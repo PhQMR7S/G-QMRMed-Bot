@@ -14,6 +14,7 @@ VALID_STAGES = (
     "synthesizing",
     "architecture",
     "generating",
+    "rendering",
     "quality_control",
 )
 
@@ -42,7 +43,9 @@ async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     """Transition a queued job to running and set its current stage."""
     if stage not in VALID_STAGES:
         raise ValueError("invalid_generation_stage")
-    result = await session.execute(select(GenerationJob).where(GenerationJob.id == job_id).with_for_update())
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
     job = result.scalar_one()
     if job.status != JobStatus.QUEUED.value:
         raise ValueError("invalid_job_transition")
@@ -74,9 +77,17 @@ async def update_progress(
     await session.flush()
 
 
-async def finish_job(session: AsyncSession, job_id: UUID, *, success: bool, error: str | None = None) -> None:
+async def finish_job(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    success: bool,
+    error: str | None = None,
+) -> None:
     """Finalize a running job exactly once."""
-    result = await session.execute(select(GenerationJob).where(GenerationJob.id == job_id).with_for_update())
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
     job = result.scalar_one()
     if job.status != JobStatus.RUNNING.value:
         raise ValueError("invalid_job_transition")
