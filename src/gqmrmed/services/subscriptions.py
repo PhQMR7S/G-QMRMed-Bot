@@ -1,6 +1,6 @@
 """Subscription resolution and activation-code business rules."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from hashlib import sha256
 from uuid import UUID
 
