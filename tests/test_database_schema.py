@@ -60,8 +60,18 @@ def test_usage_reservation_is_one_per_job() -> None:
 
 
 def test_expected_core_columns_exist() -> None:
-    assert {"user_id", "plan_id", "status"}.issubset(Subscription.__table__.c)
-    assert {"plan_id", "duration_days", "status"}.issubset(ActivationCode.__table__.c)
-    assert {"user_id", "plan_id", "provider", "status"}.issubset(Payment.__table__.c)
-    assert {"user_id", "input_type", "status", "progress"}.issubset(GenerationJob.__table__.c)
-    assert {"name", "code", "price", "currency"}.issubset(Plan.__table__.c)
+    assert {"user_id", "plan_id", "status"}.issubset(
+        set(Subscription.__table__.c.keys())
+    )
+    assert {"plan_id", "duration_days", "status"}.issubset(
+        set(ActivationCode.__table__.c.keys())
+    )
+    assert {"user_id", "plan_id", "provider", "status"}.issubset(
+        set(Payment.__table__.c.keys())
+    )
+    assert {"user_id", "input_type", "status", "progress"}.issubset(
+        set(GenerationJob.__table__.c.keys())
+    )
+    assert {"name", "code", "price", "currency"}.issubset(
+        set(Plan.__table__.c.keys())
+    )
