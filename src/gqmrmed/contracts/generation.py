@@ -1,5 +1,6 @@
 """Bounded contracts at the generation pipeline boundary."""
 
+import json
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -43,6 +44,19 @@ class GenerationRequest(BaseModel):
             return None
         normalized = value.strip()
         return normalized or None
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, value: dict[str, object] | None) -> dict[str, object] | None:
+        if value is None:
+            return None
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("generation_metadata_must_be_json") from exc
+        if len(encoded.encode("utf-8")) > 32_768:
+            raise ValueError("generation_metadata_too_large")
+        return value
 
     @model_validator(mode="after")
     def validate_model_payload(self) -> "GenerationRequest":
