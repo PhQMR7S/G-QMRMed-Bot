@@ -16,6 +16,7 @@ Telegram User
   -> GQMRMed Bot
   -> API / Orchestrator
   -> User / Subscription / Usage checks
+  -> Durable DB Job
   -> Redis Queue
   -> Medical Research
   -> Evidence Validation
@@ -29,13 +30,14 @@ Telegram User
 
 ## Foundation guarantees
 
-- FREE entitlement is exactly 3 designs per calendar day.
+- FREE entitlement is exactly 3 designs per UTC calendar day.
 - Quota reservations are atomic at the PostgreSQL level and are released on failed/cancelled work.
 - Telegram IDs use PostgreSQL BIGINT.
 - Activation codes are stored only as SHA-256 hashes and are single-use.
 - Provider transaction IDs are protected against duplicates per provider.
-- Generation jobs support text, image, document, audio, and mixed input through storage references and metadata.
+- Generation jobs support text, image, document, audio, video, and mixed input through validated contracts and references.
 - Job progress is bounded to 0..100 and lifecycle transitions are guarded.
+- Queued jobs have durable dispatch state; PostgreSQL remains the source of truth and Redis delivery is at-least-once.
 - No secrets are committed to the repository.
 - Alembic migrations are versioned and CI validates the migration chain.
 
@@ -62,8 +64,8 @@ Telegram User
 ## Build stages
 
 1. Project foundation — complete
-2. Core system foundation — in progress
-3. Telegram bot + user onboarding + usage enforcement
+2. Core system foundation — complete
+3. Telegram bot + user onboarding + usage enforcement — implemented
 4. Research, verification, synthesis, and visual architecture
 5. Image generation + exact-text renderer
 6. Queue, live progress, medical QA, visual QA, and failure recovery
@@ -72,4 +74,4 @@ Telegram User
 
 ## Current status
 
-Phase 2 foundation is implemented in the repository. CI is the required gate before moving to the Telegram integration stage.
+Phase 2 passed the full CI quality gate. Phase 3 Telegram intake and onboarding are implemented. The bot does not yet generate a placeholder image: generation/research/rendering are intentionally isolated for the following phases.
