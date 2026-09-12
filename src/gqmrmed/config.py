@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     app_name: str = Field(default="GQMRMed", alias="APP_NAME")
     app_version: str = Field(default="0.1.0", alias="APP_VERSION")
+    service_role: str = Field(default="api", alias="SERVICE_ROLE")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     telegram_bot_token: str | None = Field(default=None, alias="TELEGRAM_BOT_TOKEN")
