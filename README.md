@@ -7,7 +7,7 @@ GQMRMed is an independent Telegram medical infographic generation system.
 - Fully independent from QMRMed and QMRMed-Bot.
 - No Telegram Mini App.
 - Separate backend, database, queue, AI/image pipeline, storage, subscriptions, payments, and admin panel.
-- The Telegram bot accepts medical text, topics, images, and supported files and produces original 9:16 medical infographics.
+- The Telegram bot accepts medical topics, text, images, and supported files and produces original 9:16 medical infographics.
 
 ## Core architecture
 
@@ -21,82 +21,55 @@ Telegram User
   -> Evidence Validation
   -> Content Synthesis
   -> Visual Architect
-  -> Image Generation (FLUX.2 Klein / ComfyUI)
+  -> Image Generation
   -> SVG/HTML exact-text rendering
   -> Medical QA + Visual QA
   -> Telegram final image
 ```
 
-## Planned production modules
+## Foundation guarantees
 
-- Telegram bot (aiogram)
-- FastAPI backend
-- PostgreSQL + SQLAlchemy + Alembic
-- Redis + worker queue
-- Medical research and evidence validation
-- Content synthesis and visual architecture selection
-- ComfyUI / FLUX.2 Klein image generation
-- SVG/HTML renderer for exact medical text and layout
-- 9:16 medical design system
-- Medical QA and visual QA
-- Usage system: FREE = 3 designs/day
-- PLUS = $5/month
-- PRO = $20/year
-- Activation codes
-- Payment abstraction for Telegram Stars, external card payments, Zain Cash/manual verification
-- Private web admin panel
-- Storage, logging, monitoring, security, backups
-- Automated tests, CI/CD, Docker, deployment and production hardening
+- FREE entitlement is exactly 3 designs per calendar day.
+- Quota reservations are atomic at the PostgreSQL level and are released on failed/cancelled work.
+- Telegram IDs use PostgreSQL BIGINT.
+- Activation codes are stored only as SHA-256 hashes and are single-use.
+- Provider transaction IDs are protected against duplicates per provider.
+- Generation jobs support text, image, document, audio, and mixed input through storage references and metadata.
+- Job progress is bounded to 0..100 and lifecycle transitions are guarded.
+- No secrets are committed to the repository.
+- Alembic migrations are versioned and CI validates the migration chain.
 
-## Build phases
+## Subscription plans
 
-1. Project foundation
-2. Database
-3. Subscription system
-4. Activation codes
-5. Usage system
-6. Input handling
-7. Input analyzer
-8. Medical research engine
-9. Evidence validation
-10. Medical content synthesis
-11. Visual architect
-12. Visual design system
-13. Medical illustration engine
-14. Exact text rendering
-15. Intelligent layout
-16. Density and multi-page handling
-17. Watermark
-18. Medical QA
-19. Visual QA
-20. Quality gate
-21. Job queue
-22. Live progress
-23. Final delivery
-24. Failure handling and usage release
-25. Storage
-26. Payment system
-27. Telegram Stars
-28. External/manual payments
-29. Plans
-30. Admin panel
-31. User management
-32. Activation-code management
-33. Payment management
-34. Admin security
-35. Logging
-36. Monitoring
-37. Security hardening
-38. Testing
-39. CI/CD
-40. Docker
-41. Deployment
-42. Performance
-43. Multi-GPU readiness
-44. Backup and recovery
-45. Retention policies
-46. Final production release
+| Plan | Price | Duration | Daily limit |
+| --- | ---: | ---: | ---: |
+| FREE | $0 | ongoing | 3 |
+| PLUS | $5 | 30 days | unlimited |
+| PRO | $20 | 365 days | unlimited |
 
-## Status
+## Stack
 
-Phase 1 — repository foundation initialized.
+- Telegram: aiogram
+- API: FastAPI
+- Database: PostgreSQL + SQLAlchemy + Alembic
+- Queue: Redis
+- AI/image pipeline: provider abstraction, with ComfyUI/FLUX planned for the visual layer
+- Exact layout: SVG/HTML renderer
+- Storage: S3-compatible abstraction
+- Deployment: Docker + managed application hosting
+- Quality: Ruff, MyPy, Pytest, migration validation
+
+## Build stages
+
+1. Project foundation — complete
+2. Core system foundation — in progress
+3. Telegram bot + user onboarding + usage enforcement
+4. Research, verification, synthesis, and visual architecture
+5. Image generation + exact-text renderer
+6. Queue, live progress, medical QA, visual QA, and failure recovery
+7. Subscriptions, activation, payments, and private admin panel
+8. End-to-end testing, deployment, hardening, monitoring, and release
+
+## Current status
+
+Phase 2 foundation is implemented in the repository. CI is the required gate before moving to the Telegram integration stage.
