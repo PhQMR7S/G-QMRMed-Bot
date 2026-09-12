@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import UTC, datetime
+from datetime import datetime, UTC
 from uuid import UUID
 
 from sqlalchemy import select
