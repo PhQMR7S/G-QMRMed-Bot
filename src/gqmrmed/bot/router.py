@@ -1,19 +1,18 @@
 """Telegram handlers for onboarding and generation intake."""
 
-from datetime import UTC, datetime
-
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import create_user_generation, provision_user
 from gqmrmed.contracts.generation import GenerationRequest, InputType
+from gqmrmed.db.models import Plan
 from gqmrmed.services.subscriptions import activate_code
 from gqmrmed.services.usage import QuotaExceededError
 
 router = Router(name="gqmrmed")
-
 
 WELCOME_TEXT = (
     "مرحباً بك في GQMRMed 🩺\n\n"
@@ -61,9 +60,6 @@ async def help_handler(message: Message) -> None:
 @router.message(Command("plans"))
 async def plans_handler(message: Message, session: AsyncSession) -> None:
     """Display the active public plans."""
-    from gqmrmed.db.models import Plan
-    from sqlalchemy import select
-
     result = await session.execute(
         select(Plan)
         .where(Plan.is_active.is_(True))
@@ -88,25 +84,24 @@ async def activate_handler(message: Message, session: AsyncSession) -> None:
         await message.answer("أرسل الكود بهذا الشكل:\n/activate GQMR-PLUS-XXXX-XXXX")
         return
 
-    async with session.begin():
-        user = await _user_from_message(session, message)
-        try:
+    try:
+        async with session.begin():
+            user = await _user_from_message(session, message)
             subscription = await activate_code(
                 session,
                 user_id=user.id,
                 raw_code=parts[1],
             )
-        except ValueError as exc:
-            await session.rollback()
-            code = str(exc)
-            messages = {
-                "invalid_or_used_activation_code": "الكود غير صالح أو مستخدم مسبقاً.",
-                "activation_code_expired": "انتهت صلاحية كود التفعيل.",
-                "plan_unavailable": "الخطة المرتبطة بالكود غير متاحة حالياً.",
-                "invalid_subscription_duration": "مدة الاشتراك غير صالحة.",
-            }
-            await message.answer(messages.get(code, "تعذر تفعيل الكود."))
-            return
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "invalid_or_used_activation_code": "الكود غير صالح أو مستخدم مسبقاً.",
+            "activation_code_expired": "انتهت صلاحية كود التفعيل.",
+            "plan_unavailable": "الخطة المرتبطة بالكود غير متاحة حالياً.",
+            "invalid_subscription_duration": "مدة الاشتراك غير صالحة.",
+        }
+        await message.answer(messages.get(code, "تعذر تفعيل الكود."))
+        return
 
     expires = subscription.expires_at.isoformat() if subscription.expires_at else "غير محدد"
     await message.answer(f"تم تفعيل الاشتراك بنجاح ✅\nينتهي: {expires}")
@@ -119,21 +114,19 @@ async def _submit_generation(
     request: GenerationRequest,
 ) -> None:
     """Create a job and atomically reserve one usage slot."""
-    async with session.begin():
-        user = await _user_from_message(session, message)
-        try:
+    try:
+        async with session.begin():
+            user = await _user_from_message(session, message)
             queued = await create_user_generation(session, user=user, request=request)
-        except QuotaExceededError:
-            await session.rollback()
-            await message.answer(
-                "انتهت حصتك اليومية المجانية (3 تصاميم).\n"
-                "استخدم /plans لعرض الخطط المتاحة."
-            )
-            return
-        except PermissionError:
-            await session.rollback()
-            await message.answer("هذا الحساب غير نشط حالياً.")
-            return
+    except QuotaExceededError:
+        await message.answer(
+            "انتهت حصتك اليومية المجانية (3 تصاميم).\n"
+            "استخدم /plans لعرض الخطط المتاحة."
+        )
+        return
+    except PermissionError:
+        await message.answer("هذا الحساب غير نشط حالياً.")
+        return
 
     await message.answer(
         "تم استلام الطلب ووضعه في قائمة الانتظار ⏳\n"
