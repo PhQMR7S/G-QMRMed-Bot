@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from secrets import choice
-from string import ascii_uppercase, digits
 from uuid import UUID
 
 from sqlalchemy.dialects.postgresql import insert
@@ -11,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gqmrmed.db.models import ActivationCode, Plan
 from gqmrmed.services.subscriptions import hash_activation_code
 
-_ALPHABET = ascii_uppercase + digits
+_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 
-def generate_activation_code(plan_code: str, *, group_length: int = 4) -> str:
+def generate_activation_code(plan_code: str, *, group_length: int = 6) -> str:
     """Generate a human-enterable code; only its hash is persisted."""
-    if not 2 <= group_length <= 8:
+    if not 4 <= group_length <= 8:
         raise ValueError("invalid_code_group_length")
     prefix = plan_code.strip().upper()
     if not prefix or len(prefix) > 16 or not prefix.replace("_", "").isalnum():
