@@ -1,4 +1,9 @@
-from gqmrmed.contracts.research import ArchitectureType, MedicalClaim, SynthesizedContent, VisualPlan
+from gqmrmed.contracts.research import (
+    ArchitectureType,
+    MedicalClaim,
+    SynthesizedContent,
+    VisualPlan,
+)
 from gqmrmed.rendering.layout import HEIGHT, WIDTH, build_layout
 from gqmrmed.rendering.svg import render_svg
 
@@ -7,7 +12,12 @@ def _content() -> SynthesizedContent:
     return SynthesizedContent(
         title="Diabetic ketoacidosis",
         subtitle="Medical infographic",
-        key_points=["Metabolic emergency", "Hyperglycemia", "Ketosis", "Volume depletion"],
+        key_points=[
+            "Metabolic emergency",
+            "Hyperglycemia",
+            "Ketosis",
+            "Volume depletion",
+        ],
         claims=[
             MedicalClaim(
                 claim_id="c1",
@@ -43,6 +53,10 @@ def test_svg_escapes_exact_text_and_keeps_watermark() -> None:
 
 
 def test_svg_can_embed_illustration_asset_without_changing_text_layer() -> None:
-    svg = render_svg(content=_content(), visual_plan=_plan(), illustration_href="illustration.png")
+    svg = render_svg(
+        content=_content(),
+        visual_plan=_plan(),
+        illustration_href="illustration.png",
+    )
     assert 'href="illustration.png"' in svg
     assert "Metabolic emergency" in svg
