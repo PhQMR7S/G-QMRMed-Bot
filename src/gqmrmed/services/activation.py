@@ -5,7 +5,7 @@ from secrets import choice
 from string import ascii_uppercase, digits
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import ActivationCode, Plan
@@ -40,18 +40,24 @@ async def create_activation_code(
     for _ in range(10):
         plaintext = generate_activation_code(plan.code)
         code_hash = hash_activation_code(plaintext)
-        try:
-            async with session.begin_nested():
-                code = ActivationCode(
-                    code_hash=code_hash,
-                    plan_id=plan.id,
-                    duration_days=duration_days,
-                    created_by=created_by,
-                    expires_at=expires_at,
-                )
-                session.add(code)
-                await session.flush()
+        stmt = (
+            insert(ActivationCode)
+            .values(
+                code_hash=code_hash,
+                plan_id=plan.id,
+                duration_days=duration_days,
+                created_by=created_by,
+                expires_at=expires_at,
+            )
+            .on_conflict_do_nothing(index_elements=[ActivationCode.code_hash])
+            .returning(ActivationCode.id)
+        )
+        async with session.begin_nested():
+            result = await session.execute(stmt)
+            code_id = result.scalar_one_or_none()
+        if code_id is not None:
+            code = await session.get(ActivationCode, code_id)
+            if code is None:
+                raise RuntimeError("activation_code_persistence_failed")
             return code, plaintext
-        except IntegrityError:
-            continue
     raise RuntimeError("activation_code_generation_collision")
