@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import GenerationJob, JobStatus
 
-
 VALID_STAGES = (
     "researching",
     "synthesizing",
