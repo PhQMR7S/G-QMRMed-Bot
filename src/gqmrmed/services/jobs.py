@@ -24,13 +24,21 @@ async def create_generation_job(
     *,
     user_id: UUID,
     input_type: str,
-    input_text: str | None,
+    input_text: str | None = None,
+    input_storage_key: str | None = None,
+    input_mime_type: str | None = None,
+    input_metadata: dict[str, object] | None = None,
 ) -> GenerationJob:
-    """Create a queued generation job with a clean initial state."""
+    """Create a queued job for text, image, file, or mixed input."""
+    if not input_text and not input_storage_key:
+        raise ValueError("generation_input_required")
     job = GenerationJob(
         user_id=user_id,
         input_type=input_type[:32],
         input_text=input_text,
+        input_storage_key=input_storage_key,
+        input_mime_type=input_mime_type[:128] if input_mime_type else None,
+        input_metadata=input_metadata,
         status=JobStatus.QUEUED.value,
         progress=0,
     )
