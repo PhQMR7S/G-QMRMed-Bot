@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import create_user_generation, provision_user
 from gqmrmed.contracts.generation import GenerationRequest, InputType
-from gqmrmed.db.models import Plan
+from gqmrmed.db.models import Plan, User
 from gqmrmed.services.subscriptions import activate_code
 from gqmrmed.services.usage import QuotaExceededError
 
@@ -23,7 +23,7 @@ WELCOME_TEXT = (
 )
 
 
-async def _user_from_message(session: AsyncSession, message: Message):
+async def _user_from_message(session: AsyncSession, message: Message) -> User:
     """Provision the Telegram identity using only Telegram profile fields."""
     if message.from_user is None:
         raise ValueError("telegram_user_required")
