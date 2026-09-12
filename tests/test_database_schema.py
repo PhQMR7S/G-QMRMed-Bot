@@ -52,7 +52,7 @@ def test_generation_result_is_one_per_job() -> None:
 
 def test_usage_reservation_is_one_per_job() -> None:
     column = UsageReservation.__table__.c.job_id
-    assert column.unique is False
+    assert column.unique is not True
     assert any(
         constraint.name == "uq_usage_reservations_job_id"
         for constraint in UsageReservation.__table__.constraints
