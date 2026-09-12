@@ -3,6 +3,7 @@ from gqmrmed.db.models import (
     GenerationJob,
     GenerationResult,
     Plan,
+    UsageReservation,
     User,
 )
 
@@ -34,4 +35,12 @@ def test_core_integrity_checks_are_declared() -> None:
     assert any(
         c.name == "ck_generation_dimensions_positive"
         for c in GenerationResult.__table__.constraints
+    )
+    assert any(
+        c.name == "ck_usage_reservation_status"
+        for c in UsageReservation.__table__.constraints
+    )
+    assert any(
+        c.name == "uq_usage_reservations_job_id"
+        for c in UsageReservation.__table__.constraints
     )
