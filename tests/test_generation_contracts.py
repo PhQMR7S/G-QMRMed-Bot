@@ -11,6 +11,15 @@ def test_text_generation_request_is_normalized() -> None:
     request.validate_payload()
 
 
+def test_video_generation_input_is_supported() -> None:
+    request = GenerationRequest(
+        input_type=InputType.VIDEO,
+        storage_key="telegram://video/file-id",
+        mime_type="video/mp4",
+    )
+    assert request.input_type is InputType.VIDEO
+
+
 def test_generation_request_rejects_empty_payload() -> None:
     with pytest.raises(ValidationError, match="generation_input_required"):
         GenerationRequest(input_type=InputType.IMAGE, storage_key=None)
