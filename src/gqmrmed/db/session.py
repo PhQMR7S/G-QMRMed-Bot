@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession, create_asyn
 
 from gqmrmed.config import get_settings
 
-
 settings = get_settings()
 engine = create_async_engine(settings.database_url, pool_pre_ping=True)
 SessionFactory = async_sessionmaker(
