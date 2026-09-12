@@ -1,6 +1,10 @@
 """Select a visual architecture from the medical topic without generating artwork."""
 
-from gqmrmed.contracts.research import ArchitectureType, SynthesizedContent, VisualPlan
+from gqmrmed.contracts.research import (
+    ArchitectureType,
+    SynthesizedContent,
+    VisualPlan,
+)
 
 
 _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = (
@@ -11,7 +15,16 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.LABORATORY_INTERPRETATION,
-        ("lab", "laboratory", "blood test", "cbc", "electrolyte", "sodium", "potassium", "creatinine"),
+        (
+            "lab",
+            "laboratory",
+            "blood test",
+            "cbc",
+            "electrolyte",
+            "sodium",
+            "potassium",
+            "creatinine",
+        ),
         ("test", "normal", "abnormal", "interpretation"),
     ),
     (
@@ -21,7 +34,16 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.DRUG_PROFILE,
-        ("drug", "medication", "dose", "antibiotic", "insulin", "heparin", "aspirin", "metformin"),
+        (
+            "drug",
+            "medication",
+            "dose",
+            "antibiotic",
+            "insulin",
+            "heparin",
+            "aspirin",
+            "metformin",
+        ),
         ("class", "mechanism", "uses", "cautions"),
     ),
     (
