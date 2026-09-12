@@ -30,8 +30,11 @@ class Settings(BaseSettings):
 
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_api_key: str | None = Field(default=None, alias="AI_API_KEY")
-    research_provider: str | None = Field(default=None, alias="RESEARCH_PROVIDER")
+    ai_base_url: str = Field(default="https://api.openai.com/v1", alias="AI_BASE_URL")
+    ai_model: str = Field(default="gpt-5.6-luna", alias="AI_MODEL")
+    research_provider: str | None = Field(default="pubmed", alias="RESEARCH_PROVIDER")
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
+    research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
 
     comfyui_base_url: str = Field(default="http://comfyui:8188", alias="COMFYUI_BASE_URL")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
