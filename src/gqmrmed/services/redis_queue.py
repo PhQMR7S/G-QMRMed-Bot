@@ -1,5 +1,7 @@
 """Minimal Redis-backed queue adapter for generation jobs."""
 
+from collections.abc import Awaitable
+from typing import cast
 from uuid import UUID
 
 from redis.asyncio import Redis
@@ -15,7 +17,8 @@ class RedisJobQueue:
     async def enqueue(self, *, job_id: UUID) -> str:
         """Enqueue a job ID and return its stable queue value."""
         value = str(job_id)
-        await self._redis.rpush(self._queue_name, value)
+        result = self._redis.rpush(self._queue_name, value)
+        await cast(Awaitable[int], result)
         return value
 
     async def close(self) -> None:
