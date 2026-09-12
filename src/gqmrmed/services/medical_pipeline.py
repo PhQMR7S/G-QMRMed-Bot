@@ -1,13 +1,14 @@
 """Phase 4 pipeline: research -> evidence validation -> synthesis -> visual architecture."""
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from gqmrmed.contracts.research import ResearchBundle, ResearchRequest, SynthesizedContent, VisualPlan
 from gqmrmed.services.research import ResearchProvider, research_medical_topic, validate_synthesis_evidence
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
 
-class SynthesisProvider:
+class SynthesisProvider(Protocol):
     """Structural protocol for an async medical content synthesizer."""
 
     async def synthesize(
@@ -16,7 +17,7 @@ class SynthesisProvider:
         user_input: str,
         research: ResearchBundle,
     ) -> SynthesizedContent:
-        raise NotImplementedError
+        ...
 
 
 @dataclass(frozen=True, slots=True)
