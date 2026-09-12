@@ -20,6 +20,24 @@ def test_video_generation_input_is_supported() -> None:
     assert request.input_type is InputType.VIDEO
 
 
+def test_generation_metadata_must_be_json() -> None:
+    with pytest.raises(ValidationError, match="generation_metadata_must_be_json"):
+        GenerationRequest(
+            input_type=InputType.TEXT,
+            text="DKA",
+            metadata={"invalid": object()},
+        )
+
+
+def test_generation_metadata_is_bounded() -> None:
+    with pytest.raises(ValidationError, match="generation_metadata_too_large"):
+        GenerationRequest(
+            input_type=InputType.TEXT,
+            text="DKA",
+            metadata={"payload": "x" * 33_000},
+        )
+
+
 def test_generation_request_rejects_empty_payload() -> None:
     with pytest.raises(ValidationError, match="generation_input_required"):
         GenerationRequest(input_type=InputType.IMAGE, storage_key=None)
