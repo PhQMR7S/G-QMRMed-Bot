@@ -1,6 +1,7 @@
 """Database-backed runtime settings with stable defaults."""
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import SystemSetting
@@ -16,14 +17,12 @@ async def set_runtime_setting(session: AsyncSession, *, key: str, value: str) ->
     """Create or replace a runtime setting atomically within the caller transaction."""
     if not key or len(key) > 128:
         raise ValueError("invalid_setting_key")
-    result = await session.execute(
-        select(SystemSetting).where(SystemSetting.key == key).with_for_update()
-    )
-    setting = result.scalar_one_or_none()
-    if setting is None:
-        setting = SystemSetting(key=key, value=value)
-        session.add(setting)
-    else:
-        setting.value = value
-    await session.flush()
+    stmt = insert(SystemSetting).values(key=key, value=value).on_conflict_do_update(
+        index_elements=[SystemSetting.key],
+        set_={"value": value},
+    ).returning(SystemSetting.id)
+    setting_id = (await session.execute(stmt)).scalar_one()
+    setting = (
+        await session.execute(select(SystemSetting).where(SystemSetting.id == setting_id))
+    ).scalar_one()
     return setting
