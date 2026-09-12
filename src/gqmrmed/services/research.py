@@ -21,7 +21,11 @@ async def research_medical_topic(
     if sources and not any(source.abstract for source in sources):
         warnings.append("evidence_has_no_abstracts")
 
-    return ResearchBundle(query=request.query, sources=sources[: request.max_sources], warnings=warnings)
+    return ResearchBundle(
+        query=request.query,
+        sources=sources[: request.max_sources],
+        warnings=warnings,
+    )
 
 
 def _deduplicate_sources(sources: list[EvidenceSource]) -> list[EvidenceSource]:
