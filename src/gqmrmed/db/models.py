@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -59,12 +60,7 @@ class JobStatus(StrEnum):
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger,
-        unique=True,
-        nullable=False,
-        index=True,
-    )
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
     username: Mapped[str | None] = mapped_column(String(255))
     first_name: Mapped[str | None] = mapped_column(String(255))
     last_name: Mapped[str | None] = mapped_column(String(255))
@@ -88,15 +84,11 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "subscriptions"
 
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
     status: Mapped[str] = mapped_column(
-        String(16),
-        default=SubscriptionStatus.PENDING,
-        nullable=False,
+        String(16), default=SubscriptionStatus.PENDING, nullable=False
     )
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -109,18 +101,11 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "activation_codes"
 
-    code_hash: Mapped[str] = mapped_column(
-        String(128),
-        unique=True,
-        nullable=False,
-        index=True,
-    )
+    code_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(
-        String(16),
-        default=ActivationCodeStatus.UNUSED,
-        nullable=False,
+        String(16), default=ActivationCodeStatus.UNUSED, nullable=False
     )
     created_by: Mapped[UUID | None] = mapped_column(ForeignKey("admin_users.id"))
     activated_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
@@ -132,9 +117,7 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "payments"
 
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -142,23 +125,17 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
     status: Mapped[str] = mapped_column(
-        String(16),
-        default=PaymentStatus.PENDING,
-        nullable=False,
+        String(16), default=PaymentStatus.PENDING, nullable=False
     )
     approved_by: Mapped[UUID | None] = mapped_column(ForeignKey("admin_users.id"))
 
 
 class DailyUsage(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "daily_usage"
-    __table_args__ = (
-        UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),)
 
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     reserved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -169,17 +146,15 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_jobs"
 
     user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     input_type: Mapped[str] = mapped_column(String(32), nullable=False)
     input_text: Mapped[str | None] = mapped_column(Text)
+    input_storage_key: Mapped[str | None] = mapped_column(String(1024))
+    input_mime_type: Mapped[str | None] = mapped_column(String(128))
+    input_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(
-        String(16),
-        default=JobStatus.QUEUED,
-        nullable=False,
-        index=True,
+        String(16), default=JobStatus.QUEUED, nullable=False, index=True
     )
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     current_stage: Mapped[str | None] = mapped_column(String(64))
@@ -192,16 +167,10 @@ class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_results"
 
     job_id: Mapped[UUID] = mapped_column(
-        ForeignKey("generation_jobs.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
+        ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
-    mime_type: Mapped[str] = mapped_column(
-        String(128),
-        default="image/png",
-        nullable=False,
-    )
+    mime_type: Mapped[str] = mapped_column(String(128), default="image/png", nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
 
@@ -218,9 +187,7 @@ class AdminAction(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "admin_actions"
 
     admin_user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("admin_users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(64))
