@@ -28,19 +28,21 @@ class InfographicLayout:
 
 def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> InfographicLayout:
     """Allocate non-overlapping regions before any text or artwork is rendered."""
-    del content
     del visual_plan
     margin = 64
     title_h = 150
-    subtitle_h = 72
+    subtitle_h = 72 if content.subtitle else 0
     footer_h = 64
     gap = 24
     top = margin
 
     title = LayoutBox(margin, top, WIDTH - 2 * margin, title_h)
     top += title_h + gap
-    subtitle = LayoutBox(margin, top, WIDTH - 2 * margin, subtitle_h)
-    top += subtitle_h + gap
+
+    subtitle: LayoutBox | None = None
+    if content.subtitle:
+        subtitle = LayoutBox(margin, top, WIDTH - 2 * margin, subtitle_h)
+        top += subtitle_h + gap
 
     footer = LayoutBox(margin, HEIGHT - margin - footer_h, WIDTH - 2 * margin, footer_h)
     illustration_h = min(560, max(360, int((footer.y - top) * 0.38)))
@@ -48,8 +50,8 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
     top += illustration_h + gap
 
     available = footer.y - top - gap
-    box_count = 4
-    box_h = max(120, (available - gap * (box_count - 1)) // box_count)
+    box_count = len(content.key_points)
+    box_h = max(72, (available - gap * (box_count - 1)) // box_count)
     boxes = tuple(
         LayoutBox(margin, top + i * (box_h + gap), WIDTH - 2 * margin, box_h)
         for i in range(box_count)
