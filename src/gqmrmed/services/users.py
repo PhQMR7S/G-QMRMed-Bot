@@ -1,8 +1,7 @@
 """User provisioning and identity mapping."""
 
-from uuid import UUID
-
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import User
@@ -17,28 +16,29 @@ async def get_or_create_user(
     last_name: str | None,
     language: str | None,
 ) -> User:
-    """Return the Telegram user, updating mutable profile fields safely."""
-    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        user = User(
-            telegram_id=telegram_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name,
-            language=(language or "en")[:16],
-        )
-        session.add(user)
-        await session.flush()
-        return user
-
-    user.username = username
-    user.first_name = first_name
-    user.last_name = last_name
-    if language:
-        user.language = language[:16]
-    user.is_active = True
-    await session.flush()
+    """Upsert a Telegram user without a race-prone read-then-insert."""
+    values = {
+        "telegram_id": telegram_id,
+        "username": username,
+        "first_name": first_name,
+        "last_name": last_name,
+        "language": (language or "en")[:16],
+        "is_active": True,
+    }
+    stmt = insert(User).values(**values).on_conflict_do_update(
+        index_elements=[User.telegram_id],
+        set_={
+            "username": values["username"],
+            "first_name": values["first_name"],
+            "last_name": values["last_name"],
+            "language": values["language"],
+            "is_active": True,
+        },
+    ).returning(User.id)
+    user_id = (await session.execute(stmt)).scalar_one()
+    user = (
+        await session.execute(select(User).where(User.id == user_id))
+    ).scalar_one()
     return user
 
 
@@ -46,8 +46,3 @@ async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> Us
     """Find a user by Telegram's 64-bit identifier."""
     result = await session.execute(select(User).where(User.telegram_id == telegram_id))
     return result.scalar_one_or_none()
-
-
-def user_uuid(user: User) -> UUID:
-    """Return the internal UUID used by application services."""
-    return user.id
