@@ -1,11 +1,6 @@
 """Select a visual architecture from the medical topic without generating artwork."""
 
-from gqmrmed.contracts.research import (
-    ArchitectureType,
-    SynthesizedContent,
-    VisualPlan,
-)
-
+from gqmrmed.contracts.research import ArchitectureType, SynthesizedContent, VisualPlan
 
 _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = (
     (
