@@ -1,8 +1,4 @@
-"""Small HTTP client for the OpenAI Responses API.
-
-The dependency stays on httpx so the application can swap providers without
-coupling the core pipeline to one SDK.
-"""
+"""Small HTTP client for the OpenAI Responses API."""
 
 from __future__ import annotations
 
@@ -30,11 +26,7 @@ class OpenAIResponsesConfig:
 class OpenAIResponsesSynthesizer:
     """Generate evidence-linked medical content using the Responses API."""
 
-    def __init__(
-        self,
-        config: OpenAIResponsesConfig,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
+    def __init__(self, config: OpenAIResponsesConfig, client: httpx.AsyncClient | None = None) -> None:
         self.config = config
         self._client = client
 
