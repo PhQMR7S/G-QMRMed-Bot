@@ -1,6 +1,6 @@
-"""Generation-job lifecycle primitives."""
+"""Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -49,6 +49,68 @@ async def create_generation_job(
     return job
 
 
+async def mark_dispatched(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    dispatched_at: datetime | None = None,
+) -> bool:
+    """Record a successful queue publish; harmless when already recorded."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None:
+        return False
+    if job.status != JobStatus.QUEUED.value:
+        return False
+    if job.enqueued_at is None:
+        job.enqueued_at = dispatched_at or datetime.now(UTC)
+    job.dispatch_attempts += 1
+    job.last_dispatch_error = None
+    await session.flush()
+    return True
+
+
+async def record_dispatch_failure(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    error: str,
+) -> bool:
+    """Record a failed queue publish without changing the source-of-truth state."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None or job.status != JobStatus.QUEUED.value:
+        return False
+    job.dispatch_attempts += 1
+    job.last_dispatch_error = error[:2000]
+    await session.flush()
+    return True
+
+
+async def get_undispatched_jobs(
+    session: AsyncSession,
+    *,
+    limit: int = 50,
+) -> list[UUID]:
+    """Return queued jobs not yet durably marked as published to Redis."""
+    if not 1 <= limit <= 500:
+        raise ValueError("invalid_dispatch_batch_size")
+    result = await session.execute(
+        select(GenerationJob.id)
+        .where(
+            GenerationJob.status == JobStatus.QUEUED.value,
+            GenerationJob.enqueued_at.is_(None),
+        )
+        .order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     """Transition a queued job to running and set its current stage."""
     if stage not in _STAGE_INDEX:
@@ -64,6 +126,24 @@ async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     job.progress = max(job.progress, 1)
     job.started_at = datetime.now(UTC)
     await session.flush()
+
+
+async def cancel_queued_job(session: AsyncSession, job_id: UUID) -> bool:
+    """Cancel a queued job before execution begins."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None:
+        return False
+    if job.status == JobStatus.CANCELLED.value:
+        return True
+    if job.status != JobStatus.QUEUED.value:
+        return False
+    job.status = JobStatus.CANCELLED.value
+    job.completed_at = datetime.now(UTC)
+    await session.flush()
+    return True
 
 
 async def update_progress(
