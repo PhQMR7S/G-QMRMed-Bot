@@ -10,6 +10,7 @@ class InputType(StrEnum):
     IMAGE = "image"
     DOCUMENT = "document"
     AUDIO = "audio"
+    VIDEO = "video"
     MIXED = "mixed"
 
 
