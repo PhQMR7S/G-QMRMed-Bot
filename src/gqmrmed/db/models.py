@@ -184,6 +184,10 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "progress >= 0 AND progress <= 100",
             name="ck_generation_progress_range",
         ),
+        CheckConstraint(
+            "dispatch_attempts >= 0",
+            name="ck_generation_dispatch_attempts_nonnegative",
+        ),
     )
 
     user_id: Mapped[UUID] = mapped_column(
@@ -199,6 +203,9 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     current_stage: Mapped[str | None] = mapped_column(String(64))
+    dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_dispatch_error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
