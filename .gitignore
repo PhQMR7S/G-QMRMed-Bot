@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+ENV/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local data
+postgres_data/
+redis_data/
+storage/
+outputs/
+tmp/
+logs/
+
+# Docker
+*.pid
+
+# Node/admin build artifacts (future)
+node_modules/
+dist/
+build/
+
+# Generated reports
+coverage.xml
