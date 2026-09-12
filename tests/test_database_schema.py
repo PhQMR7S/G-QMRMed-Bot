@@ -9,6 +9,7 @@ from gqmrmed.db.models import (
     Payment,
     Plan,
     Subscription,
+    UsageReservation,
     User,
 )
 
@@ -22,6 +23,7 @@ def test_core_tables_are_registered() -> None:
         "payments",
         "daily_usage",
         "generation_jobs",
+        "usage_reservations",
         "generation_results",
         "admin_users",
         "admin_actions",
@@ -46,6 +48,15 @@ def test_generation_result_is_one_per_job() -> None:
     column = GenerationResult.__table__.c.job_id
     assert column.unique is True
     assert isinstance(column.type, Uuid)
+
+
+def test_usage_reservation_is_one_per_job() -> None:
+    column = UsageReservation.__table__.c.job_id
+    assert column.unique is False
+    assert any(
+        constraint.name == "uq_usage_reservations_job_id"
+        for constraint in UsageReservation.__table__.constraints
+    )
 
 
 def test_expected_core_columns_exist() -> None:
