@@ -58,6 +58,12 @@ class JobStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class UsageReservationStatus(StrEnum):
+    RESERVED = "RESERVED"
+    COMMITTED = "COMMITTED"
+    RELEASED = "RELEASED"
+
+
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
@@ -196,6 +202,29 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "usage_reservations"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_usage_reservations_job_id"),
+        CheckConstraint(
+            "status IN ('RESERVED', 'COMMITTED', 'RELEASED')",
+            name="ck_usage_reservation_status",
+        ),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), default=UsageReservationStatus.RESERVED, nullable=False
+    )
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
