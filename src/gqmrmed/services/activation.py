@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gqmrmed.db.models import ActivationCode, Plan
 from gqmrmed.services.subscriptions import hash_activation_code
 
-
 _ALPHABET = ascii_uppercase + digits
 
 
