@@ -23,6 +23,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install ".[dev]"
 
+      - name: Compile Python sources
+        run: python -m compileall -q src alembic
+
+      - name: Validate Alembic migrations
+        run: alembic upgrade head --sql > /tmp/gqmrmed-schema.sql
+
       - name: Ruff
         run: ruff check .
 
