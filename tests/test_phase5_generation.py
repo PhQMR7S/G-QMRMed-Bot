@@ -11,7 +11,7 @@ from gqmrmed.generation.providers import (
     ComfyUIImageProvider,
     ImageGenerationError,
 )
-from gqmrmed.generation.renderer import HEIGHT, WIDTH, render_infographic_svg
+from gqmrmed.generation.renderer import HEIGHT, render_infographic_svg, WIDTH
 
 
 def _content() -> SynthesizedContent:
