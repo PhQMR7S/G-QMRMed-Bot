@@ -16,12 +16,12 @@ async def get_or_create_user(
     last_name: str | None,
     language: str | None,
 ) -> User:
-    """Upsert a Telegram user without a race-prone read-then-insert."""
+    """Upsert Telegram profile data without reactivating a blocked user."""
     values = {
         "telegram_id": telegram_id,
-        "username": username,
-        "first_name": first_name,
-        "last_name": last_name,
+        "username": username[:255] if username else None,
+        "first_name": first_name[:255] if first_name else None,
+        "last_name": last_name[:255] if last_name else None,
         "language": (language or "en")[:16],
         "is_active": True,
     }
@@ -32,7 +32,6 @@ async def get_or_create_user(
             "first_name": values["first_name"],
             "last_name": values["last_name"],
             "language": values["language"],
-            "is_active": True,
         },
     ).returning(User.id)
     user_id = (await session.execute(stmt)).scalar_one()
