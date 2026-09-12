@@ -14,6 +14,7 @@ from gqmrmed.db.models import (
     PlanCode,
     Subscription,
     SubscriptionStatus,
+    User,
 )
 
 
@@ -28,10 +29,7 @@ def hash_activation_code(code: str) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
-async def get_plan(
-    session: AsyncSession,
-    code: PlanCode,
-) -> Plan | None:
+async def get_plan(session: AsyncSession, code: PlanCode) -> Plan | None:
     """Return an active plan by stable public code."""
     result = await session.execute(
         select(Plan).where(Plan.code == code.value, Plan.is_active.is_(True))
@@ -70,6 +68,10 @@ async def activate_code(
 ) -> Subscription:
     """Atomically consume an unused activation code and create its subscription."""
     code_hash = hash_activation_code(raw_code)
+    user_result = await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+    if user_result.scalar_one_or_none() is None:
+        raise ValueError("user_not_found")
+
     result = await session.execute(
         select(ActivationCode)
         .where(ActivationCode.code_hash == code_hash)
@@ -84,7 +86,9 @@ async def activate_code(
         raise ValueError("activation_code_expired")
 
     plan = (
-        await session.execute(select(Plan).where(Plan.id == code.plan_id, Plan.is_active.is_(True)))
+        await session.execute(
+            select(Plan).where(Plan.id == code.plan_id, Plan.is_active.is_(True))
+        )
     ).scalar_one_or_none()
     if plan is None:
         raise ValueError("plan_unavailable")
