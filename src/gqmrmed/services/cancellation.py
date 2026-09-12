@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import GenerationJob, UsageReservation
 from gqmrmed.services.jobs import cancel_queued_job
-from gqmrmed.services.usage import Reservation, release_generation
+from gqmrmed.services.usage import release_generation, Reservation
 
 
 async def cancel_generation(
