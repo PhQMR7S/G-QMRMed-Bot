@@ -41,7 +41,10 @@ async def _user_from_message(session: AsyncSession, message: Message) -> User:
 async def start_handler(message: Message, session: AsyncSession) -> None:
     """Register the user and show the minimal onboarding message."""
     async with session.begin():
-        await _user_from_message(session, message)
+        user = await _user_from_message(session, message)
+    if not user.is_active:
+        await message.answer("هذا الحساب غير نشط حالياً.")
+        return
     await message.answer(WELCOME_TEXT)
 
 
@@ -87,11 +90,16 @@ async def activate_handler(message: Message, session: AsyncSession) -> None:
     try:
         async with session.begin():
             user = await _user_from_message(session, message)
+            if not user.is_active:
+                raise PermissionError("user_inactive")
             subscription = await activate_code(
                 session,
                 user_id=user.id,
                 raw_code=parts[1],
             )
+    except PermissionError:
+        await message.answer("هذا الحساب غير نشط حالياً.")
+        return
     except ValueError as exc:
         code = str(exc)
         messages = {
