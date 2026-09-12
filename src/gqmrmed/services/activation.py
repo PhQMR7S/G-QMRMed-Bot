@@ -5,7 +5,6 @@ from secrets import choice
 from string import ascii_uppercase, digits
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
