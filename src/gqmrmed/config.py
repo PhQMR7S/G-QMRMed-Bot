@@ -5,7 +5,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     app_env: str = Field(default="development", alias="APP_ENV")
     app_name: str = Field(default="GQMRMed", alias="APP_NAME")
@@ -36,8 +40,16 @@ class Settings(BaseSettings):
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
     research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
 
-    comfyui_base_url: str = Field(default="http://comfyui:8188", alias="COMFYUI_BASE_URL")
-    comfyui_timeout_seconds: float = Field(default=120.0, gt=0, le=600, alias="COMFYUI_TIMEOUT_SECONDS")
+    comfyui_base_url: str = Field(
+        default="http://comfyui:8188",
+        alias="COMFYUI_BASE_URL",
+    )
+    comfyui_timeout_seconds: float = Field(
+        default=120.0,
+        gt=0,
+        le=600,
+        alias="COMFYUI_TIMEOUT_SECONDS",
+    )
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
     image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
