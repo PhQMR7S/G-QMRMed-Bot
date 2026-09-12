@@ -12,9 +12,13 @@ def test_text_generation_request_is_normalized() -> None:
 
 
 def test_generation_request_rejects_empty_payload() -> None:
-    request = GenerationRequest(input_type=InputType.IMAGE, storage_key=None)
-    with pytest.raises(ValueError, match="generation_input_required"):
-        request.validate_payload()
+    with pytest.raises(ValidationError, match="generation_input_required"):
+        GenerationRequest(input_type=InputType.IMAGE, storage_key=None)
+
+
+def test_generation_request_rejects_blank_storage_key() -> None:
+    with pytest.raises(ValidationError, match="generation_input_required"):
+        GenerationRequest(input_type=InputType.IMAGE, storage_key="   ")
 
 
 def test_generation_request_rejects_unknown_fields() -> None:
