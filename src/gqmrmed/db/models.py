@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -70,6 +71,17 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "plans"
+    __table_args__ = (
+        CheckConstraint("price >= 0", name="ck_plans_price_nonnegative"),
+        CheckConstraint(
+            "duration_days IS NULL OR duration_days > 0",
+            name="ck_plans_duration_positive",
+        ),
+        CheckConstraint(
+            "daily_limit IS NULL OR daily_limit > 0",
+            name="ck_plans_daily_limit_positive",
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
@@ -100,6 +112,9 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "activation_codes"
+    __table_args__ = (
+        CheckConstraint("duration_days > 0", name="ck_activation_duration_positive"),
+    )
 
     code_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
@@ -115,6 +130,9 @@ class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "payments"
+    __table_args__ = (
+        CheckConstraint("amount >= 0", name="ck_payment_amount_nonnegative"),
+    )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -132,7 +150,13 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DailyUsage(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "daily_usage"
-    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),
+        CheckConstraint(
+            "reserved >= 0 AND committed >= 0",
+            name="ck_daily_usage_nonnegative",
+        ),
+    )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -144,6 +168,12 @@ class DailyUsage(UUIDPrimaryKeyMixin, Base):
 
 class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "progress >= 0 AND progress <= 100",
+            name="ck_generation_progress_range",
+        ),
+    )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
@@ -165,6 +195,12 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_results"
+    __table_args__ = (
+        CheckConstraint(
+            "width > 0 AND height > 0",
+            name="ck_generation_dimensions_positive",
+        ),
+    )
 
     job_id: Mapped[UUID] = mapped_column(
         ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, unique=True
