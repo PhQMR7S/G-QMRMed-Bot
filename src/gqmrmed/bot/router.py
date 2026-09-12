@@ -149,76 +149,76 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
     request: GenerationRequest | None = None
 
     if message.photo:
-        item = message.photo[-1]
+        photo = message.photo[-1]
         request = GenerationRequest(
             input_type=InputType.MIXED if text else InputType.IMAGE,
             text=text,
-            storage_key=f"telegram://photo/{item.file_id}",
+            storage_key=f"telegram://photo/{photo.file_id}",
             mime_type="image/jpeg",
             metadata={
-                "telegram_file_id": item.file_id,
+                "telegram_file_id": photo.file_id,
                 "telegram_message_id": message.message_id,
-                "width": item.width,
-                "height": item.height,
+                "width": photo.width,
+                "height": photo.height,
             },
         )
     elif message.document:
-        item = message.document
+        document = message.document
         request = GenerationRequest(
             input_type=InputType.MIXED if text else InputType.DOCUMENT,
             text=text,
-            storage_key=f"telegram://document/{item.file_id}",
-            mime_type=item.mime_type,
+            storage_key=f"telegram://document/{document.file_id}",
+            mime_type=document.mime_type,
             metadata={
-                "telegram_file_id": item.file_id,
+                "telegram_file_id": document.file_id,
                 "telegram_message_id": message.message_id,
-                "file_name": item.file_name,
-                "file_size": item.file_size,
+                "file_name": document.file_name,
+                "file_size": document.file_size,
             },
         )
     elif message.audio:
-        item = message.audio
+        audio = message.audio
         request = GenerationRequest(
             input_type=InputType.MIXED if text else InputType.AUDIO,
             text=text,
-            storage_key=f"telegram://audio/{item.file_id}",
-            mime_type=item.mime_type or "audio/mpeg",
+            storage_key=f"telegram://audio/{audio.file_id}",
+            mime_type=audio.mime_type or "audio/mpeg",
             metadata={
-                "telegram_file_id": item.file_id,
+                "telegram_file_id": audio.file_id,
                 "telegram_message_id": message.message_id,
-                "file_name": item.file_name,
-                "duration": item.duration,
-                "file_size": item.file_size,
+                "file_name": audio.file_name,
+                "duration": audio.duration,
+                "file_size": audio.file_size,
             },
         )
     elif message.voice:
-        item = message.voice
+        voice = message.voice
         request = GenerationRequest(
             input_type=InputType.MIXED if text else InputType.AUDIO,
             text=text,
-            storage_key=f"telegram://voice/{item.file_id}",
-            mime_type=item.mime_type or "audio/ogg",
+            storage_key=f"telegram://voice/{voice.file_id}",
+            mime_type=voice.mime_type or "audio/ogg",
             metadata={
-                "telegram_file_id": item.file_id,
+                "telegram_file_id": voice.file_id,
                 "telegram_message_id": message.message_id,
-                "duration": item.duration,
-                "file_size": item.file_size,
+                "duration": voice.duration,
+                "file_size": voice.file_size,
             },
         )
     elif message.video:
-        item = message.video
+        video = message.video
         request = GenerationRequest(
             input_type=InputType.MIXED if text else InputType.VIDEO,
             text=text,
-            storage_key=f"telegram://video/{item.file_id}",
-            mime_type=item.mime_type or "video/mp4",
+            storage_key=f"telegram://video/{video.file_id}",
+            mime_type=video.mime_type or "video/mp4",
             metadata={
-                "telegram_file_id": item.file_id,
+                "telegram_file_id": video.file_id,
                 "telegram_message_id": message.message_id,
-                "width": item.width,
-                "height": item.height,
-                "duration": item.duration,
-                "file_size": item.file_size,
+                "width": video.width,
+                "height": video.height,
+                "duration": video.duration,
+                "file_size": video.file_size,
             },
         )
     elif text:
