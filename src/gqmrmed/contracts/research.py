@@ -83,7 +83,10 @@ class SynthesizedContent(BaseModel):
     key_points: list[str] = Field(min_length=1, max_length=12)
     claims: list[MedicalClaim] = Field(min_length=1, max_length=30)
     cautions: list[str] = Field(default_factory=list, max_length=8)
-    disclaimer: str = Field(default="Educational medical information; not a diagnosis.", max_length=240)
+    disclaimer: str = Field(
+        default="Educational medical information; not a diagnosis.",
+        max_length=240,
+    )
 
 
 class ArchitectureType(StrEnum):
