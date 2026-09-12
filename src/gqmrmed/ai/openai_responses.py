@@ -26,7 +26,11 @@ class OpenAIResponsesConfig:
 class OpenAIResponsesSynthesizer:
     """Generate evidence-linked medical content using the Responses API."""
 
-    def __init__(self, config: OpenAIResponsesConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: OpenAIResponsesConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
