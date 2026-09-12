@@ -9,7 +9,7 @@ from gqmrmed.contracts.research import (
     SourceType,
     SynthesizedContent,
 )
-from gqmrmed.research.pubmed import PubMedResearchProvider, _score_record
+from gqmrmed.research.pubmed import _score_record, PubMedResearchProvider
 from gqmrmed.services.medical_pipeline import build_medical_plan
 from gqmrmed.services.research import validate_synthesis_evidence
 from gqmrmed.services.visual_architecture import select_visual_architecture
