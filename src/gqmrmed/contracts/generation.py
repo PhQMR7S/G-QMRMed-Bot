@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class InputType(StrEnum):
@@ -24,25 +24,20 @@ class GenerationRequest(BaseModel):
     mime_type: str | None = Field(default=None, max_length=128)
     metadata: dict[str, object] | None = None
 
-    @field_validator("text")
+    @field_validator("text", "storage_key")
     @classmethod
-    def normalize_text(cls, value: str | None) -> str | None:
+    def normalize_optional_strings(cls, value: str | None) -> str | None:
         if value is None:
             return None
         normalized = value.strip()
         return normalized or None
 
+    @model_validator(mode="after")
+    def validate_model_payload(self) -> "GenerationRequest":
+        self.validate_payload()
+        return self
+
     def validate_payload(self) -> None:
         """Reject requests that contain neither inline text nor stored input."""
         if self.text is None and self.storage_key is None:
             raise ValueError("generation_input_required")
-
-
-class GenerationProgress(BaseModel):
-    """Safe progress payload for Telegram/UI adapters."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    stage: str = Field(min_length=1, max_length=64)
-    progress: int = Field(ge=0, le=100)
-    elapsed_seconds: int = Field(ge=0)
