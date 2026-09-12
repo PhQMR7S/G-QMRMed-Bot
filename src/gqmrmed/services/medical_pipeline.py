@@ -3,8 +3,17 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from gqmrmed.contracts.research import ResearchBundle, ResearchRequest, SynthesizedContent, VisualPlan
-from gqmrmed.services.research import ResearchProvider, research_medical_topic, validate_synthesis_evidence
+from gqmrmed.contracts.research import (
+    ResearchBundle,
+    ResearchRequest,
+    SynthesizedContent,
+    VisualPlan,
+)
+from gqmrmed.services.research import (
+    research_medical_topic,
+    ResearchProvider,
+    validate_synthesis_evidence,
+)
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
 
