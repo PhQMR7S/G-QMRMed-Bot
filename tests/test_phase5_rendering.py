@@ -4,7 +4,7 @@ from gqmrmed.contracts.research import (
     SynthesizedContent,
     VisualPlan,
 )
-from gqmrmed.rendering.layout import HEIGHT, WIDTH, build_layout
+from gqmrmed.rendering.layout import build_layout, HEIGHT, WIDTH
 from gqmrmed.rendering.svg import render_svg
 
 
