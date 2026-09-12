@@ -124,7 +124,10 @@ class GenerationWorker:
         try:
             job_id = UUID(raw_job_id)
         except ValueError:
-            logger.error("generation_queue_invalid_job_id", extra={"job_id": raw_job_id})
+            logger.error(
+                "generation_queue_invalid_job_id",
+                extra={"job_id": raw_job_id},
+            )
             return True
         await self.process(job_id)
         return True
@@ -215,7 +218,10 @@ class GenerationWorker:
                     100,
                 )
         except Exception as exc:
-            logger.exception("generation_job_failed", extra={"job_id": str(job_id)})
+            logger.exception(
+                "generation_job_failed",
+                extra={"job_id": str(job_id)},
+            )
             async with self._session_factory() as session:
                 async with session.begin():
                     result = await session.execute(
