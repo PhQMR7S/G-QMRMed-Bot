@@ -4,7 +4,7 @@ import pytest
 from gqmrmed.main import app
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_health() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -15,7 +15,7 @@ async def test_health() -> None:
     assert response.json()["service"] == "GQMRMed"
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_health_live() -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
