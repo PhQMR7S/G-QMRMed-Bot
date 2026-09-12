@@ -13,6 +13,17 @@ class InputType(StrEnum):
     MIXED = "mixed"
 
 
+class GenerationStage(StrEnum):
+    """Ordered stages exposed by the generation pipeline."""
+
+    RESEARCHING = "researching"
+    SYNTHESIZING = "synthesizing"
+    ARCHITECTURE = "architecture"
+    GENERATING = "generating"
+    RENDERING = "rendering"
+    QUALITY_CONTROL = "quality_control"
+
+
 class GenerationRequest(BaseModel):
     """Normalized request accepted by the pipeline."""
 
@@ -24,7 +35,7 @@ class GenerationRequest(BaseModel):
     mime_type: str | None = Field(default=None, max_length=128)
     metadata: dict[str, object] | None = None
 
-    @field_validator("text", "storage_key")
+    @field_validator("text", "storage_key", "mime_type")
     @classmethod
     def normalize_optional_strings(cls, value: str | None) -> str | None:
         if value is None:
@@ -41,3 +52,13 @@ class GenerationRequest(BaseModel):
         """Reject requests that contain neither inline text nor stored input."""
         if self.text is None and self.storage_key is None:
             raise ValueError("generation_input_required")
+
+
+class GenerationProgress(BaseModel):
+    """Safe progress payload for Telegram/API progress updates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: GenerationStage
+    progress: int = Field(ge=0, le=100)
+    elapsed_seconds: int = Field(ge=0)
