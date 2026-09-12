@@ -57,6 +57,11 @@ def test_usage_reservation_is_one_per_job() -> None:
     )
 
 
+def test_generation_dispatch_state_is_durable() -> None:
+    columns = GenerationJob.__table__.c.keys()
+    assert {"dispatch_attempts", "enqueued_at", "last_dispatch_error"}.issubset(columns)
+
+
 def test_expected_core_columns_exist() -> None:
     assert {"user_id", "plan_id", "status"}.issubset(
         set(Subscription.__table__.c.keys())
