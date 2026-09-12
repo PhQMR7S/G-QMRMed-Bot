@@ -25,7 +25,7 @@ jobs:
       - name: Install project
         run: |
           python -m pip install --upgrade pip
-          pip install ".[dev]"
+          pip install -e ".[dev]"
 
       - name: Compile Python sources
         run: python -m compileall -q src alembic
@@ -40,7 +40,8 @@ jobs:
         run: mypy src
 
       - name: Verify source package resolution
-        run: PYTHONPATH=src python -c "import gqmrmed.contracts.generation as m; assert m.__file__.startswith('src/'), m.__file__"
+        run: |
+          python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
 
       - name: Pytest
-        run: PYTHONPATH=src pytest
+        run: python -m pytest
