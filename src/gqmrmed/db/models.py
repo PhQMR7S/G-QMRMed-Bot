@@ -132,6 +132,11 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "payments"
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_payment_amount_nonnegative"),
+        UniqueConstraint(
+            "provider",
+            "transaction_id",
+            name="uq_payments_provider_transaction",
+        ),
     )
 
     user_id: Mapped[UUID] = mapped_column(
