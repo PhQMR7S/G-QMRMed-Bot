@@ -1,22 +1,23 @@
 """Generation-job lifecycle primitives."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, JobStatus
 
-VALID_STAGES = (
-    "researching",
-    "synthesizing",
-    "architecture",
-    "generating",
-    "rendering",
-    "quality_control",
-)
+VALID_STAGES = tuple(stage.value for stage in GenerationStage)
 _STAGE_INDEX = {stage: index for index, stage in enumerate(VALID_STAGES)}
+
+
+def _normalize_stage(stage: str) -> str:
+    try:
+        return GenerationStage(stage).value
+    except ValueError as exc:
+        raise ValueError("invalid_generation_stage") from exc
 
 
 async def create_generation_job(
@@ -32,18 +33,20 @@ async def create_generation_job(
     """Create a queued job for text, image, file, or mixed input."""
     normalized_type = input_type.strip()
     normalized_text = input_text.strip() if input_text is not None else None
+    normalized_storage_key = input_storage_key.strip() if input_storage_key else None
+    normalized_mime_type = input_mime_type.strip() if input_mime_type else None
     if not normalized_type:
         raise ValueError("generation_input_type_required")
     if len(normalized_type) > 32:
         raise ValueError("generation_input_type_too_long")
-    if not normalized_text and not input_storage_key:
+    if not normalized_text and not normalized_storage_key:
         raise ValueError("generation_input_required")
     job = GenerationJob(
         user_id=user_id,
         input_type=normalized_type,
         input_text=normalized_text or None,
-        input_storage_key=input_storage_key,
-        input_mime_type=input_mime_type[:128] if input_mime_type else None,
+        input_storage_key=normalized_storage_key,
+        input_mime_type=normalized_mime_type,
         input_metadata=input_metadata,
         status=JobStatus.QUEUED.value,
         progress=0,
@@ -55,8 +58,7 @@ async def create_generation_job(
 
 async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     """Transition a queued job to running and set its current stage."""
-    if stage not in VALID_STAGES:
-        raise ValueError("invalid_generation_stage")
+    normalized_stage = _normalize_stage(stage)
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
@@ -64,7 +66,7 @@ async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     if job.status != JobStatus.QUEUED.value:
         raise ValueError("invalid_job_transition")
     job.status = JobStatus.RUNNING.value
-    job.current_stage = stage
+    job.current_stage = normalized_stage
     job.progress = max(job.progress, 1)
     job.started_at = datetime.now(UTC)
     await session.flush()
@@ -78,8 +80,7 @@ async def update_progress(
     progress: int,
 ) -> None:
     """Update progress while enforcing monotonic stage and progress order."""
-    if stage not in VALID_STAGES:
-        raise ValueError("invalid_generation_stage")
+    normalized_stage = _normalize_stage(stage)
     if not 0 <= progress <= 100:
         raise ValueError("invalid_generation_progress")
     result = await session.execute(
@@ -88,9 +89,12 @@ async def update_progress(
     job = result.scalar_one()
     if job.status != JobStatus.RUNNING.value:
         raise ValueError("invalid_job_transition")
-    if job.current_stage is not None and _STAGE_INDEX[stage] < _STAGE_INDEX[job.current_stage]:
+    if (
+        job.current_stage is not None
+        and _STAGE_INDEX[normalized_stage] < _STAGE_INDEX[job.current_stage]
+    ):
         raise ValueError("generation_stage_regression")
-    job.current_stage = stage
+    job.current_stage = normalized_stage
     job.progress = max(job.progress, progress)
     await session.flush()
 
@@ -114,5 +118,5 @@ async def finish_job(
     job.completed_at = datetime.now(UTC)
     job.error = error if not success else None
     if success:
-        job.current_stage = "quality_control"
+        job.current_stage = GenerationStage.QUALITY_CONTROL.value
     await session.flush()
