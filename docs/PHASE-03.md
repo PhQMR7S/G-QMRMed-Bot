@@ -12,6 +12,7 @@
 - Paid plans with unlimited daily quota are supported by the same reservation ledger.
 - Durable DB-to-Redis dispatch state protects queued jobs across process restarts.
 - Dispatcher is at-least-once and the database remains the source of truth.
+- Queued-job cancellation releases the reserved usage slot atomically and idempotently.
 - Bot and API can run from the same image using `SERVICE_ROLE=bot` or `SERVICE_ROLE=api`.
 
 ## Important boundary
