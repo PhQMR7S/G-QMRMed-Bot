@@ -1,8 +1,11 @@
 """Secure generation of single-use subscription activation codes."""
 
+from datetime import datetime
 from secrets import choice
 from string import ascii_uppercase, digits
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.db.models import ActivationCode, Plan
@@ -28,8 +31,8 @@ async def create_activation_code(
     *,
     plan: Plan,
     duration_days: int,
-    created_by,
-    expires_at=None,
+    created_by: UUID | None,
+    expires_at: datetime | None = None,
 ) -> tuple[ActivationCode, str]:
     """Create a unique hashed activation code and return plaintext once."""
     if duration_days <= 0:
@@ -37,8 +40,10 @@ async def create_activation_code(
     for _ in range(10):
         plaintext = generate_activation_code(plan.code)
         code_hash = hash_activation_code(plaintext)
-        exists = await session.get(ActivationCode, code_hash)
-        if exists is None:
+        result = await session.execute(
+            select(ActivationCode.id).where(ActivationCode.code_hash == code_hash)
+        )
+        if result.scalar_one_or_none() is None:
             code = ActivationCode(
                 code_hash=code_hash,
                 plan_id=plan.id,
