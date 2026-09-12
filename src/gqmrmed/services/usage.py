@@ -1,7 +1,7 @@
 """Atomic daily generation quota reservation and settlement."""
 
 from dataclasses import dataclass
-from datetime import date, datetime, UTC
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -113,9 +113,10 @@ async def commit_generation(session: AsyncSession, reservation: Reservation) -> 
             reserved=DailyUsage.reserved - 1,
             committed=DailyUsage.committed + 1,
         )
+        .returning(DailyUsage.id)
     )
     result = await session.execute(stmt)
-    if result.rowcount != 1:
+    if result.scalar_one_or_none() is None:
         raise RuntimeError("generation reservation counters are inconsistent")
 
     ledger.status = UsageReservationStatus.COMMITTED.value
@@ -146,9 +147,10 @@ async def release_generation(session: AsyncSession, reservation: Reservation) ->
             DailyUsage.reserved > 0,
         )
         .values(reserved=DailyUsage.reserved - 1)
+        .returning(DailyUsage.id)
     )
     result = await session.execute(stmt)
-    if result.rowcount != 1:
+    if result.scalar_one_or_none() is None:
         raise RuntimeError("generation reservation counters are inconsistent")
 
     ledger.status = UsageReservationStatus.RELEASED.value
