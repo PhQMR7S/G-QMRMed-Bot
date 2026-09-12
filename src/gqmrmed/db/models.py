@@ -4,6 +4,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,7 +60,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     telegram_id: Mapped[int] = mapped_column(
-        Integer,
+        BigInteger,
         unique=True,
         nullable=False,
         index=True,
@@ -222,7 +224,7 @@ class AdminAction(UUIDPrimaryKeyMixin, Base):
     )
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(64))
-    target_id: Mapped[UUID | None] = mapped_column()
+    target_id: Mapped[UUID | None] = mapped_column(Uuid)
     details: Mapped[str | None] = mapped_column(Text)
 
 
