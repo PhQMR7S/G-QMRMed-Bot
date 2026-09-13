@@ -20,15 +20,66 @@ Before production start, provide:
 - At least one configured AI provider according to `AI_PROVIDER_ORDER`.
 - Persistent result storage. For a single host, the production compose volume is sufficient; for multiple hosts, configure S3-compatible storage.
 
+Never put real credentials, Telegram tokens, API keys, S3 secrets, or ComfyUI workflow credentials in Git.
+
+## Pre-release gate
+
+Run the configuration gate from the release host with the real `.env` loaded, without printing the environment:
+
+```bash
+set -a
+source .env
+set +a
+bash scripts/release-gate.sh
+```
+
+The gate verifies production mode, required dependencies, minimum admin-secret length, valid non-empty ComfyUI workflow JSON, at least one usable AI provider, and all-or-none S3 configuration. It does not print credential values.
+
+Then validate the exact Compose contract:
+
+```bash
+docker compose --env-file .env -f compose.production.yml config --quiet
+```
+
+Build from the exact Git commit being released and record the image digest:
+
+```bash
+git rev-parse HEAD
+docker compose --env-file .env -f compose.production.yml build
+```
+
+Do not mix images built from different commits in the same release.
+
 ## Release order
 
-1. Build the application image from the exact Git commit being released.
-2. Run `alembic upgrade head` once as the release migration step.
-3. Start `api`, `bot`, and `worker` from the same image/commit.
-4. Verify `/health/live` on the API process.
-5. Verify `/health/ready` reports both PostgreSQL and Redis as `ok`.
-6. Send a controlled Telegram generation request and verify the complete durable path: job creation → queue → worker → research → synthesis → rendering → stored result → Telegram delivery.
-7. Verify a failed Telegram delivery can be retried without regenerating the image.
+1. Check out the exact release commit and verify `git rev-parse HEAD`.
+2. Run `bash scripts/release-gate.sh` with the production environment loaded.
+3. Validate `docker compose ... config --quiet`.
+4. Build the application image from that exact commit.
+5. Run `alembic upgrade head` once through the one-shot `migrate` service.
+6. Start `api`, `bot`, and `worker` from the same image/commit.
+7. Verify `/health/live` on the API process.
+8. Verify `/health/ready` reports both PostgreSQL and Redis as `ok`.
+9. Verify the bot is connected to Telegram and only one polling consumer is active.
+10. Send one controlled Telegram generation request and verify the complete durable path: job creation → quota reservation → queue → worker lease → research → synthesis → evidence validation → architecture → illustration → SVG QA → PNG QA → persistent result → Telegram delivery.
+11. Verify a failed Telegram delivery can be retried without regenerating the image or consuming another usage unit.
+12. Verify duplicate worker delivery/retry is idempotent.
+13. Verify the free quota is exactly three successful reservations per UTC calendar day and paid-plan limits match the active entitlement.
+14. Verify a real Telegram Stars purchase only settles after `successful_payment`, and that the stored Telegram charge ID is present for refund handling.
+
+## Rollback
+
+If the application image must be rolled back, keep the database at the newest compatible schema unless the release explicitly contains a tested reversible migration. Do not blindly downgrade production migrations.
+
+For an application-only rollback:
+
+```bash
+git checkout <known-good-commit>
+docker compose --env-file .env -f compose.production.yml build
+docker compose --env-file .env -f compose.production.yml up -d api bot worker
+```
+
+Run the live and readiness checks again before accepting traffic. If a migration is not backward-compatible, stop and use the release-specific rollback procedure rather than forcing `alembic downgrade`.
 
 ## Compose
 
@@ -69,4 +120,6 @@ When more than one application host can execute workers, local `/data/results` i
 
 ## Final external gate
 
-The repository can validate code, packaging, migrations, and deterministic tests without production credentials. A real end-to-end generation cannot be truthfully marked complete until the external Telegram, PostgreSQL, Redis, AI, ComfyUI, and persistent-storage endpoints are supplied and exercised.
+The repository can validate code, packaging, migrations, deterministic rendering, and production configuration without production credentials. A real end-to-end generation cannot be truthfully marked complete until the external Telegram, PostgreSQL, Redis, AI, ComfyUI, and persistent-storage endpoints are supplied and exercised using the acceptance sequence above.
+
+The release is considered **production-ready** only when the repository CI is green **and** the external acceptance sequence passes. A green CI run alone does not prove that external services are reachable or that a real Telegram generation was delivered.
