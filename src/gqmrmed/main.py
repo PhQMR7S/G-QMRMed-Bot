@@ -35,19 +35,16 @@ async def start_embedded_worker() -> None:
         logger.warning("Embedded worker disabled: TELEGRAM_BOT_TOKEN is not configured")
         return
 
-    if not settings.comfyui_workflow_json:
-        logger.warning(
-            "Embedded worker disabled: COMFYUI_WORKFLOW_JSON is not configured"
-        )
-        return
-
     try:
         from gqmrmed.services.runtime import build_worker
 
         bot = Bot(token=settings.telegram_bot_token)
         worker = build_worker(settings, bot)
-    except Exception:
-        logger.exception("Embedded worker configuration failed; API will remain available")
+    except Exception as exc:
+        logger.exception(
+            "Embedded worker configuration failed; API will remain available",
+            extra={"reason": str(exc)},
+        )
         return
 
     stop_event = asyncio.Event()
