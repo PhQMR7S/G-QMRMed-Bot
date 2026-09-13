@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # are disabled unless explicitly enabled by configuration.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,openrouter_free,groq_free,openai_compatible,openai",
+        default="ollama,openrouter_free,groq_free,huggingface_free,openai_compatible,openai",
         alias="AI_PROVIDER_ORDER",
     )
     ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
@@ -60,6 +60,22 @@ class Settings(BaseSettings):
     groq_model: str = Field(default="openai/gpt-oss-20b", alias="GROQ_MODEL")
     groq_timeout_seconds: float = Field(
         default=120.0, gt=0, le=900, alias="GROQ_TIMEOUT_SECONDS"
+    )
+    huggingface_token: str | None = Field(default=None, alias="HUGGINGFACE_TOKEN")
+    huggingface_text_model: str = Field(
+        default="openai/gpt-oss-120b:fastest", alias="HUGGINGFACE_TEXT_MODEL"
+    )
+    huggingface_image_model: str = Field(
+        default="black-forest-labs/FLUX.1-dev", alias="HUGGINGFACE_IMAGE_MODEL"
+    )
+    huggingface_base_url: str = Field(
+        default="https://router.huggingface.co/v1", alias="HUGGINGFACE_BASE_URL"
+    )
+    huggingface_image_provider: str = Field(
+        default="auto", alias="HUGGINGFACE_IMAGE_PROVIDER"
+    )
+    huggingface_timeout_seconds: float = Field(
+        default=180.0, gt=0, le=900, alias="HUGGINGFACE_TIMEOUT_SECONDS"
     )
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
