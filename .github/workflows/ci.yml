@@ -46,6 +46,16 @@ jobs:
       - name: Pytest
         run: python -m pytest
 
+      - name: Validate production Compose contract
+        run: |
+          export DATABASE_URL='postgresql+asyncpg://gqmrmed:gqmrmed@db:5432/gqmrmed'
+          export REDIS_URL='redis://redis:6379/0'
+          export TELEGRAM_BOT_TOKEN='ci-token'
+          export ADMIN_SECRET='ci-admin-secret-012345678901234567890123456789'
+          export COMFYUI_BASE_URL='http://comfyui:8188'
+          export COMFYUI_WORKFLOW_JSON='{}'
+          docker compose -f compose.production.yml config --quiet
+
       - name: Build production container
         run: docker build --tag gqmrmed:ci .
 
