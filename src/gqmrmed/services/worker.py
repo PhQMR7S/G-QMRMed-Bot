@@ -7,13 +7,14 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from gqmrmed.contracts.generation import GenerationStage
+from gqmrmed.contracts.generation import GenerationStage, InputType
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
 from gqmrmed.services.jobs import (
@@ -22,7 +23,8 @@ from gqmrmed.services.jobs import (
     recover_stale_running_jobs,
     update_progress,
 )
-from gqmrmed.services.usage import commit_generation, release_generation, Reservation
+from gqmrmed.services.media_ingestion import MediaIngestor
+from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +97,7 @@ class ThrottledProgressReporter:
 
 
 class JobQueue(Protocol):
-    async def dequeue(self, *, timeout_seconds: int) -> str | None:
-        ...
+    async def dequeue(self, *, timeout_seconds: int) -> str | None: ...
 
 
 class GenerationWorker:
@@ -111,6 +112,8 @@ class GenerationWorker:
         result_store: ResultStore,
         progress_sink: ProgressSink | None = None,
         delivery_sink: DeliverySink | None = None,
+        media_ingestor: MediaIngestor | None = None,
+        media_temp_dir: str = "/tmp/gqmrmed-media",
         poll_timeout_seconds: int = 2,
         recovery_interval_seconds: int = 60,
         stale_running_after_seconds: int = 900,
@@ -127,6 +130,8 @@ class GenerationWorker:
         self._result_store = result_store
         self._progress_sink = progress_sink
         self._delivery_sink = delivery_sink
+        self._media_ingestor = media_ingestor
+        self._media_temp_dir = Path(media_temp_dir)
         self._poll_timeout = poll_timeout_seconds
         self._recovery_interval = recovery_interval_seconds
         self._stale_running_after = stale_running_after_seconds
@@ -199,6 +204,25 @@ class GenerationWorker:
                 extra={"job_id": str(job.id), "stage": stage.value, "progress": progress},
             )
 
+    async def _prepare_media(self, job: GenerationJob) -> None:
+        """Download Telegram media and convert it into synthesis-ready text."""
+        if self._media_ingestor is None or not job.storage_key:
+            return
+        destination = self._media_temp_dir / f"{job.id}.bin"
+        ingested = await self._media_ingestor.ingest(
+            storage_key=job.storage_key,
+            mime_type=job.mime_type,
+            destination=destination,
+        )
+        if not ingested.extracted_text:
+            raise ValueError("media_content_extraction_required")
+        prefix = (job.input_text or "").strip()
+        if job.input_type is InputType.MIXED and prefix:
+            job.input_text = f"User caption/context:\n{prefix}\n\nExtracted media content:\n{ingested.extracted_text}"
+        else:
+            job.input_text = ingested.extracted_text
+        job.input_type = InputType.TEXT
+
     async def process(self, job_id: UUID) -> None:
         async with self._session_factory() as session:
             async with session.begin():
@@ -219,6 +243,7 @@ class GenerationWorker:
 
             reporter = ThrottledProgressReporter()
             await self._emit_progress(job, GenerationStage.RESEARCHING, 1)
+            await self._prepare_media(job)
 
             async def progress(stage: GenerationStage, value: int) -> None:
                 if not reporter.should_emit(stage, value):
@@ -296,6 +321,9 @@ class GenerationWorker:
                         success=False,
                         error=f"{type(exc).__name__}: {exc}"[:4000],
                     )
+        finally:
+            if "destination" in locals():
+                destination.unlink(missing_ok=True)
 
 
 __all__ = [
