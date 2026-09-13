@@ -33,6 +33,8 @@ Telegram User
 ## Foundation guarantees
 
 - FREE entitlement is exactly 3 designs per UTC calendar day.
+- PLUS entitlement is exactly 8 designs per UTC calendar day while an active 30-day subscription exists.
+- PRO entitlement is exactly 15 designs per UTC calendar day while an active 90-day subscription exists.
 - Quota reservations are atomic at the PostgreSQL level and are released on failed/cancelled work.
 - Telegram IDs use PostgreSQL BIGINT.
 - Activation codes are stored only as SHA-256 hashes and are single-use.
@@ -53,7 +55,7 @@ Telegram User
 - Evidence records carry source IDs, PMID, title, abstract, publication year, provenance URL, and a bounded evidence score.
 - Research results are deduplicated and missing-evidence conditions are surfaced as warnings.
 - Synthesized medical claims must reference known evidence IDs; unknown or missing citations are rejected before visual planning.
-- AI synthesis is provider-neutral, with local Ollama first, OpenAI-compatible gateways second, and OpenAI Responses as a configurable fallback.
+- AI synthesis is provider-neutral, with local Ollama first and configured free external providers next. Paid providers remain disabled unless explicitly enabled.
 - Visual architecture is selected deterministically from the medical topic and synthesized content.
 - Illustration generation and exact text rendering are explicitly separated: the image model receives an illustration-only prompt while exact labels/text remain a renderer responsibility.
 - Final artwork is rasterized to a deterministic 1080×1920 PNG for Telegram delivery.
@@ -72,8 +74,10 @@ Telegram User
 | Plan | Price | Duration | Daily limit |
 | --- | ---: | ---: | ---: |
 | FREE | $0 | ongoing | 3 |
-| PLUS | $5 | 30 days | unlimited |
-| PRO | $20 | 365 days | unlimited |
+| PLUS | $5 | 30 days | 8 |
+| PRO | $20 | 90 days | 15 |
+
+The limits above are enforced from the active database plan entitlement at job creation time, not merely displayed in Telegram. Each generation reserves one durable usage slot before queue dispatch; concurrent requests cannot oversubscribe the plan quota, and a failed generation releases the reservation exactly once.
 
 Payment approval is transactional: an approved paid payment creates the corresponding subscription, while invalid plan/amount transitions are rejected. `/buy PLUS` and `/buy PRO` currently create manual pending payment requests; provider-specific payment gateways are not claimed as integrated until their APIs and credentials are configured.
 
@@ -105,9 +109,9 @@ Payment approval is transactional: an approved paid payment creates the correspo
 
 ## Current status
 
-The application-level generation path is implemented and CI-verified: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
+The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-Subscriptions and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. Approving a valid paid payment now grants the purchased subscription transactionally. Result storage can use an S3-compatible object store so worker restarts or ephemeral application filesystems do not discard completed images.
+Subscription entitlements and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. The launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days. Approving a valid paid payment grants the purchased subscription transactionally. Result storage can use an S3-compatible object store so worker restarts or ephemeral application filesystems do not discard completed images.
 
 The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
 
