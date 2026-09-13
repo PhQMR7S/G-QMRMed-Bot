@@ -153,7 +153,7 @@ class GoogleDriveResultStore:
             raise ValueError("invalid_google_drive_credentials_json") from exc
         if not isinstance(info, dict) or not info:
             raise ValueError("invalid_google_drive_credentials_json")
-        credentials = service_account.Credentials.from_service_account_info(
+        credentials = service_account.Credentials.from_service_account_info(  # type: ignore[no-untyped-call]
             info, scopes=self._SCOPES
         )
         self._folder_id = folder_id
