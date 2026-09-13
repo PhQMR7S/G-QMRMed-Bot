@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.db.models import Payment, PaymentStatus, Plan, Subscription, SubscriptionStatus
+from gqmrmed.db.models import Payment, PaymentStatus, Plan, PlanCode, Subscription, SubscriptionStatus
 
 
 async def create_payment(
@@ -20,9 +20,11 @@ async def create_payment(
     amount: Decimal,
     currency: str = "USD",
 ) -> Payment:
-    """Create an idempotent pending payment record."""
-    if amount < 0 or amount != Decimal(plan.price):
+    """Create an idempotent pending payment record for a paid plan."""
+    if plan.code == PlanCode.FREE or amount < 0 or amount != Decimal(plan.price):
         raise ValueError("invalid_payment_amount")
+    if not currency.strip():
+        raise ValueError("invalid_payment_currency")
     provider = provider.strip().lower()
     if not provider:
         raise ValueError("invalid_payment_provider")
@@ -59,6 +61,8 @@ async def _activate_paid_subscription(
     plan: Plan,
 ) -> Subscription:
     """Create the subscription granted by a newly approved payment."""
+    if plan.code == PlanCode.FREE or plan.duration_days is None or plan.duration_days <= 0:
+        raise ValueError("plan_not_paid_or_invalid_duration")
     now = datetime.now(UTC)
     result = await session.execute(
         select(Subscription)
