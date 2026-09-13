@@ -1,8 +1,11 @@
-"""Filesystem result persistence and Telegram delivery adapters."""
+"""Persistent result storage and Telegram delivery adapters."""
 
+import asyncio
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
+import boto3
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
@@ -50,6 +53,79 @@ class FilesystemResultStore:
         )
 
 
+class S3ResultStore:
+    """Persist final PNGs in any S3-compatible object storage service."""
+
+    def __init__(
+        self,
+        *,
+        endpoint: str,
+        access_key_id: str,
+        secret_access_key: str,
+        bucket: str,
+        region: str | None = None,
+    ) -> None:
+        if not endpoint.strip() or not access_key_id.strip() or not secret_access_key.strip():
+            raise ValueError("incomplete_s3_configuration")
+        if not bucket.strip():
+            raise ValueError("invalid_s3_bucket")
+        self._bucket = bucket
+        self._client: Any = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            region_name=region,
+        )
+
+    async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult:
+        if image.mime_type != "image/png":
+            raise ValueError("final_result_must_be_png")
+        if image.width <= 0 or image.height <= 0 or not image.image_bytes:
+            raise ValueError("invalid_final_result")
+        key = f"results/{job_id}.png"
+        await asyncio.to_thread(
+            self._client.put_object,
+            Bucket=self._bucket,
+            Key=key,
+            Body=image.image_bytes,
+            ContentType="image/png",
+        )
+        return StoredResult(
+            storage_key=f"s3://{self._bucket}/{key}",
+            width=image.width,
+            height=image.height,
+            mime_type=image.mime_type,
+            image_bytes=image.image_bytes,
+        )
+
+    async def load(self, storage_key: str) -> StoredResult:
+        """Reload an object for durable Telegram delivery retry."""
+        prefix = f"s3://{self._bucket}/"
+        if not storage_key.startswith(prefix):
+            raise ValueError("invalid_s3_storage_key")
+        key = storage_key[len(prefix) :]
+        response = await asyncio.to_thread(
+            self._client.get_object,
+            Bucket=self._bucket,
+            Key=key,
+        )
+        body = response["Body"]
+        try:
+            data = await asyncio.to_thread(body.read)
+        finally:
+            await asyncio.to_thread(body.close)
+        if not data:
+            raise ValueError("stored_result_empty")
+        return StoredResult(
+            storage_key=storage_key,
+            width=0,
+            height=0,
+            mime_type="image/png",
+            image_bytes=data,
+        )
+
+
 class TelegramResultDelivery:
     """Send only the completed infographic to the originating Telegram chat."""
 
@@ -69,4 +145,4 @@ class TelegramResultDelivery:
         return sent.message_id
 
 
-__all__ = ["FilesystemResultStore", "TelegramResultDelivery"]
+__all__ = ["FilesystemResultStore", "S3ResultStore", "TelegramResultDelivery"]
