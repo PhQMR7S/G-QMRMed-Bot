@@ -55,3 +55,7 @@ testpaths = ["tests"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["cairosvg"]
+ignore_missing_imports = true
