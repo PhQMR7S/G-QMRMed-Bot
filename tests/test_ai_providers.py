@@ -74,11 +74,9 @@ async def test_router_falls_back_in_configured_order(research: ResearchBundle) -
     assert result.title == "Diabetes"
 
 
-@pytest.mark.asyncio
-async def test_router_rejects_paid_provider_by_default(research: ResearchBundle) -> None:
-    router = ProviderRouter([(ProviderDescriptor("paid", "model", "paid"), SuccessProvider())])
+def test_router_rejects_paid_provider_by_default() -> None:
     with pytest.raises(ValueError, match="provider_router_requires_enabled_provider"):
-        await router.synthesize(user_input="diabetes", research=research)
+        ProviderRouter([(ProviderDescriptor("paid", "model", "paid"), SuccessProvider())])
 
 
 @pytest.mark.asyncio
