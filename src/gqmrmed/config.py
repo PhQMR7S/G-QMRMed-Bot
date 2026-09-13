@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     s3_secret_access_key: str | None = Field(default=None, alias="S3_SECRET_ACCESS_KEY")
     s3_bucket: str = Field(default="gqmrmed", alias="S3_BUCKET")
     s3_region: str | None = Field(default=None, alias="S3_REGION")
+    google_drive_credentials_json: str | None = Field(
+        default=None, alias="GOOGLE_DRIVE_CREDENTIALS_JSON"
+    )
+    google_drive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
 
     # AI routing: free/local providers are the launch default. Paid providers
     # are disabled unless explicitly enabled by configuration.
@@ -101,6 +105,10 @@ class Settings(BaseSettings):
                 not self.s3_access_key_id or not self.s3_secret_access_key
             ):
                 raise ValueError("complete S3 credentials are required when S3 is configured")
+            if bool(self.google_drive_credentials_json) != bool(self.google_drive_folder_id):
+                raise ValueError(
+                    "Google Drive credentials and folder ID must be configured together"
+                )
         return self
 
 
