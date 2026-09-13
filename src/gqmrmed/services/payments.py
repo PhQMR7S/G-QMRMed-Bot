@@ -1,12 +1,13 @@
 """Payment lifecycle helpers for manual and provider-backed payment flows."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.db.models import Payment, PaymentStatus, Plan
+from gqmrmed.db.models import Payment, PaymentStatus, Plan, Subscription, SubscriptionStatus
 
 
 async def create_payment(
@@ -20,7 +21,7 @@ async def create_payment(
     currency: str = "USD",
 ) -> Payment:
     """Create an idempotent pending payment record."""
-    if amount < 0:
+    if amount < 0 or amount != Decimal(plan.price):
         raise ValueError("invalid_payment_amount")
     provider = provider.strip().lower()
     if not provider:
@@ -51,6 +52,41 @@ async def create_payment(
     return payment
 
 
+async def _activate_paid_subscription(
+    session: AsyncSession,
+    *,
+    payment: Payment,
+    plan: Plan,
+) -> Subscription:
+    """Create the subscription granted by a newly approved payment."""
+    now = datetime.now(UTC)
+    result = await session.execute(
+        select(Subscription)
+        .where(
+            Subscription.user_id == payment.user_id,
+            Subscription.status == SubscriptionStatus.ACTIVE.value,
+            Subscription.expires_at.is_not(None),
+            Subscription.expires_at > now,
+        )
+        .order_by(Subscription.expires_at.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    existing = result.scalar_one_or_none()
+    start = now if existing is None or existing.expires_at is None else existing.expires_at
+    subscription = Subscription(
+        user_id=payment.user_id,
+        plan_id=plan.id,
+        status=SubscriptionStatus.ACTIVE.value,
+        starts_at=start,
+        expires_at=start + timedelta(days=plan.duration_days),
+        activated_at=now,
+    )
+    session.add(subscription)
+    await session.flush()
+    return subscription
+
+
 async def set_payment_status(
     session: AsyncSession,
     *,
@@ -58,7 +94,7 @@ async def set_payment_status(
     status: PaymentStatus,
     approved_by: UUID | None = None,
 ) -> Payment:
-    """Transition a payment under a row lock and record the approving admin."""
+    """Transition a payment under a row lock and grant access on approval."""
     result = await session.execute(
         select(Payment).where(Payment.id == payment_id).with_for_update()
     )
@@ -77,6 +113,15 @@ async def set_payment_status(
     }
     if status != current and status not in allowed[current]:
         raise ValueError("invalid_payment_transition")
+    if status == PaymentStatus.APPROVED and current != PaymentStatus.APPROVED:
+        plan = (
+            await session.execute(
+                select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True))
+            )
+        ).scalar_one_or_none()
+        if plan is None:
+            raise ValueError("plan_unavailable")
+        await _activate_paid_subscription(session, payment=payment, plan=plan)
     payment.status = status.value
     if status == PaymentStatus.APPROVED:
         payment.approved_by = approved_by
