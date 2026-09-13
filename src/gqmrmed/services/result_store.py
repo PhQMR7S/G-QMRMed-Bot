@@ -43,8 +43,8 @@ class FilesystemResultStore:
             raise ValueError("stored_result_empty")
         return StoredResult(
             storage_key=storage_key,
-            width=1080,
-            height=1920,
+            width=0,
+            height=0,
             mime_type="image/png",
             image_bytes=data,
         )
@@ -56,16 +56,17 @@ class TelegramResultDelivery:
     def __init__(self, bot: Bot) -> None:
         self._bot = bot
 
-    async def __call__(self, job: GenerationJob, result: StoredResult) -> None:
+    async def __call__(self, job: GenerationJob, result: StoredResult) -> int | None:
         chat_id = (job.input_metadata or {}).get("telegram_chat_id")
         if not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("telegram_chat_id_unavailable")
         if not result.image_bytes:
             raise ValueError("result_bytes_unavailable")
-        await self._bot.send_photo(
+        sent = await self._bot.send_photo(
             chat_id=chat_id,
             photo=BufferedInputFile(result.image_bytes, filename=f"{job.id}.png"),
         )
+        return sent.message_id
 
 
 __all__ = ["FilesystemResultStore", "TelegramResultDelivery"]
