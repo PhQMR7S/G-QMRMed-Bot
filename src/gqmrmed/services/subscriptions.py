@@ -45,7 +45,11 @@ async def get_effective_subscription(
 ) -> Subscription | None:
     """Resolve one server-authoritative entitlement using UTC and deterministic precedence."""
     now = datetime.now(UTC)
-    rank = case((Plan.code == PlanCode.PRO.value, 3), (Plan.code == PlanCode.PLUS.value, 2), else_=1)
+    rank = case(
+        (Plan.code == PlanCode.PRO.value, 3),
+        (Plan.code == PlanCode.PLUS.value, 2),
+        else_=1,
+    )
     result = await session.execute(
         select(Subscription)
         .join(Plan, Plan.id == Subscription.plan_id)
@@ -124,8 +128,12 @@ async def grant_paid_subscription(
                 old_total_days = current_plan.duration_days or 1
                 old_price = Decimal(current_plan.price)
                 new_price = Decimal(plan.price)
-                credit_value = old_price * Decimal(remaining_seconds) / Decimal(old_total_days * 86400)
-                credit_days = float(credit_value / new_price * Decimal(duration)) if new_price else 0.0
+                credit_value = (
+                    old_price * Decimal(remaining_seconds) / Decimal(old_total_days * 86400)
+                )
+                credit_days = (
+                    float(credit_value / new_price * Decimal(duration)) if new_price else 0.0
+                )
                 start = now
                 expires = start + timedelta(days=duration + max(0.0, credit_days))
                 for subscription, _ in active_rows:

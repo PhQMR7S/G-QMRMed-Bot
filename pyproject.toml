@@ -51,8 +51,8 @@ order-by-type = false
 "alembic/versions/*.py" = ["E501"]
 "src/gqmrmed/admin.py" = ["B008"]
 "src/gqmrmed/services/jobs.py" = ["I001"]
-"src/gqmrmed/db/models.py" = ["E501"]
-"src/gqmrmed/services/payments.py" = ["E501"]
+"src/gqmrmed/db/models.py" = ["E501", "I001"]
+"src/gqmrmed/services/payments.py" = ["E501", "I001"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

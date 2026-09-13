@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import create_user_generation, provision_user
 from gqmrmed.contracts.generation import GenerationRequest, InputType
-from gqmrmed.db.models import Plan, PlanCode, User
+from gqmrmed.db.models import Plan, User
 from gqmrmed.services.subscriptions import activate_code
 from gqmrmed.services.usage import QuotaExceededError
 
