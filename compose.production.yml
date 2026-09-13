@@ -69,13 +69,18 @@ services:
       S3_BUCKET: ${S3_BUCKET:-gqmrmed}
       S3_REGION: ${S3_REGION:-}
       AI_PROVIDER: ${AI_PROVIDER:-}
-      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openai_compatible,openai}
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openrouter_free,openai_compatible,openai}
+      AI_ALLOW_PAID: ${AI_ALLOW_PAID:-false}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
       AI_MODEL: ${AI_MODEL:-gpt-5.6-luna}
       AI_COMPATIBLE_API_KEY: ${AI_COMPATIBLE_API_KEY:-}
       AI_COMPATIBLE_BASE_URL: ${AI_COMPATIBLE_BASE_URL:-}
       AI_COMPATIBLE_MODEL: ${AI_COMPATIBLE_MODEL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
+      OPENROUTER_TIMEOUT_SECONDS: ${OPENROUTER_TIMEOUT_SECONDS:-120}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
