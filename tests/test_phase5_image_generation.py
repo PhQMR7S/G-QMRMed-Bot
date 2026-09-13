@@ -1,11 +1,11 @@
 import pytest
 
 from gqmrmed.ai.image_generation import (
+    build_illustration_request,
     ComfyUIConfig,
     ComfyUIIllustrationProvider,
     ImageGenerationError,
     ImageGenerationRequest,
-    build_illustration_request,
 )
 from gqmrmed.contracts.research import ArchitectureType, VisualPlan
 
