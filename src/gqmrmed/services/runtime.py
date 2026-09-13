@@ -27,7 +27,10 @@ from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
 from gqmrmed.services.media_routing import RoutingMediaExtractor
-from gqmrmed.services.production_pipeline import ProductionGenerationPipeline, ProductionPipelineConfig
+from gqmrmed.services.production_pipeline import (
+    ProductionGenerationPipeline,
+    ProductionPipelineConfig,
+)
 from gqmrmed.services.redis_queue import RedisJobQueue
 from gqmrmed.services.result_store import FilesystemResultStore, TelegramResultDelivery
 from gqmrmed.services.telegram_media import TelegramMediaSource
@@ -72,7 +75,10 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         ):
             providers.append(
                 (
-                    ProviderDescriptor(name="openai_compatible", model=settings.ai_compatible_model),
+                    ProviderDescriptor(
+                        name="openai_compatible",
+                        model=settings.ai_compatible_model,
+                    ),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.ai_compatible_api_key,
@@ -126,7 +132,10 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         research_provider=research.search,
         synthesis_provider=synthesis,
         image_provider=image,
-        config=ProductionPipelineConfig(width=settings.image_width, height=settings.image_height),
+        config=ProductionPipelineConfig(
+            width=settings.image_width,
+            height=settings.image_height,
+        ),
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
