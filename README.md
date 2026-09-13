@@ -26,7 +26,8 @@ Telegram User
   -> SVG exact-text rendering
   -> PNG rasterization
   -> Medical/Visual QA boundary
-  -> Telegram final image
+  -> Durable Result Storage
+  -> Telegram delivery + retry
 ```
 
 ## Foundation guarantees
@@ -39,7 +40,9 @@ Telegram User
 - Generation jobs support text, image, document, audio, video, and mixed input through validated contracts and references.
 - Job progress is bounded to 0..100 and lifecycle transitions are guarded.
 - Queued jobs have durable dispatch state; PostgreSQL remains the source of truth and Redis delivery is at-least-once.
-- Stale RUNNING jobs are recovered conservatively and their reservations released.
+- RUNNING jobs use a heartbeat lease, preventing long-running valid generations from being mistaken for dead workers.
+- Successful results have durable Telegram delivery state in job metadata and are retried after transient delivery/process failures.
+- Failed generation releases its reserved usage; successful generation commits usage before delivery retry begins.
 - No secrets are committed to the repository.
 - Alembic migrations are versioned and CI validates the migration chain.
 
@@ -53,6 +56,15 @@ Telegram User
 - Visual architecture is selected deterministically from the medical topic and synthesized content.
 - Illustration generation and exact text rendering are explicitly separated: the image model receives an illustration-only prompt while exact labels/text remain a renderer responsibility.
 - Final artwork is rasterized to a deterministic 1080×1920 PNG for Telegram delivery.
+
+## Media ingestion
+
+- Telegram media is downloaded through a provider-neutral source adapter.
+- Inputs are size-checked, MIME-normalized, hashed, and stored only temporarily during processing.
+- PDF/TXT/Markdown/CSV extraction is local where possible.
+- Images can use the configured multimodal AI extractor for OCR and medical diagram interpretation.
+- Audio and video can use the configured transcription path; video audio extraction uses FFmpeg.
+- Media is converted into synthesis-ready text before medical research, preserving user captions/context for mixed inputs.
 
 ## Subscription plans
 
@@ -73,6 +85,7 @@ Telegram User
 - AI/image pipeline: ComfyUI API adapter, ready for a configured FLUX.2 Klein workflow
 - Exact layout: SVG renderer + CairoSVG rasterization
 - Storage: filesystem result adapter now, S3-compatible abstraction retained for production storage
+- Media: Telegram download + local document extraction + optional AI OCR/transcription + FFmpeg
 - Deployment: Docker + managed application hosting
 - Quality: Ruff, MyPy, Pytest, migration validation
 
@@ -83,12 +96,14 @@ Telegram User
 3. Telegram bot + user onboarding + usage enforcement — implemented
 4. Research, verification, synthesis, and visual architecture — implemented
 5. Image generation + exact-text renderer — wired
-6. Queue, live progress, failure recovery, and Telegram delivery — wired
+6. Queue, live progress, heartbeat recovery, media ingestion, and durable Telegram delivery — implemented
 7. Subscriptions, activation, payments, and private admin panel — next
 8. End-to-end testing, deployment, hardening, monitoring, and release — next
 
 ## Current status
 
-The repository now contains the complete application-level text-to-infographic execution path: a Telegram job is durably queued, researched against PubMed, synthesized through the configured provider router, assigned a visual architecture, rendered with a real ComfyUI illustration provider, composed with exact SVG text, rasterized to PNG, persisted, and delivered back to Telegram. The remaining deployment dependency is external infrastructure/configuration: a real Telegram token, database/Redis endpoints, an AI provider credential or reachable Ollama instance, and a ComfyUI deployment with a concrete API-format workflow/model.
+The repository now contains the complete application-level text-to-infographic execution path: a Telegram job is durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
+
+The remaining deployment dependency is external infrastructure/configuration: a real Telegram token, database/Redis endpoints, an AI provider credential or reachable Ollama instance, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. FLUX.2 Klein 4B is supported by ComfyUI and is designed for consumer GPUs; its model weights are not committed to this repository.
 
 CI is the source of truth for static typing, linting, migrations, package resolution, and automated tests after each push.
