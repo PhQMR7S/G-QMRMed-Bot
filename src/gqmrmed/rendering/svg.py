@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
-from gqmrmed.rendering.layout import build_layout, HEIGHT, LayoutBox, WIDTH
+from gqmrmed.rendering.layout import HEIGHT, LayoutBox, WIDTH, build_layout
 
 
 class SVGRenderError(RuntimeError):
@@ -28,7 +28,10 @@ def render_svg(
         _text_box(layout.title, content.title, 58, bold=True),
     ]
     if content.subtitle:
-        parts.append(_text_box(layout.subtitle, content.subtitle, 30, bold=False))
+        subtitle_box = layout.subtitle
+        if subtitle_box is None:
+            raise SVGRenderError("subtitle content requires a subtitle layout box")
+        parts.append(_text_box(subtitle_box, content.subtitle, 30, bold=False))
     if illustration_href:
         parts.append(
             f'<image href="{escape(illustration_href, quote=True)}" '
