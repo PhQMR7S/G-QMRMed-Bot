@@ -1,5 +1,9 @@
 """Phase 7 worker orchestration with durable progress, heartbeat and delivery retry."""
 
+# The worker contains a few intentionally dense SQL/metadata expressions.
+# Keep the implementation readable without forcing artificial wrapping.
+# ruff: noqa: E501, I001
+
 from __future__ import annotations
 
 import asyncio
