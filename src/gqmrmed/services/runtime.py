@@ -32,7 +32,11 @@ from gqmrmed.services.production_pipeline import (
     ProductionPipelineConfig,
 )
 from gqmrmed.services.redis_queue import RedisJobQueue
-from gqmrmed.services.result_store import FilesystemResultStore, TelegramResultDelivery
+from gqmrmed.services.result_store import (
+    FilesystemResultStore,
+    S3ResultStore,
+    TelegramResultDelivery,
+)
 from gqmrmed.services.telegram_media import TelegramMediaSource
 from gqmrmed.services.worker import GenerationWorker
 
@@ -139,11 +143,25 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
+
+    if settings.s3_endpoint:
+        if not settings.s3_access_key_id or not settings.s3_secret_access_key:
+            raise RuntimeError("complete S3 credentials are required when S3 is configured")
+        result_store = S3ResultStore(
+            endpoint=settings.s3_endpoint,
+            access_key_id=settings.s3_access_key_id,
+            secret_access_key=settings.s3_secret_access_key,
+            bucket=settings.s3_bucket,
+            region=settings.s3_region,
+        )
+    else:
+        result_store = FilesystemResultStore(Path(settings.result_storage_dir))
+
     return GenerationWorker(
         queue=queue,
         session_factory=SessionFactory,
         pipeline=pipeline,
-        result_store=FilesystemResultStore(Path(settings.result_storage_dir)),
+        result_store=result_store,
         progress_sink=TelegramProgressSink(bot),
         delivery_sink=TelegramResultDelivery(bot),
         media_ingestor=media_ingestor,
