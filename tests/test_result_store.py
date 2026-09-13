@@ -73,23 +73,36 @@ class FakeDriveUpload:
 class FakeDriveFiles:
     def __init__(self) -> None:
         self.data: dict[str, bytes] = {}
+        self.names: dict[str, str] = {}
         self.next_id = 1
+
+    def list(self, *, q: str, **_: object) -> FakeDriveRequest:
+        filename = q.split("name='")[1].split("'")[0]
+        for file_id, name in self.names.items():
+            if name == filename:
+                return FakeDriveRequest({"files": [{"id": file_id}]})
+        return FakeDriveRequest({"files": []})
 
     def create(self, *, body: dict[str, object], media_body: FakeDriveUpload, **_: object) -> object:
         file_id = f"file-{self.next_id}"
         self.next_id += 1
+        self.names[file_id] = str(body["name"])
         self.data[file_id] = media_body.data
         return FakeDriveRequest({"id": file_id})
+
+    def update(self, *, fileId: str, media_body: FakeDriveUpload, **_: object) -> object:
+        self.data[fileId] = media_body.data
+        return FakeDriveRequest({"id": fileId})
 
     def get_media(self, *, fileId: str, **_: object) -> object:
         return FakeDriveMediaRequest(self.data[fileId])
 
 
 class FakeDriveRequest:
-    def __init__(self, response: dict[str, str]) -> None:
+    def __init__(self, response: dict[str, object]) -> None:
         self.response = response
 
-    def execute(self) -> dict[str, str]:
+    def execute(self) -> dict[str, object]:
         return self.response
 
 
@@ -132,16 +145,21 @@ async def test_google_drive_result_store_round_trip(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(result_store, "MediaIoBaseDownload", FakeDriveDownloader)
 
     store = result_store.GoogleDriveResultStore(
-        credentials_json='{"client_email":"bot@example.com","private_key":"key","token_uri":"uri"}',
+        credentials_json=(
+            '{"client_email":"bot@example.com","private_key":"key",'
+            '"token_uri":"uri"}'
+        ),
         folder_id="folder-id",
     )
     job_id = uuid4()
     image = GeneratedIllustration(image_bytes=b"png-data", width=1080, height=1920)
 
     stored = await store.put(job_id=job_id, image=image)
+    stored_again = await store.put(job_id=job_id, image=image)
     loaded = await store.load(stored.storage_key)
 
-    assert stored.storage_key.startswith("gdrive://file-")
+    assert stored.storage_key == stored_again.storage_key
+    assert len(service.files().data) == 1
     assert stored.image_bytes == b"png-data"
     assert loaded.image_bytes == b"png-data"
     assert loaded.mime_type == "image/png"
