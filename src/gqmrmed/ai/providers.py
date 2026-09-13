@@ -53,7 +53,7 @@ class ProviderRouter:
         for metadata, provider in self.providers:
             try:
                 return await provider.synthesize(user_input=user_input, research=research)
-            except Exception as exc:  # noqa: BLE001 - boundary must isolate provider outages.
+            except Exception as exc:  # noqa: BLE001 - isolate provider outages at boundary.
                 errors.append(f"{metadata.name}:{type(exc).__name__}")
         raise ProviderRoutingError("all_synthesis_providers_failed:" + ",".join(errors))
 
@@ -69,7 +69,7 @@ class OpenAICompatibleConfig:
 
 
 class OpenAICompatibleChatSynthesizer:
-    """Adapter for OpenAI-compatible gateways without coupling routing to one vendor."""
+    """Adapter for OpenAI-compatible gateways without vendor coupling."""
 
     def __init__(
         self,
