@@ -40,7 +40,7 @@ from gqmrmed.services.result_store import (
     TelegramResultDelivery,
 )
 from gqmrmed.services.telegram_media import TelegramMediaSource
-from gqmrmed.services.worker import GenerationWorker
+from gqmrmed.services.worker import GenerationWorker, ResultStore
 
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
@@ -187,6 +187,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
 
+    result_store: ResultStore
     if settings.google_drive_credentials_json and settings.google_drive_folder_id:
         result_store = GoogleDriveResultStore(
             credentials_json=settings.google_drive_credentials_json,
