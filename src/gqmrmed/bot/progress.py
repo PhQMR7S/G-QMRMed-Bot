@@ -8,9 +8,10 @@ from typing import Any
 from uuid import UUID
 
 from aiogram import Bot
+from sqlalchemy import select
 
 from gqmrmed.contracts.generation import GenerationProgress, GenerationStage
-from gqmrmed.db.models import GenerationJob
+from gqmrmed.db.models import GenerationJob, User
 from gqmrmed.db.session import SessionFactory
 from gqmrmed.services.jobs import set_progress_message_id
 
@@ -81,7 +82,11 @@ class TelegramProgressSink:
 
         chat_id = (job.input_metadata or {}).get("telegram_chat_id")
         if not isinstance(chat_id, int) or chat_id <= 0:
-            chat_id = job.user_id.int % (2**63 - 1)
+            async with self._session_factory() as session:
+                result = await session.execute(select(User.telegram_id).where(User.id == job.user_id))
+                chat_id = result.scalar_one_or_none()
+        if not isinstance(chat_id, int) or chat_id <= 0:
+            raise ValueError("telegram_chat_id_unavailable")
 
         text = format_progress_message(stage, progress, elapsed_seconds=elapsed)
         if message_id is None:
@@ -93,17 +98,12 @@ class TelegramProgressSink:
                     await set_progress_message_id(session, job_id, message_id)
             return
 
-        try:
-            await self._bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=text,
-                parse_mode="HTML",
-            )
-        except Exception:
-            # Telegram delivery is observability only; the worker remains source-of-truth.
-            self._message_ids[job_id] = message_id
-            raise
+        await self._bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            parse_mode="HTML",
+        )
 
 
 __all__ = ["TelegramProgressSink", "format_progress_message"]
