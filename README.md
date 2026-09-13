@@ -80,13 +80,13 @@ Telegram User
 | PLUS | $5 | 30 days | 8 | 400 ⭐ |
 | PRO | $20 | 90 days | 15 | 1,600 ⭐ |
 
-Telegram's official documentation states that the amount a user pays to acquire Stars can vary by user/region due to VAT and other fees, and Telegram currently assigns a $0.013 reward value per Star to developers. The launch Star amounts therefore target approximately $5.20 and $20.80 of current reward value; they are not a promise that every user will pay exactly $5/$20 when acquiring Stars. citeturn3search0
+Telegram's official documentation states that the amount a user pays to acquire Stars can vary by user/region due to VAT and other fees, and Telegram currently assigns a $0.013 reward value per Star to developers. The launch Star amounts therefore target approximately $5.20 and $20.80 of current reward value; they are not a promise that every user will pay exactly $5/$20 when acquiring Stars.
 
-Inside Telegram, GQMRMed sells a digital service. Telegram requires digital goods/services in bots to be sold exclusively using Telegram Stars (`XTR`), so the bot does not expose Mastercard, Zain Cash, bank-transfer, or other alternative payment instructions as an in-Telegram purchase path. citeturn6search0turn3search0
+Inside Telegram, GQMRMed sells a digital service. Telegram requires digital goods/services in bots to be sold exclusively using Telegram Stars (`XTR`), so the bot does not expose Mastercard, Zain Cash, bank-transfer, or other alternative payment instructions as an in-Telegram purchase path.
 
-The bot requires explicit purchase-terms confirmation before creating a Stars invoice, validates the exact server-side order during `pre_checkout_query`, and grants access only after a verified `successful_payment`. Telegram also requires `/terms` and payment support for live digital-service sales; GQMRMed exposes `/terms` and `/paysupport`. citeturn6search0turn4search0
+The bot requires explicit purchase-terms confirmation before creating a Stars invoice, validates the exact server-side order during `pre_checkout_query`, and grants access only after a verified `successful_payment`. Telegram also requires `/terms` and payment support for live digital-service sales; GQMRMed exposes `/terms` and `/paysupport`.
 
-All successful Stars transactions persist the Telegram charge ID for audit/refund handling. Telegram documents `telegram_payment_charge_id` as the identifier needed for refunds. citeturn4search0
+All successful Stars transactions persist the Telegram charge ID for audit/refund handling.
 
 ## Activation codes and admin operations
 
