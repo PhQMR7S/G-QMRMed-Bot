@@ -20,11 +20,15 @@ class FakeSession:
     def __init__(self, *results: object) -> None:
         self.results = list(results)
         self.calls = 0
+        self.added: list[object] = []
 
     async def execute(self, _statement: object) -> FakeResult:
         value = self.results[self.calls]
         self.calls += 1
         return FakeResult(value)
+
+    def add(self, value: object) -> None:
+        self.added.append(value)
 
     async def flush(self) -> None:
         return None
@@ -104,15 +108,6 @@ async def test_approval_grants_subscription_and_is_replay_safe() -> None:
     plan = make_plan()
     payment = make_payment(plan)
     user = SimpleNamespace(id=payment.user_id)
-    subscription = SimpleNamespace(
-        id=uuid4(),
-        user_id=payment.user_id,
-        plan_id=plan.id,
-        status=SubscriptionStatus.ACTIVE.value,
-        starts_at=None,
-        expires_at=None,
-        activated_at=None,
-    )
     session = FakeSession(payment, plan, user, None)
 
     result = await set_payment_status(
@@ -124,6 +119,7 @@ async def test_approval_grants_subscription_and_is_replay_safe() -> None:
     assert result is payment
     assert payment.status == PaymentStatus.APPROVED.value
     assert payment.subscription_id is not None
+    assert len(session.added) == 1
     assert session.calls == 4
 
     replay_session = FakeSession(payment)
@@ -134,7 +130,6 @@ async def test_approval_grants_subscription_and_is_replay_safe() -> None:
     )
     assert replay is payment
     assert replay_session.calls == 1
-    assert subscription.status == SubscriptionStatus.ACTIVE.value
 
 
 @pytest.mark.asyncio
