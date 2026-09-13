@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -31,14 +33,20 @@ class ProviderRoutingError(RuntimeError):
 
 
 class ProviderRouter:
-    """Try healthy providers in priority order, never using paid providers by accident."""
+    """Try free/local providers safely with bounded retry and concurrency."""
 
     def __init__(
         self,
         providers: Sequence[tuple[ProviderDescriptor, TextSynthesisProvider]],
         *,
         allow_paid: bool = False,
+        retry_attempts: int = 2,
+        max_concurrency_per_provider: int = 4,
     ) -> None:
+        if retry_attempts < 0:
+            raise ValueError("retry_attempts_must_be_nonnegative")
+        if max_concurrency_per_provider <= 0:
+            raise ValueError("max_concurrency_per_provider_must_be_positive")
         enabled = [
             (meta, provider)
             for meta, provider in providers
@@ -48,17 +56,54 @@ class ProviderRouter:
             raise ValueError("provider_router_requires_enabled_provider")
         self.providers = tuple(enabled)
         self.allow_paid = allow_paid
+        self.retry_attempts = retry_attempts
+        self._semaphores = {
+            meta.name: asyncio.Semaphore(max_concurrency_per_provider)
+            for meta, _ in self.providers
+        }
 
     async def synthesize(
         self, *, user_input: str, research: ResearchBundle
     ) -> SynthesizedContent:
         errors: list[str] = []
         for metadata, provider in self.providers:
-            try:
-                return await provider.synthesize(user_input=user_input, research=research)
-            except Exception as exc:  # noqa: BLE001 - isolate provider outages at boundary.
-                errors.append(f"{metadata.name}:{type(exc).__name__}")
+            semaphore = self._semaphores[metadata.name]
+            for attempt in range(self.retry_attempts + 1):
+                try:
+                    async with semaphore:
+                        return await provider.synthesize(
+                            user_input=user_input, research=research
+                        )
+                except Exception as exc:  # noqa: BLE001 - isolate provider outages at boundary.
+                    errors.append(f"{metadata.name}:{type(exc).__name__}")
+                    if attempt >= self.retry_attempts or not _is_transient_provider_error(exc):
+                        break
+                    await asyncio.sleep(_retry_delay(attempt))
         raise ProviderRoutingError("all_synthesis_providers_failed:" + ",".join(errors))
+
+
+def _is_transient_provider_error(exc: Exception) -> bool:
+    """Retry only network, timeout, throttling, and server-side provider failures."""
+    if isinstance(exc, (httpx.TimeoutException, httpx.NetworkError)):
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "network_error",
+            "request_failed:408",
+            "request_failed:429",
+            "request_failed:500",
+            "request_failed:502",
+            "request_failed:503",
+            "request_failed:504",
+        )
+    )
+
+
+def _retry_delay(attempt: int) -> float:
+    """Use bounded exponential backoff with jitter to avoid synchronized retries."""
+    return min(8.0, 0.5 * (2**attempt)) + random.uniform(0.0, 0.25)
 
 
 @dataclass(frozen=True, slots=True)
