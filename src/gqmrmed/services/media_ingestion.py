@@ -1,4 +1,4 @@
-"""Provider-neutral media ingestion and normalization for Telegram jobs."""
+"""Provider-neutral media ingestion and content extraction for Telegram jobs."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from gqmrmed.contracts.generation import InputType
 
 
 class MediaIngestionError(RuntimeError):
-    """Raised when an input cannot be safely ingested."""
+    """Raised when an input cannot be safely ingested or interpreted."""
 
 
 @dataclass(frozen=True, slots=True)
 class IngestedMedia:
-    """Normalized local media metadata."""
+    """Normalized local media metadata and optional extracted text."""
 
     path: Path
     mime_type: str
@@ -31,21 +31,27 @@ class MediaSource(Protocol):
     async def download(self, storage_key: str, destination: Path) -> None: ...
 
 
+class MediaExtractor(Protocol):
+    async def extract(self, *, path: Path, mime_type: str, input_type: InputType) -> str: ...
+
+
 @dataclass(frozen=True, slots=True)
 class MediaIngestionConfig:
     max_bytes: int = 25 * 1024 * 1024
 
 
 class MediaIngestor:
-    """Download, validate, hash and classify media without interpreting it."""
+    """Download, validate, hash and interpret media through an injected extractor."""
 
     def __init__(
         self,
         source: MediaSource,
         config: MediaIngestionConfig | None = None,
+        extractor: MediaExtractor | None = None,
     ) -> None:
         self._source = source
         self._config = config or MediaIngestionConfig()
+        self._extractor = extractor
         if self._config.max_bytes <= 0:
             raise ValueError("invalid_media_max_bytes")
 
@@ -70,12 +76,26 @@ class MediaIngestor:
         digest = hashlib.sha256(destination.read_bytes()).hexdigest()
         guessed = mimetypes.guess_type(destination.name)[0]
         normalized_mime = (mime_type or guessed or "application/octet-stream").lower()
+        input_type = _input_type_for_mime(normalized_mime)
+        extracted_text: str | None = None
+        if self._extractor is not None:
+            try:
+                extracted_text = (await self._extractor.extract(
+                    path=destination,
+                    mime_type=normalized_mime,
+                    input_type=input_type,
+                )).strip() or None
+            except MediaIngestionError:
+                raise
+            except Exception as exc:
+                raise MediaIngestionError("media_extraction_failed") from exc
         return IngestedMedia(
             path=destination,
             mime_type=normalized_mime,
             size_bytes=size,
             sha256=digest,
-            input_type=_input_type_for_mime(normalized_mime),
+            input_type=input_type,
+            extracted_text=extracted_text,
         )
 
 
@@ -91,6 +111,7 @@ def _input_type_for_mime(mime_type: str) -> InputType:
 
 __all__ = [
     "IngestedMedia",
+    "MediaExtractor",
     "MediaIngestionConfig",
     "MediaIngestionError",
     "MediaIngestor",
