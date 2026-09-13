@@ -32,10 +32,21 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="gqmrmed", alias="S3_BUCKET")
     s3_region: str | None = Field(default=None, alias="S3_REGION")
 
+    # AI routing: comma-separated provider names, highest priority first.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
+    ai_provider_order: str = Field(
+        default="ollama,openai_compatible,openai",
+        alias="AI_PROVIDER_ORDER",
+    )
     ai_api_key: str | None = Field(default=None, alias="AI_API_KEY")
     ai_base_url: str = Field(default="https://api.openai.com/v1", alias="AI_BASE_URL")
     ai_model: str = Field(default="gpt-5.6-luna", alias="AI_MODEL")
+    ai_compatible_api_key: str | None = Field(default=None, alias="AI_COMPATIBLE_API_KEY")
+    ai_compatible_base_url: str | None = Field(default=None, alias="AI_COMPATIBLE_BASE_URL")
+    ai_compatible_model: str | None = Field(default=None, alias="AI_COMPATIBLE_MODEL")
+    ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
+    ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
+    ollama_timeout_seconds: float = Field(default=180.0, gt=0, le=900, alias="OLLAMA_TIMEOUT_SECONDS")
     research_provider: str | None = Field(default="pubmed", alias="RESEARCH_PROVIDER")
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
     research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
