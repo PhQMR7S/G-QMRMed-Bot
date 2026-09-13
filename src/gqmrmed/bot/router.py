@@ -137,7 +137,9 @@ async def buy_handler(message: Message, session: AsyncSession) -> None:
         await message.answer("تعذر إنشاء طلب الدفع حالياً.")
         return
 
-    status_text = "قيد المراجعة" if payment.status == PaymentStatus.PENDING.value else payment.status
+    status_text = (
+        "قيد المراجعة" if payment.status == PaymentStatus.PENDING.value else payment.status
+    )
     await message.answer(
         "تم إنشاء طلب الاشتراك ✅\n\n"
         f"الخطة: {plan.name}\n"
