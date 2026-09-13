@@ -74,6 +74,8 @@ Telegram User
 | PLUS | $5 | 30 days | unlimited |
 | PRO | $20 | 365 days | unlimited |
 
+Payment approval is transactional: an approved paid payment creates the corresponding subscription, while invalid plan/amount transitions are rejected.
+
 ## Stack
 
 - Telegram: aiogram
@@ -84,7 +86,7 @@ Telegram User
 - Medical synthesis: provider abstraction + Ollama/OpenAI-compatible/OpenAI adapters
 - AI/image pipeline: ComfyUI API adapter, ready for a configured FLUX.2 Klein workflow
 - Exact layout: SVG renderer + CairoSVG rasterization
-- Storage: filesystem result adapter now, S3-compatible abstraction retained for production storage
+- Storage: filesystem result adapter for local/dev operation; production deployment must mount persistent storage or provide an external object-storage adapter
 - Media: Telegram download + local document extraction + optional AI OCR/transcription + FFmpeg
 - Deployment: Docker + managed application hosting
 - Quality: Ruff, MyPy, Pytest, migration validation
@@ -97,13 +99,15 @@ Telegram User
 4. Research, verification, synthesis, and visual architecture — implemented
 5. Image generation + exact-text renderer — wired
 6. Queue, live progress, heartbeat recovery, media ingestion, and durable Telegram delivery — implemented
-7. Subscriptions, activation, payments, and private admin panel — next
-8. End-to-end testing, deployment, hardening, monitoring, and release — next
+7. Subscriptions, activation, payments, and private admin panel — implemented
+8. End-to-end testing, deployment, hardening, monitoring, and release — in progress
 
 ## Current status
 
-The repository now contains the complete application-level text-to-infographic execution path: a Telegram job is durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
+The application-level generation path is implemented and CI-verified: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-The remaining deployment dependency is external infrastructure/configuration: a real Telegram token, database/Redis endpoints, an AI provider credential or reachable Ollama instance, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. FLUX.2 Klein 4B is supported by ComfyUI and is designed for consumer GPUs; its model weights are not committed to this repository.
+Subscriptions and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. Approving a valid paid payment now grants the purchased subscription transactionally.
 
-CI is the source of truth for static typing, linting, migrations, package resolution, and automated tests after each push.
+The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
+
+CI is the source of truth for static typing, linting, migrations, package resolution, and automated tests after each push. Passing CI does not replace an end-to-end staging smoke test against the real external services.
