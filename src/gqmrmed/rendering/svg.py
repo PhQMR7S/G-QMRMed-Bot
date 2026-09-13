@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
-from gqmrmed.rendering.layout import HEIGHT, WIDTH, LayoutBox, build_layout
+from gqmrmed.rendering.layout import build_layout, HEIGHT, LayoutBox, WIDTH
 
 
 class SVGRenderError(RuntimeError):
