@@ -88,6 +88,7 @@ async def _activate_paid_subscription(
     )
     session.add(subscription)
     await session.flush()
+    payment.subscription_id = subscription.id
     return subscription
 
 
@@ -98,7 +99,7 @@ async def set_payment_status(
     status: PaymentStatus,
     approved_by: UUID | None = None,
 ) -> Payment:
-    """Transition a payment under a row lock and grant access on approval."""
+    """Transition a payment under a row lock and grant/revoke its paid access."""
     result = await session.execute(
         select(Payment).where(Payment.id == payment_id).with_for_update()
     )
@@ -126,6 +127,16 @@ async def set_payment_status(
         if plan is None:
             raise ValueError("plan_unavailable")
         await _activate_paid_subscription(session, payment=payment, plan=plan)
+    elif status == PaymentStatus.REFUNDED and payment.subscription_id is not None:
+        subscription = (
+            await session.execute(
+                select(Subscription)
+                .where(Subscription.id == payment.subscription_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if subscription is not None and subscription.status == SubscriptionStatus.ACTIVE.value:
+            subscription.status = SubscriptionStatus.CANCELLED.value
     payment.status = status.value
     if status == PaymentStatus.APPROVED:
         payment.approved_by = approved_by
