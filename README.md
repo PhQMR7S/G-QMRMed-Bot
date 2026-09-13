@@ -45,6 +45,7 @@ Telegram User
 - Failed generation releases its reserved usage; successful generation commits usage before delivery retry begins.
 - No secrets are committed to the repository.
 - Alembic migrations are versioned and CI validates the migration chain.
+- `/health` and `/health/live` provide liveness checks; `/health/ready` verifies PostgreSQL and Redis before the service is considered ready.
 
 ## Medical intelligence
 
@@ -74,7 +75,7 @@ Telegram User
 | PLUS | $5 | 30 days | unlimited |
 | PRO | $20 | 365 days | unlimited |
 
-Payment approval is transactional: an approved paid payment creates the corresponding subscription, while invalid plan/amount transitions are rejected.
+Payment approval is transactional: an approved paid payment creates the corresponding subscription, while invalid plan/amount transitions are rejected. `/buy PLUS` and `/buy PRO` currently create manual pending payment requests; provider-specific payment gateways are not claimed as integrated until their APIs and credentials are configured.
 
 ## Stack
 
@@ -86,10 +87,10 @@ Payment approval is transactional: an approved paid payment creates the correspo
 - Medical synthesis: provider abstraction + Ollama/OpenAI-compatible/OpenAI adapters
 - AI/image pipeline: ComfyUI API adapter, ready for a configured FLUX.2 Klein workflow
 - Exact layout: SVG renderer + CairoSVG rasterization
-- Storage: filesystem result adapter for local/dev operation; production deployment must mount persistent storage or provide an external object-storage adapter
+- Storage: filesystem result adapter for local/dev operation; S3-compatible object storage adapter for durable production results
 - Media: Telegram download + local document extraction + optional AI OCR/transcription + FFmpeg
 - Deployment: Docker + managed application hosting
-- Quality: Ruff, MyPy, Pytest, migration validation
+- Quality: Ruff, MyPy, Pytest, migration validation, production container build validation
 
 ## Build stages
 
@@ -106,8 +107,8 @@ Payment approval is transactional: an approved paid payment creates the correspo
 
 The application-level generation path is implemented and CI-verified: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-Subscriptions and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. Approving a valid paid payment now grants the purchased subscription transactionally.
+Subscriptions and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. Approving a valid paid payment now grants the purchased subscription transactionally. Result storage can use an S3-compatible object store so worker restarts or ephemeral application filesystems do not discard completed images.
 
-The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
+The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
 
-CI is the source of truth for static typing, linting, migrations, package resolution, and automated tests after each push. Passing CI does not replace an end-to-end staging smoke test against the real external services.
+CI is the source of truth for static typing, linting, migrations, package resolution, automated tests, and production container buildability after each push. Passing CI does not replace an end-to-end staging smoke test against the real external services.
