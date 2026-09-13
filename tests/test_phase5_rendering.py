@@ -44,6 +44,18 @@ def test_layout_is_9_16_and_has_expected_canvas() -> None:
     assert HEIGHT / WIDTH == 16 / 9
 
 
+def test_layout_keeps_all_regions_non_overlapping_at_max_key_points() -> None:
+    content = _content().model_copy(
+        update={"key_points": [f"Point {index}" for index in range(12)]}
+    )
+    layout = build_layout(content, _plan())
+    assert len(layout.content_boxes) == 12
+    assert layout.illustration.y + layout.illustration.height <= layout.content_boxes[0].y
+    for previous, current in zip(layout.content_boxes, layout.content_boxes[1:], strict=False):
+        assert previous.y + previous.height <= current.y
+    assert layout.content_boxes[-1].y + layout.content_boxes[-1].height <= layout.footer.y
+
+
 def test_svg_escapes_exact_text_and_keeps_watermark() -> None:
     content = _content().model_copy(update={"title": "DKA & <test>"})
     svg = render_svg(content=content, visual_plan=_plan())
