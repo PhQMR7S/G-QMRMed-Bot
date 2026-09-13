@@ -36,6 +36,20 @@ from gqmrmed.services.usage import Reservation, commit_generation, release_gener
 logger = logging.getLogger(__name__)
 
 
+def _metadata_int(metadata: dict[str, object], key: str, default: int = 0) -> int:
+    value = metadata.get(key, default)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
 @dataclass(frozen=True, slots=True)
 class StoredResult:
     """Metadata returned after an output image has been persisted."""
@@ -232,7 +246,7 @@ class GenerationWorker:
                         current = fresh.scalar_one_or_none()
                         if current is not None:
                             metadata = dict(current.input_metadata or {})
-                            attempts = int(metadata.get("telegram_delivery_attempts", 0)) + 1
+                            attempts = _metadata_int(metadata, "telegram_delivery_attempts") + 1
                             metadata["telegram_delivery_attempts"] = attempts
                             metadata["telegram_delivery_last_error"] = f"{type(exc).__name__}: {exc}"[:2000]
                             current.input_metadata = metadata
