@@ -1,5 +1,9 @@
 """Minimal private browser panel for operations; API remains protected by ADMIN_SECRET."""
 
+# The embedded HTML/JavaScript is intentionally kept readable as one browser document.
+# Ruff's Python line-length rule is not meaningful for the embedded markup.
+# ruff: noqa: E501
+
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
