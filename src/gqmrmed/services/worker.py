@@ -11,13 +11,13 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
 from gqmrmed.services.jobs import finish_job, mark_running, update_progress
-from gqmrmed.services.usage import commit_generation, release_generation, Reservation
+from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
 
@@ -142,12 +142,12 @@ class GenerationWorker:
     async def process(self, job_id: UUID) -> None:
         async with self._session_factory() as session:
             async with session.begin():
-                result = await session.execute(
+                job_result = await session.execute(
                     select(GenerationJob)
                     .where(GenerationJob.id == job_id)
                     .with_for_update()
                 )
-                job = result.scalar_one_or_none()
+                job = job_result.scalar_one_or_none()
                 if job is None or job.status != "QUEUED":
                     return
                 await mark_running(
@@ -158,10 +158,10 @@ class GenerationWorker:
 
         try:
             async with self._session_factory() as session:
-                result = await session.execute(
+                job_result = await session.execute(
                     select(GenerationJob).where(GenerationJob.id == job_id)
                 )
-                job = result.scalar_one()
+                job = job_result.scalar_one()
 
             reporter = ThrottledProgressReporter()
 
@@ -184,12 +184,12 @@ class GenerationWorker:
 
             async with self._session_factory() as session:
                 async with session.begin():
-                    result = await session.execute(
+                    usage_result = await session.execute(
                         select(UsageReservation).where(
                             UsageReservation.job_id == job_id
                         )
                     )
-                    ledger = result.scalar_one_or_none()
+                    ledger = usage_result.scalar_one_or_none()
                     if ledger is not None:
                         await commit_generation(
                             session,
@@ -224,12 +224,12 @@ class GenerationWorker:
             )
             async with self._session_factory() as session:
                 async with session.begin():
-                    result = await session.execute(
+                    usage_result = await session.execute(
                         select(UsageReservation).where(
                             UsageReservation.job_id == job_id
                         )
                     )
-                    ledger = result.scalar_one_or_none()
+                    ledger = usage_result.scalar_one_or_none()
                     if ledger is not None:
                         await release_generation(
                             session,
