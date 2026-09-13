@@ -46,7 +46,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
     ollama_timeout_seconds: float = Field(
-        default=180.0, gt=0, le=900, alias="OLLAMA_TIMEOUT_SECONDS"
+        default=180.0,
+        gt=0,
+        le=900,
+        alias="OLLAMA_TIMEOUT_SECONDS",
     )
     research_provider: str | None = Field(default="pubmed", alias="RESEARCH_PROVIDER")
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
