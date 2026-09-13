@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -49,20 +49,13 @@ async def create_generation_job(
     return job
 
 
-async def mark_dispatched(
-    session: AsyncSession,
-    job_id: UUID,
-    *,
-    dispatched_at: datetime | None = None,
-) -> bool:
+async def mark_dispatched(session: AsyncSession, job_id: UUID, *, dispatched_at: datetime | None = None) -> bool:
     """Record a successful queue publish and refresh its dispatch lease."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
-    if job is None:
-        return False
-    if job.status != JobStatus.QUEUED.value:
+    if job is None or job.status != JobStatus.QUEUED.value:
         return False
     job.enqueued_at = dispatched_at or datetime.now(UTC)
     job.dispatch_attempts += 1
@@ -71,12 +64,7 @@ async def mark_dispatched(
     return True
 
 
-async def record_dispatch_failure(
-    session: AsyncSession,
-    job_id: UUID,
-    *,
-    error: str,
-) -> bool:
+async def record_dispatch_failure(session: AsyncSession, job_id: UUID, *, error: str) -> bool:
     """Record a failed queue publish without changing the source-of-truth state."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
@@ -90,12 +78,7 @@ async def record_dispatch_failure(
     return True
 
 
-async def get_undispatched_jobs(
-    session: AsyncSession,
-    *,
-    limit: int = 50,
-    recovery_after_seconds: int = 60,
-) -> list[UUID]:
+async def get_undispatched_jobs(session: AsyncSession, *, limit: int = 50, recovery_after_seconds: int = 60) -> list[UUID]:
     """Return queued jobs needing initial dispatch or stale-dispatch recovery."""
     if not 1 <= limit <= 500:
         raise ValueError("invalid_dispatch_batch_size")
@@ -106,10 +89,7 @@ async def get_undispatched_jobs(
         select(GenerationJob.id)
         .where(
             GenerationJob.status == JobStatus.QUEUED.value,
-            (
-                GenerationJob.enqueued_at.is_(None)
-                | (GenerationJob.enqueued_at <= cutoff)
-            ),
+            GenerationJob.enqueued_at.is_(None) | (GenerationJob.enqueued_at <= cutoff),
         )
         .order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
         .limit(limit)
@@ -117,13 +97,8 @@ async def get_undispatched_jobs(
     return list(result.scalars().all())
 
 
-async def recover_stale_running_jobs(
-    session: AsyncSession,
-    *,
-    stale_after_seconds: int = 900,
-    limit: int = 100,
-) -> list[UUID]:
-    """Fail jobs whose worker lease has clearly expired."""
+async def recover_stale_running_jobs(session: AsyncSession, *, stale_after_seconds: int = 900, limit: int = 100) -> list[UUID]:
+    """Fail jobs whose heartbeat lease has clearly expired."""
     if stale_after_seconds <= 0:
         raise ValueError("invalid_running_recovery_window")
     if not 1 <= limit <= 500:
@@ -134,7 +109,7 @@ async def recover_stale_running_jobs(
         .where(
             GenerationJob.status == JobStatus.RUNNING.value,
             GenerationJob.started_at.is_not(None),
-            GenerationJob.started_at <= cutoff,
+            GenerationJob.updated_at <= cutoff,
         )
         .order_by(GenerationJob.started_at.asc(), GenerationJob.id.asc())
         .limit(limit)
@@ -169,6 +144,53 @@ async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     await session.flush()
 
 
+async def touch_job_heartbeat(session: AsyncSession, job_id: UUID) -> bool:
+    """Refresh the ORM updated timestamp used as the worker lease."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None or job.status != JobStatus.RUNNING.value:
+        return False
+    metadata = dict(job.input_metadata or {})
+    metadata["worker_heartbeat_at"] = datetime.now(UTC).isoformat()
+    job.input_metadata = metadata
+    await session.flush()
+    return True
+
+
+async def mark_delivery_pending(session: AsyncSession, job_id: UUID) -> bool:
+    """Persist that a successful result still needs Telegram delivery."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None or job.status != JobStatus.SUCCEEDED.value:
+        return False
+    metadata = dict(job.input_metadata or {})
+    metadata.setdefault("telegram_delivery_status", "PENDING")
+    job.input_metadata = metadata
+    await session.flush()
+    return True
+
+
+async def mark_delivery_succeeded(session: AsyncSession, job_id: UUID, *, message_id: int | None = None) -> bool:
+    """Persist successful Telegram delivery idempotently."""
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None:
+        return False
+    metadata = dict(job.input_metadata or {})
+    metadata["telegram_delivery_status"] = "DELIVERED"
+    if message_id is not None:
+        metadata["telegram_delivery_message_id"] = message_id
+    job.input_metadata = metadata
+    await session.flush()
+    return True
+
+
 async def cancel_queued_job(session: AsyncSession, job_id: UUID) -> bool:
     """Cancel a queued job before execution begins."""
     result = await session.execute(
@@ -187,13 +209,7 @@ async def cancel_queued_job(session: AsyncSession, job_id: UUID) -> bool:
     return True
 
 
-async def update_progress(
-    session: AsyncSession,
-    job_id: UUID,
-    *,
-    stage: str,
-    progress: int,
-) -> None:
+async def update_progress(session: AsyncSession, job_id: UUID, *, stage: str, progress: int) -> None:
     """Update progress while enforcing monotonic stage and progress order."""
     if stage not in _STAGE_INDEX:
         raise ValueError("invalid_generation_stage")
@@ -212,11 +228,7 @@ async def update_progress(
     await session.flush()
 
 
-async def set_progress_message_id(
-    session: AsyncSession,
-    job_id: UUID,
-    message_id: int,
-) -> bool:
+async def set_progress_message_id(session: AsyncSession, job_id: UUID, message_id: int) -> bool:
     """Persist the Telegram message used for live progress updates."""
     if message_id <= 0:
         raise ValueError("invalid_progress_message_id")
@@ -233,13 +245,7 @@ async def set_progress_message_id(
     return True
 
 
-async def finish_job(
-    session: AsyncSession,
-    job_id: UUID,
-    *,
-    success: bool,
-    error: str | None = None,
-) -> None:
+async def finish_job(session: AsyncSession, job_id: UUID, *, success: bool, error: str | None = None) -> None:
     """Finalize a running job exactly once."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
@@ -262,10 +268,13 @@ __all__ = [
     "create_generation_job",
     "finish_job",
     "get_undispatched_jobs",
+    "mark_delivery_pending",
+    "mark_delivery_succeeded",
     "mark_dispatched",
     "mark_running",
     "record_dispatch_failure",
     "recover_stale_running_jobs",
     "set_progress_message_id",
+    "touch_job_heartbeat",
     "update_progress",
 ]
