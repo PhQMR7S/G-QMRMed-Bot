@@ -89,9 +89,9 @@ class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
     code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
-    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
     duration_days: Mapped[int | None] = mapped_column(Integer)
     daily_limit: Mapped[int | None] = mapped_column(Integer)
@@ -111,9 +111,6 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    user: Mapped[User] = relationship()
-    plan: Mapped[Plan] = relationship()
 
 
 class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -149,6 +146,7 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
+    subscription_id: Mapped[UUID | None] = mapped_column(ForeignKey("subscriptions.id"))
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     transaction_id: Mapped[str | None] = mapped_column(String(255), index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
