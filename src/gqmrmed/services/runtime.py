@@ -93,6 +93,24 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
                     ),
                 )
             )
+        elif name == "groq_free" and settings.groq_api_key:
+            providers.append(
+                (
+                    ProviderDescriptor(
+                        name="groq_free",
+                        model=settings.groq_model,
+                        cost_tier="free",
+                    ),
+                    OpenAICompatibleChatSynthesizer(
+                        OpenAICompatibleConfig(
+                            api_key=settings.groq_api_key,
+                            base_url=settings.groq_base_url,
+                            model=settings.groq_model,
+                            timeout_seconds=settings.groq_timeout_seconds,
+                        )
+                    ),
+                )
+            )
         elif (
             name == "openai_compatible"
             and settings.ai_compatible_api_key
