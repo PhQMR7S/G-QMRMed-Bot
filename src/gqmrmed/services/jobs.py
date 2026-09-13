@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -117,6 +117,47 @@ async def get_undispatched_jobs(
     return list(result.scalars().all())
 
 
+async def recover_stale_running_jobs(
+    session: AsyncSession,
+    *,
+    stale_after_seconds: int = 900,
+    limit: int = 100,
+) -> list[UUID]:
+    """Fail jobs whose worker lease has clearly expired.
+
+    A worker can disappear after claiming a job. Without recovery, its usage
+    reservation would remain held forever and the job would never be retried.
+    The conservative default is 15 minutes, well above the configured image
+    generation timeout, and only jobs with a recorded start time are eligible.
+    """
+    if stale_after_seconds <= 0:
+        raise ValueError("invalid_running_recovery_window")
+    if not 1 <= limit <= 500:
+        raise ValueError("invalid_running_recovery_batch_size")
+    cutoff = datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
+    result = await session.execute(
+        select(GenerationJob)
+        .where(
+            GenerationJob.status == JobStatus.RUNNING.value,
+            GenerationJob.started_at.is_not(None),
+            GenerationJob.started_at <= cutoff,
+        )
+        .order_by(GenerationJob.started_at.asc(), GenerationJob.id.asc())
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    jobs = list(result.scalars().all())
+    recovered: list[UUID] = []
+    now = datetime.now(UTC)
+    for job in jobs:
+        job.status = JobStatus.FAILED.value
+        job.completed_at = now
+        job.error = "generation_worker_lease_expired"
+        recovered.append(job.id)
+    await session.flush()
+    return recovered
+
+
 async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
     """Transition a queued job to running and set its current stage."""
     if stage not in _STAGE_INDEX:
@@ -230,6 +271,7 @@ __all__ = [
     "mark_dispatched",
     "mark_running",
     "record_dispatch_failure",
+    "recover_stale_running_jobs",
     "set_progress_message_id",
     "update_progress",
 ]
