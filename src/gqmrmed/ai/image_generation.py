@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from gqmrmed.contracts.research import VisualPlan
+
 
 class ImageGenerationError(RuntimeError):
     """Raised when an illustration provider cannot produce an asset."""
@@ -28,6 +30,13 @@ class ImageGenerationRequest:
             raise ValueError("image_dimensions_must_be_9_16")
         if self.seed is not None and self.seed < 0:
             raise ValueError("image_seed_invalid")
+
+
+def build_illustration_request(visual_plan: VisualPlan, *, seed: int | None = None) -> ImageGenerationRequest:
+    """Convert the visual plan into a safe 9:16 illustration request."""
+    if visual_plan.aspect_ratio != "9:16":
+        raise ValueError("visual_plan_must_be_9_16")
+    return ImageGenerationRequest(prompt=visual_plan.illustration_prompt, seed=seed)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,4 +100,5 @@ __all__ = [
     "ImageGenerationRequest",
     "ImageGenerationResult",
     "IllustrationProvider",
+    "build_illustration_request",
 ]
