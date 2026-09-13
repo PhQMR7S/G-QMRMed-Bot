@@ -1,4 +1,4 @@
-"""Provider registry, routing, and local/OpenAI-compatible synthesis adapters."""
+"""Provider registry, cost-aware routing, and local/OpenAI-compatible adapters."""
 
 from __future__ import annotations
 
@@ -13,8 +13,6 @@ from gqmrmed.contracts.research import ResearchBundle, SynthesizedContent
 
 
 class TextSynthesisProvider(Protocol):
-    """Contract shared by every medical text synthesis provider."""
-
     async def synthesize(
         self, *, user_input: str, research: ResearchBundle
     ) -> SynthesizedContent: ...
@@ -22,8 +20,6 @@ class TextSynthesisProvider(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ProviderDescriptor:
-    """Operational metadata used by the deterministic provider router."""
-
     name: str
     model: str
     cost_tier: str = "unknown"
@@ -35,16 +31,23 @@ class ProviderRoutingError(RuntimeError):
 
 
 class ProviderRouter:
-    """Try configured providers in order; only provider failures trigger fallback."""
+    """Try healthy providers in priority order, never using paid providers by accident."""
 
     def __init__(
         self,
         providers: Sequence[tuple[ProviderDescriptor, TextSynthesisProvider]],
+        *,
+        allow_paid: bool = False,
     ) -> None:
-        enabled = [(meta, provider) for meta, provider in providers if meta.enabled]
+        enabled = [
+            (meta, provider)
+            for meta, provider in providers
+            if meta.enabled and (allow_paid or meta.cost_tier in {"free", "local"})
+        ]
         if not enabled:
             raise ValueError("provider_router_requires_enabled_provider")
         self.providers = tuple(enabled)
+        self.allow_paid = allow_paid
 
     async def synthesize(
         self, *, user_input: str, research: ResearchBundle
@@ -60,12 +63,11 @@ class ProviderRouter:
 
 @dataclass(frozen=True, slots=True)
 class OpenAICompatibleConfig:
-    """Configuration for APIs exposing the OpenAI chat-completions contract."""
-
     api_key: str
     base_url: str
     model: str
     timeout_seconds: float = 60.0
+    extra_headers: tuple[tuple[str, str], ...] = ()
 
 
 class OpenAICompatibleChatSynthesizer:
@@ -90,12 +92,14 @@ class OpenAICompatibleChatSynthesizer:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(timeout=self.config.timeout_seconds)
         try:
+            headers = {
+                "Authorization": f"Bearer {self.config.api_key}",
+                "Content-Type": "application/json",
+            }
+            headers.update(dict(self.config.extra_headers))
             response = await client.post(
                 f"{self.config.base_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers=headers,
                 json={
                     "model": self.config.model,
                     "messages": [
@@ -119,10 +123,12 @@ class OpenAICompatibleChatSynthesizer:
                 await client.aclose()
 
 
+class OpenRouterFreeSynthesizer(OpenAICompatibleChatSynthesizer):
+    """OpenRouter free-only route. The model ID is dynamically resolved by OpenRouter."""
+
+
 @dataclass(frozen=True, slots=True)
 class OllamaConfig:
-    """Local Ollama HTTP configuration; no hosted API subscription is required."""
-
     base_url: str = "http://ollama:11434"
     model: str = "qwen3:8b"
     timeout_seconds: float = 180.0
