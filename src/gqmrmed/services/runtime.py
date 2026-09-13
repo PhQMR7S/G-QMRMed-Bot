@@ -28,6 +28,7 @@ from gqmrmed.generation.providers import (
     ComfyUIImageProvider,
     HuggingFaceImageConfig,
     HuggingFaceImageProvider,
+    ImageGenerationProvider,
 )
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
@@ -192,6 +193,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
 
     synthesis = ProviderRouter(providers, allow_paid=settings.ai_allow_paid)
+    image: ImageGenerationProvider
     if settings.huggingface_token:
         image = HuggingFaceImageProvider(
             HuggingFaceImageConfig(
