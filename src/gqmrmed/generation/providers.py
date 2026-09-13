@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, cast, Protocol
 from uuid import uuid4
 
+import cairosvg
 import httpx
 from huggingface_hub import InferenceClient
 
@@ -36,6 +37,57 @@ class ImageGenerationProvider(Protocol):
         height: int,
     ) -> GeneratedIllustration:
         ...
+
+
+class ProceduralMedicalIllustrationProvider:
+    """Deterministic no-network fallback used when no image model is configured.
+
+    It produces a clean medical/scientific motif so the full generation pipeline
+    remains operational on zero-cost infrastructure. A real image provider can
+    replace it without changing the pipeline contract.
+    """
+
+    async def generate(
+        self,
+        *,
+        prompt: str,
+        width: int,
+        height: int,
+    ) -> GeneratedIllustration:
+        del prompt
+        if width <= 0 or height <= 0:
+            raise ImageGenerationError("invalid_image_dimensions")
+        svg = f"""
+        <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 1080 1920">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#0f172a"/>
+              <stop offset="1" stop-color="#1e3a5f"/>
+            </linearGradient>
+          </defs>
+          <rect width="1080" height="1920" rx="48" fill="url(#bg)"/>
+          <circle cx="540" cy="770" r="300" fill="#ffffff" opacity="0.07"/>
+          <circle cx="540" cy="770" r="210" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.32"/>
+          <path d="M300 770 H410 L455 650 L520 900 L575 700 L625 770 H780" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+          <path d="M455 1030 C390 960 320 900 320 820 C320 735 430 700 540 810 C650 700 760 735 760 820 C760 900 690 960 625 1030 L540 1115 Z" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.55"/>
+          <circle cx="540" cy="770" r="34" fill="#ffffff" opacity="0.9"/>
+          <path d="M540 520 V410 M540 1130 V1240 M290 770 H180 M790 770 H900" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.35"/>
+          <text x="540" y="1420" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="54" font-weight="700">QMRMed</text>
+          <text x="540" y="1490" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="28" opacity="0.72">Medical infographic illustration</text>
+        </svg>
+        """
+        image_bytes = await asyncio.to_thread(
+            cairosvg.svg2png,
+            bytestring=svg.encode("utf-8"),
+            output_width=width,
+            output_height=height,
+        )
+        return GeneratedIllustration(
+            image_bytes=image_bytes,
+            width=width,
+            height=height,
+            mime_type="image/png",
+        )
 
 
 @dataclass(frozen=True, slots=True)
