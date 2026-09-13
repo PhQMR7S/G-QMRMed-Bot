@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import logging
 
 from aiogram import Bot
 from fastapi import FastAPI
@@ -13,6 +14,7 @@ from gqmrmed.config import get_settings
 from gqmrmed.db.session import SessionFactory
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 app.include_router(admin_router)
@@ -21,24 +23,38 @@ app.include_router(admin_panel_router)
 
 @app.on_event("startup")
 async def start_embedded_worker() -> None:
-    """Run the durable generation worker in the free API instance when enabled."""
+    """Run the generation worker in the free API instance when fully configured."""
+    app.state.worker_task = None
+    app.state.worker_stop = None
+    app.state.worker_bot = None
+
     if settings.service_role != "api" or not settings.run_worker_in_api:
-        app.state.worker_task = None
-        app.state.worker_stop = None
-        app.state.worker_bot = None
         return
 
     if not settings.telegram_bot_token:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is required when RUN_WORKER_IN_API=true")
+        logger.warning("Embedded worker disabled: TELEGRAM_BOT_TOKEN is not configured")
+        return
 
-    from gqmrmed.services.runtime import build_worker
+    if not settings.comfyui_workflow_json:
+        logger.warning(
+            "Embedded worker disabled: COMFYUI_WORKFLOW_JSON is not configured"
+        )
+        return
 
-    bot = Bot(token=settings.telegram_bot_token)
-    worker = build_worker(settings, bot)
+    try:
+        from gqmrmed.services.runtime import build_worker
+
+        bot = Bot(token=settings.telegram_bot_token)
+        worker = build_worker(settings, bot)
+    except Exception:
+        logger.exception("Embedded worker configuration failed; API will remain available")
+        return
+
     stop_event = asyncio.Event()
     app.state.worker_bot = bot
     app.state.worker_stop = stop_event
     app.state.worker_task = asyncio.create_task(worker.run(stop_event))
+    logger.info("Embedded generation worker started")
 
 
 @app.on_event("shutdown")
