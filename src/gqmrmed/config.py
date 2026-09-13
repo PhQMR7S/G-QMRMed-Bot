@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -70,6 +70,20 @@ class Settings(BaseSettings):
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
     image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Reject unsafe secret defaults when the application is marked production."""
+        if self.app_env.strip().lower() == "production":
+            if not self.telegram_bot_token:
+                raise ValueError("TELEGRAM_BOT_TOKEN is required in production")
+            if not self.admin_secret or len(self.admin_secret) < 32:
+                raise ValueError("ADMIN_SECRET must be at least 32 characters in production")
+            if self.s3_endpoint and (
+                not self.s3_access_key_id or not self.s3_secret_access_key
+            ):
+                raise ValueError("complete S3 credentials are required when S3 is configured")
+        return self
 
 
 @lru_cache(maxsize=1)
