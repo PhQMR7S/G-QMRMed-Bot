@@ -1,7 +1,5 @@
 """Filesystem result persistence and Telegram delivery adapters."""
 
-from __future__ import annotations
-
 from pathlib import Path
 from uuid import UUID
 
@@ -33,6 +31,22 @@ class FilesystemResultStore:
             height=image.height,
             mime_type=image.mime_type,
             image_bytes=image.image_bytes,
+        )
+
+    async def load(self, storage_key: str) -> StoredResult:
+        """Reload a persisted result for delivery retry after process restart."""
+        path = Path(storage_key)
+        if not path.is_file():
+            raise FileNotFoundError("stored_result_missing")
+        data = path.read_bytes()
+        if not data:
+            raise ValueError("stored_result_empty")
+        return StoredResult(
+            storage_key=storage_key,
+            width=1080,
+            height=1920,
+            mime_type="image/png",
+            image_bytes=data,
         )
 
 
