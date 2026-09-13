@@ -144,6 +144,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
 
+    result_store: FilesystemResultStore | S3ResultStore
     if settings.s3_endpoint:
         if not settings.s3_access_key_id or not settings.s3_secret_access_key:
             raise RuntimeError("complete S3 credentials are required when S3 is configured")
