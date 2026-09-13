@@ -110,7 +110,9 @@ def _is_transient_provider_error(exc: Exception) -> bool:
 
 def _retry_delay(attempt: int) -> float:
     """Use bounded exponential backoff with jitter to avoid synchronized retries."""
-    return min(8.0, 0.5 * (2**attempt)) + random.uniform(0.0, 0.25)
+    base_delay = min(8.0, 0.5 * (2**attempt))
+    jitter = random.uniform(0.0, 0.25)
+    return float(base_delay + jitter)
 
 
 @dataclass(frozen=True, slots=True)
