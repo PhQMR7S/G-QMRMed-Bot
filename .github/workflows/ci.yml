@@ -48,3 +48,7 @@ jobs:
 
       - name: Build production container
         run: docker build --tag gqmrmed:ci .
+
+      - name: Smoke-test production container imports
+        run: |
+          docker run --rm --entrypoint python gqmrmed:ci -c "import gqmrmed.main; import gqmrmed.services.runtime"
