@@ -9,19 +9,28 @@ from typing import cast
 from aiogram import Bot
 from redis.asyncio import Redis
 
-from gqmrmed.ai.image_generation import ComfyUIConfig as LegacyComfyConfig
-from gqmrmed.ai.providers import OllamaConfig, OllamaSynthesizer, OpenAICompatibleChatSynthesizer
-from gqmrmed.ai.providers import OpenAICompatibleConfig, ProviderDescriptor, ProviderRouter
 from gqmrmed.ai.openai_responses import OpenAIResponsesConfig, OpenAIResponsesSynthesizer
+from gqmrmed.ai.providers import (
+    OllamaConfig,
+    OllamaSynthesizer,
+    OpenAICompatibleChatSynthesizer,
+    OpenAICompatibleConfig,
+    ProviderDescriptor,
+    ProviderRouter,
+    TextSynthesisProvider,
+)
+from gqmrmed.bot.progress import TelegramProgressSink
 from gqmrmed.config import Settings
+from gqmrmed.db.session import SessionFactory
 from gqmrmed.generation.providers import ComfyUIConfig, ComfyUIImageProvider
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
-from gqmrmed.services.production_pipeline import ProductionGenerationPipeline, ProductionPipelineConfig
+from gqmrmed.services.production_pipeline import (
+    ProductionGenerationPipeline,
+    ProductionPipelineConfig,
+)
 from gqmrmed.services.redis_queue import RedisJobQueue
 from gqmrmed.services.result_store import FilesystemResultStore, TelegramResultDelivery
 from gqmrmed.services.worker import GenerationWorker
-from gqmrmed.db.session import SessionFactory
-from gqmrmed.bot.progress import TelegramProgressSink
 
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
@@ -38,7 +47,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     research = PubMedResearchProvider(
         PubMedConfig(api_key=settings.research_api_key, email=settings.research_email)
     )
-    providers: list[tuple[ProviderDescriptor, object]] = []
+    providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
     order = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
     for name in order:
         if name == "ollama":
@@ -54,10 +63,17 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
                     ),
                 )
             )
-        elif name == "openai_compatible" and settings.ai_compatible_api_key and settings.ai_compatible_base_url and settings.ai_compatible_model:
+        elif (
+            name == "openai_compatible"
+            and settings.ai_compatible_api_key
+            and settings.ai_compatible_base_url
+            and settings.ai_compatible_model
+        ):
             providers.append(
                 (
-                    ProviderDescriptor(name="openai_compatible", model=settings.ai_compatible_model),
+                    ProviderDescriptor(
+                        name="openai_compatible", model=settings.ai_compatible_model
+                    ),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.ai_compatible_api_key,
@@ -83,7 +99,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     if not providers:
         raise RuntimeError("no_synthesis_provider_configured")
 
-    synthesis = ProviderRouter(cast(list[tuple[ProviderDescriptor, object]], providers))
+    synthesis = ProviderRouter(providers)
     image = ComfyUIImageProvider(
         ComfyUIConfig(
             base_url=settings.comfyui_base_url,
