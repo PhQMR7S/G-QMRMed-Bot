@@ -21,7 +21,7 @@ class RedisJobQueue:
         return value
 
     async def dequeue(self, *, timeout_seconds: int = 2) -> str | None:
-        result = await self._redis.blpop(self._queue_name, timeout=timeout_seconds)
+        result = await self._redis.blpop([self._queue_name], timeout=timeout_seconds)
         if result is None:
             return None
         _, value = result
