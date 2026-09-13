@@ -21,6 +21,7 @@ dependencies = [
   "structlog>=25,<26",
   "cairosvg>=2.7,<3",
   "pypdf>=6,<7",
+  "boto3>=1.35,<2",
 ]
 
 [project.optional-dependencies]
@@ -60,7 +61,7 @@ python_version = "3.12"
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["cairosvg"]
+module = ["boto3", "botocore.*", "cairosvg"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
