@@ -16,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
-from gqmrmed.services.jobs import finish_job, mark_running, recover_stale_running_jobs, update_progress
+from gqmrmed.services.jobs import (
+    finish_job,
+    mark_running,
+    recover_stale_running_jobs,
+    update_progress,
+)
 from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
@@ -52,7 +57,12 @@ class DeliverySink(Protocol):
 
 
 class ProgressSink(Protocol):
-    async def __call__(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None: ...
+    async def __call__(
+        self,
+        job: GenerationJob,
+        stage: GenerationStage,
+        progress: int,
+    ) -> None: ...
 
 
 class ThrottledProgressReporter:
@@ -66,7 +76,13 @@ class ThrottledProgressReporter:
         self._last_stage: GenerationStage | None = None
         self._last_progress = -1
 
-    def should_emit(self, stage: GenerationStage, progress: int, *, force: bool = False) -> bool:
+    def should_emit(
+        self,
+        stage: GenerationStage,
+        progress: int,
+        *,
+        force: bool = False,
+    ) -> bool:
         now = time.monotonic()
         meaningful = stage != self._last_stage or progress >= self._last_progress + 5
         due = now - self._last_emit >= self._interval
@@ -167,7 +183,12 @@ class GenerationWorker:
                         extra={"count": len(recovered)},
                     )
 
-    async def _emit_progress(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
+    async def _emit_progress(
+        self,
+        job: GenerationJob,
+        stage: GenerationStage,
+        progress: int,
+    ) -> None:
         if self._progress_sink is None:
             return
         try:
@@ -191,7 +212,9 @@ class GenerationWorker:
 
         try:
             async with self._session_factory() as session:
-                job_result = await session.execute(select(GenerationJob).where(GenerationJob.id == job_id))
+                job_result = await session.execute(
+                    select(GenerationJob).where(GenerationJob.id == job_id)
+                )
                 job = job_result.scalar_one()
 
             reporter = ThrottledProgressReporter()
@@ -203,7 +226,10 @@ class GenerationWorker:
                 async with self._session_factory() as progress_session:
                     async with progress_session.begin():
                         await update_progress(
-                            progress_session, job_id, stage=stage.value, progress=value
+                            progress_session,
+                            job_id,
+                            stage=stage.value,
+                            progress=value,
                         )
                 await self._emit_progress(job, stage, value)
 
@@ -242,7 +268,10 @@ class GenerationWorker:
                 try:
                     await self._delivery_sink(job, stored)
                 except Exception:
-                    logger.exception("generation_delivery_failed", extra={"job_id": str(job_id)})
+                    logger.exception(
+                        "generation_delivery_failed",
+                        extra={"job_id": str(job_id)},
+                    )
         except Exception as exc:
             logger.exception("generation_job_failed", extra={"job_id": str(job_id)})
             async with self._session_factory() as session:
