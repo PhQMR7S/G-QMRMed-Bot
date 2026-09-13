@@ -14,7 +14,12 @@ from gqmrmed.ai.providers import (
     ProviderRouter,
     ProviderRoutingError,
 )
-from gqmrmed.contracts.research import EvidenceSource, ResearchBundle, SourceType, SynthesizedContent
+from gqmrmed.contracts.research import (
+    EvidenceSource,
+    ResearchBundle,
+    SourceType,
+    SynthesizedContent,
+)
 
 
 @pytest.fixture
