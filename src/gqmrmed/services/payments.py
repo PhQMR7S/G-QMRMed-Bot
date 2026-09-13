@@ -6,67 +6,20 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.db.models import (
-    BillingLedger,
-    Payment,
-    PaymentStatus,
-    Plan,
-    PlanCode,
-    Subscription,
-    SubscriptionStatus,
-    User,
-)
+from gqmrmed.db.models import BillingLedger, Payment, PaymentStatus, Plan, PlanCode, Subscription, SubscriptionStatus, User
 from gqmrmed.services.subscriptions import grant_paid_subscription
 
 
 def _plan_code(plan: Plan) -> str:
-    """Normalize ORM/test-double plan codes at a trust boundary."""
     value = plan.code
     return value.value if isinstance(value, PlanCode) else str(value)
 
 
-async def _ledger(
-    session: AsyncSession,
-    *,
-    event_type: str,
-    payment: Payment | None = None,
-    subscription: Subscription | None = None,
-    plan: Plan | None = None,
-    user_id: UUID | None = None,
-    amount: Decimal | None = None,
-    currency: str | None = None,
-    stars_amount: int | None = None,
-    metadata: dict[str, object] | None = None,
-) -> None:
-    """Append one immutable billing event."""
-    session.add(
-        BillingLedger(
-            event_type=event_type,
-            user_id=user_id or (payment.user_id if payment is not None else None),
-            payment_id=payment.id if payment is not None else None,
-            subscription_id=subscription.id if subscription is not None else None,
-            plan_id=plan.id if plan is not None else None,
-            amount=amount,
-            currency=currency,
-            stars_amount=stars_amount,
-            metadata=metadata,
-        )
-    )
+async def _ledger(session: AsyncSession, *, event_type: str, payment: Payment | None = None, subscription: Subscription | None = None, plan: Plan | None = None, user_id: UUID | None = None, amount: Decimal | None = None, currency: str | None = None, stars_amount: int | None = None, metadata: dict[str, object] | None = None) -> None:
+    session.add(BillingLedger(event_type=event_type, user_id=user_id or (payment.user_id if payment is not None else None), payment_id=payment.id if payment is not None else None, subscription_id=subscription.id if subscription is not None else None, plan_id=plan.id if plan is not None else None, amount=amount, currency=currency, stars_amount=stars_amount, ledger_metadata=metadata))
 
 
-async def create_payment(
-    session: AsyncSession,
-    *,
-    user_id: UUID,
-    plan: Plan,
-    provider: str,
-    transaction_id: str | None,
-    amount: Decimal,
-    currency: str = "USD",
-    invoice_payload: str | None = None,
-    stars_amount: int | None = None,
-) -> Payment:
-    """Create or return an idempotent pending payment snapshot."""
+async def create_payment(session: AsyncSession, *, user_id: UUID, plan: Plan, provider: str, transaction_id: str | None, amount: Decimal, currency: str = "USD", invoice_payload: str | None = None, stars_amount: int | None = None) -> Payment:
     code = _plan_code(plan)
     if code == PlanCode.FREE.value or amount < 0:
         raise ValueError("invalid_payment_amount")
@@ -83,106 +36,41 @@ async def create_payment(
     invoice_payload = invoice_payload.strip() if invoice_payload else None
 
     if transaction_id:
-        existing = (
-            await session.execute(
-                select(Payment).where(
-                    Payment.provider == provider,
-                    Payment.transaction_id == transaction_id,
-                )
-            )
-        ).scalar_one_or_none()
+        existing = (await session.execute(select(Payment).where(Payment.provider == provider, Payment.transaction_id == transaction_id))).scalar_one_or_none()
         if existing is not None:
             return existing
     if invoice_payload:
-        existing = (
-            await session.execute(select(Payment).where(Payment.invoice_payload == invoice_payload))
-        ).scalar_one_or_none()
+        existing = (await session.execute(select(Payment).where(Payment.invoice_payload == invoice_payload))).scalar_one_or_none()
         if existing is not None:
             return existing
 
-    payment = Payment(
-        user_id=user_id,
-        plan_id=plan.id,
-        transaction_id=transaction_id,
-        invoice_payload=invoice_payload,
-        stars_amount=stars_amount,
-        provider=provider,
-        amount=amount,
-        currency=currency.upper(),
-        status=PaymentStatus.PENDING.value,
-    )
+    payment = Payment(user_id=user_id, plan_id=plan.id, transaction_id=transaction_id, invoice_payload=invoice_payload, stars_amount=stars_amount, provider=provider, amount=amount, currency=currency.upper(), status=PaymentStatus.PENDING.value)
     session.add(payment)
     await session.flush()
-    await _ledger(
-        session,
-        event_type="PAYMENT_CREATED",
-        payment=payment,
-        plan=plan,
-        amount=amount,
-        currency=currency.upper(),
-        stars_amount=stars_amount,
-        metadata={"provider": provider, "invoice_payload": invoice_payload or ""},
-    )
+    await _ledger(session, event_type="PAYMENT_CREATED", payment=payment, plan=plan, amount=amount, currency=currency.upper(), stars_amount=stars_amount, metadata={"provider": provider, "invoice_payload": invoice_payload or ""})
     await session.flush()
     return payment
 
 
-async def create_stars_payment(
-    session: AsyncSession,
-    *,
-    user_id: UUID,
-    plan: Plan,
-    invoice_payload: str,
-) -> Payment:
-    """Create the pending server-side order backing a Telegram Stars invoice."""
+async def create_stars_payment(session: AsyncSession, *, user_id: UUID, plan: Plan, invoice_payload: str) -> Payment:
     if _plan_code(plan) == PlanCode.FREE.value or plan.stars_price is None:
         raise ValueError("stars_not_available_for_plan")
-    return await create_payment(
-        session,
-        user_id=user_id,
-        plan=plan,
-        provider="telegram_stars",
-        transaction_id=None,
-        amount=Decimal(plan.stars_price),
-        currency="XTR",
-        invoice_payload=invoice_payload,
-        stars_amount=plan.stars_price,
-    )
+    return await create_payment(session, user_id=user_id, plan=plan, provider="telegram_stars", transaction_id=None, amount=Decimal(plan.stars_price), currency="XTR", invoice_payload=invoice_payload, stars_amount=plan.stars_price)
 
 
-async def finalize_stars_payment(
-    session: AsyncSession,
-    *,
-    invoice_payload: str,
-    transaction_id: str,
-    telegram_user_id: int,
-    total_amount: int,
-) -> Payment:
-    """Verify and settle a successful Telegram Stars payment exactly once."""
-    result = await session.execute(
-        select(Payment).where(Payment.invoice_payload == invoice_payload).with_for_update()
-    )
+async def finalize_stars_payment(session: AsyncSession, *, invoice_payload: str, transaction_id: str, telegram_user_id: int, total_amount: int) -> Payment:
+    result = await session.execute(select(Payment).where(Payment.invoice_payload == invoice_payload).with_for_update())
     payment = result.scalar_one_or_none()
     if payment is None or payment.provider != "telegram_stars":
         raise ValueError("payment_order_not_found")
 
-    user = (
-        await session.execute(select(User).where(User.id == payment.user_id).with_for_update())
-    ).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.id == payment.user_id).with_for_update())).scalar_one_or_none()
     if user is None or user.telegram_id != telegram_user_id:
         raise ValueError("payment_user_mismatch")
     if payment.stars_amount != total_amount or payment.currency != "XTR":
         raise ValueError("payment_amount_mismatch")
 
-    duplicate = (
-        await session.execute(
-            select(Payment).where(
-                Payment.provider == "telegram_stars",
-                Payment.transaction_id == transaction_id,
-                Payment.id != payment.id,
-            )
-        )
-    ).scalar_one_or_none()
+    duplicate = (await session.execute(select(Payment).where(Payment.provider == "telegram_stars", Payment.transaction_id == transaction_id, Payment.id != payment.id))).scalar_one_or_none()
     if duplicate is not None:
         raise ValueError("duplicate_payment_transaction")
 
@@ -193,11 +81,7 @@ async def finalize_stars_payment(
     if payment.status != PaymentStatus.PENDING.value:
         raise ValueError("payment_not_pending")
 
-    plan = (
-        await session.execute(
-            select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True))
-        )
-    ).scalar_one_or_none()
+    plan = (await session.execute(select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True)))).scalar_one_or_none()
     if plan is None or plan.stars_price != total_amount:
         raise ValueError("plan_price_changed")
 
@@ -205,29 +89,12 @@ async def finalize_stars_payment(
     payment.transaction_id = transaction_id
     payment.status = PaymentStatus.APPROVED.value
     payment.subscription_id = subscription.id
-    await _ledger(
-        session,
-        event_type="PAYMENT_APPROVED",
-        payment=payment,
-        subscription=subscription,
-        plan=plan,
-        amount=payment.amount,
-        currency="XTR",
-        stars_amount=total_amount,
-        metadata={"telegram_charge_id": transaction_id},
-    )
+    await _ledger(session, event_type="PAYMENT_APPROVED", payment=payment, subscription=subscription, plan=plan, amount=payment.amount, currency="XTR", stars_amount=total_amount, metadata={"telegram_charge_id": transaction_id})
     await session.flush()
     return payment
 
 
-async def set_payment_status(
-    session: AsyncSession,
-    *,
-    payment_id: UUID,
-    status: PaymentStatus,
-    approved_by: UUID | None = None,
-) -> Payment:
-    """Transition a payment under a row lock and audit every terminal state change."""
+async def set_payment_status(session: AsyncSession, *, payment_id: UUID, status: PaymentStatus, approved_by: UUID | None = None) -> Payment:
     result = await session.execute(select(Payment).where(Payment.id == payment_id).with_for_update())
     payment = result.scalar_one_or_none()
     if payment is None:
@@ -235,21 +102,11 @@ async def set_payment_status(
     current = PaymentStatus(payment.status)
     if status == current:
         return payment
-
-    allowed = {
-        PaymentStatus.PENDING: {PaymentStatus.APPROVED, PaymentStatus.REJECTED},
-        PaymentStatus.APPROVED: {PaymentStatus.REFUNDED},
-        PaymentStatus.REJECTED: set(),
-        PaymentStatus.REFUNDED: set(),
-    }
+    allowed = {PaymentStatus.PENDING: {PaymentStatus.APPROVED, PaymentStatus.REJECTED}, PaymentStatus.APPROVED: {PaymentStatus.REFUNDED}, PaymentStatus.REJECTED: set(), PaymentStatus.REFUNDED: set()}
     if status not in allowed[current]:
         raise ValueError("invalid_payment_transition")
 
-    plan = (
-        await session.execute(
-            select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True))
-        )
-    ).scalar_one_or_none()
+    plan = (await session.execute(select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True)))).scalar_one_or_none()
     if plan is None:
         raise ValueError("plan_unavailable")
 
@@ -260,57 +117,22 @@ async def set_payment_status(
         payment.subscription_id = subscription.id
         payment.approved_by = approved_by
         payment.status = status.value
-        await _ledger(
-            session,
-            event_type="PAYMENT_APPROVED",
-            payment=payment,
-            subscription=subscription,
-            plan=plan,
-            amount=payment.amount,
-            currency=payment.currency,
-            metadata={"approved_by": str(approved_by) if approved_by else "system"},
-        )
+        await _ledger(session, event_type="PAYMENT_APPROVED", payment=payment, subscription=subscription, plan=plan, amount=payment.amount, currency=payment.currency, metadata={"approved_by": str(approved_by) if approved_by else "system"})
     elif status == PaymentStatus.REJECTED:
         payment.status = status.value
         payment.approved_by = approved_by
-        await _ledger(
-            session,
-            event_type="PAYMENT_REJECTED",
-            payment=payment,
-            plan=plan,
-            amount=payment.amount,
-            currency=payment.currency,
-            metadata={"approved_by": str(approved_by) if approved_by else "system"},
-        )
+        await _ledger(session, event_type="PAYMENT_REJECTED", payment=payment, plan=plan, amount=payment.amount, currency=payment.currency, metadata={"approved_by": str(approved_by) if approved_by else "system"})
     else:
         if payment.subscription_id is not None:
-            subscription = (
-                await session.execute(
-                    select(Subscription)
-                    .where(Subscription.id == payment.subscription_id)
-                    .with_for_update()
-                )
-            ).scalar_one_or_none()
+            subscription = (await session.execute(select(Subscription).where(Subscription.id == payment.subscription_id).with_for_update())).scalar_one_or_none()
             if subscription is not None and subscription.status == SubscriptionStatus.ACTIVE.value:
                 subscription.status = SubscriptionStatus.CANCELLED.value
         payment.status = status.value
-        await _ledger(
-            session,
-            event_type="PAYMENT_REFUNDED",
-            payment=payment,
-            plan=plan,
-            amount=payment.amount,
-            currency=payment.currency,
-            stars_amount=payment.stars_amount,
-        )
-
+        await _ledger(session, event_type="PAYMENT_REFUNDED", payment=payment, plan=plan, amount=payment.amount, currency=payment.currency, stars_amount=payment.stars_amount)
     await session.flush()
     return payment
 
 
-async def get_payment_by_invoice_payload(
-    session: AsyncSession, *, invoice_payload: str
-) -> Payment | None:
-    """Fetch an order by its Telegram invoice payload."""
+async def get_payment_by_invoice_payload(session: AsyncSession, *, invoice_payload: str) -> Payment | None:
     result = await session.execute(select(Payment).where(Payment.invoice_payload == invoice_payload))
     return result.scalar_one_or_none()
