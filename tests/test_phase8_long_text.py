@@ -28,7 +28,10 @@ Monitor potassium and glucose. Treatment must account for potassium shifts.
 
 
 def test_short_text_stays_single_page_and_preserves_identity() -> None:
-    plan = LongTextEngine().build_plan("# Anemia\nIron deficiency causes fatigue.", visual_identity="clinical-blue")
+    plan = LongTextEngine().build_plan(
+        "# Anemia\nIron deficiency causes fatigue.",
+        visual_identity="clinical-blue",
+    )
 
     assert plan.mode == "single"
     assert plan.page_count == 1
@@ -37,8 +40,21 @@ def test_short_text_stays_single_page_and_preserves_identity() -> None:
 
 
 def test_long_text_selects_multi_page() -> None:
-    text = "\n\n".join(f"## Section {i}\n" + ("Clinical management and diagnosis details. " * 50) for i in range(8))
-    plan = LongTextEngine().build_plan(text)
+    sections = []
+    topics = [
+        "cardiology",
+        "neurology",
+        "endocrinology",
+        "infectious disease",
+        "hematology",
+        "nephrology",
+        "gastroenterology",
+        "pulmonology",
+    ]
+    for index, topic in enumerate(topics):
+        body = f"Clinical {topic} management and diagnosis details. " * 50
+        sections.append(f"## Section {index}\n{body}")
+    plan = LongTextEngine().build_plan("\n\n".join(sections))
 
     assert plan.mode == "multi_page"
     assert plan.page_count > 1
