@@ -17,12 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from gqmrmed.contracts.generation import GenerationStage, InputType
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
-from gqmrmed.services.jobs import (
-    finish_job,
-    mark_running,
-    recover_stale_running_jobs,
-    update_progress,
-)
+from gqmrmed.services.jobs import finish_job, mark_running, recover_stale_running_jobs, update_progress
 from gqmrmed.services.media_ingestion import MediaIngestor
 from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
@@ -50,8 +45,7 @@ class GenerationPipeline(Protocol):
 
 
 class ResultStore(Protocol):
-    async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult:
-        ...
+    async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult: ...
 
 
 class DeliverySink(Protocol):
@@ -78,13 +72,7 @@ class ThrottledProgressReporter:
         self._last_stage: GenerationStage | None = None
         self._last_progress = -1
 
-    def should_emit(
-        self,
-        stage: GenerationStage,
-        progress: int,
-        *,
-        force: bool = False,
-    ) -> bool:
+    def should_emit(self, stage: GenerationStage, progress: int, *, force: bool = False) -> bool:
         now = time.monotonic()
         meaningful = stage != self._last_stage or progress >= self._last_progress + 5
         due = now - self._last_emit >= self._interval
@@ -183,17 +171,9 @@ class GenerationWorker:
                             ),
                         )
                 if recovered:
-                    logger.warning(
-                        "generation_stale_jobs_recovered",
-                        extra={"count": len(recovered)},
-                    )
+                    logger.warning("generation_stale_jobs_recovered", extra={"count": len(recovered)})
 
-    async def _emit_progress(
-        self,
-        job: GenerationJob,
-        stage: GenerationStage,
-        progress: int,
-    ) -> None:
+    async def _emit_progress(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
         if self._progress_sink is None:
             return
         try:
@@ -204,10 +184,10 @@ class GenerationWorker:
                 extra={"job_id": str(job.id), "stage": stage.value, "progress": progress},
             )
 
-    async def _prepare_media(self, job: GenerationJob) -> None:
+    async def _prepare_media(self, job: GenerationJob) -> Path | None:
         """Download Telegram media and convert it into synthesis-ready text."""
         if self._media_ingestor is None or not job.storage_key:
-            return
+            return None
         destination = self._media_temp_dir / f"{job.id}.bin"
         ingested = await self._media_ingestor.ingest(
             storage_key=job.storage_key,
@@ -218,10 +198,14 @@ class GenerationWorker:
             raise ValueError("media_content_extraction_required")
         prefix = (job.input_text or "").strip()
         if job.input_type is InputType.MIXED and prefix:
-            job.input_text = f"User caption/context:\n{prefix}\n\nExtracted media content:\n{ingested.extracted_text}"
+            job.input_text = (
+                f"User caption/context:\n{prefix}\n\nExtracted media content:\n"
+                f"{ingested.extracted_text}"
+            )
         else:
             job.input_text = ingested.extracted_text
         job.input_type = InputType.TEXT
+        return destination
 
     async def process(self, job_id: UUID) -> None:
         async with self._session_factory() as session:
@@ -234,6 +218,7 @@ class GenerationWorker:
                     return
                 await mark_running(session, job_id, GenerationStage.RESEARCHING.value)
 
+        media_destination: Path | None = None
         try:
             async with self._session_factory() as session:
                 job_result = await session.execute(
@@ -243,7 +228,7 @@ class GenerationWorker:
 
             reporter = ThrottledProgressReporter()
             await self._emit_progress(job, GenerationStage.RESEARCHING, 1)
-            await self._prepare_media(job)
+            media_destination = await self._prepare_media(job)
 
             async def progress(stage: GenerationStage, value: int) -> None:
                 if not reporter.should_emit(stage, value):
@@ -293,10 +278,7 @@ class GenerationWorker:
                 try:
                     await self._delivery_sink(job, stored)
                 except Exception:
-                    logger.exception(
-                        "generation_delivery_failed",
-                        extra={"job_id": str(job_id)},
-                    )
+                    logger.exception("generation_delivery_failed", extra={"job_id": str(job_id)})
         except Exception as exc:
             logger.exception("generation_job_failed", extra={"job_id": str(job_id)})
             async with self._session_factory() as session:
@@ -322,8 +304,8 @@ class GenerationWorker:
                         error=f"{type(exc).__name__}: {exc}"[:4000],
                     )
         finally:
-            if "destination" in locals():
-                destination.unlink(missing_ok=True)
+            if media_destination is not None:
+                media_destination.unlink(missing_ok=True)
 
 
 __all__ = [
