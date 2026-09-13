@@ -16,12 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
-from gqmrmed.services.jobs import (
-    finish_job,
-    mark_running,
-    recover_stale_running_jobs,
-    update_progress,
-)
+from gqmrmed.services.jobs import finish_job, mark_running, recover_stale_running_jobs, update_progress
 from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
@@ -35,6 +30,7 @@ class StoredResult:
     width: int
     height: int
     mime_type: str
+    image_bytes: bytes | None = None
 
 
 class GenerationPipeline(Protocol):
@@ -47,23 +43,16 @@ class GenerationPipeline(Protocol):
 
 
 class ResultStore(Protocol):
-    async def put(
-        self,
-        *,
-        job_id: UUID,
-        image: GeneratedIllustration,
-    ) -> StoredResult:
+    async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult:
         ...
+
+
+class DeliverySink(Protocol):
+    async def __call__(self, job: GenerationJob, result: StoredResult) -> None: ...
 
 
 class ProgressSink(Protocol):
-    async def __call__(
-        self,
-        job: GenerationJob,
-        stage: GenerationStage,
-        progress: int,
-    ) -> None:
-        ...
+    async def __call__(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None: ...
 
 
 class ThrottledProgressReporter:
@@ -77,13 +66,7 @@ class ThrottledProgressReporter:
         self._last_stage: GenerationStage | None = None
         self._last_progress = -1
 
-    def should_emit(
-        self,
-        stage: GenerationStage,
-        progress: int,
-        *,
-        force: bool = False,
-    ) -> bool:
+    def should_emit(self, stage: GenerationStage, progress: int, *, force: bool = False) -> bool:
         now = time.monotonic()
         meaningful = stage != self._last_stage or progress >= self._last_progress + 5
         due = now - self._last_emit >= self._interval
@@ -111,6 +94,7 @@ class GenerationWorker:
         pipeline: GenerationPipeline,
         result_store: ResultStore,
         progress_sink: ProgressSink | None = None,
+        delivery_sink: DeliverySink | None = None,
         poll_timeout_seconds: int = 2,
         recovery_interval_seconds: int = 60,
         stale_running_after_seconds: int = 900,
@@ -126,6 +110,7 @@ class GenerationWorker:
         self._pipeline = pipeline
         self._result_store = result_store
         self._progress_sink = progress_sink
+        self._delivery_sink = delivery_sink
         self._poll_timeout = poll_timeout_seconds
         self._recovery_interval = recovery_interval_seconds
         self._stale_running_after = stale_running_after_seconds
@@ -139,10 +124,7 @@ class GenerationWorker:
         try:
             job_id = UUID(raw_job_id)
         except ValueError:
-            logger.error(
-                "generation_queue_invalid_job_id",
-                extra={"job_id": raw_job_id},
-            )
+            logger.error("generation_queue_invalid_job_id", extra={"job_id": raw_job_id})
             return True
         await self.process(job_id)
         return True
@@ -162,14 +144,11 @@ class GenerationWorker:
         async with self._session_factory() as session:
             async with session.begin():
                 recovered = await recover_stale_running_jobs(
-                    session,
-                    stale_after_seconds=self._stale_running_after,
+                    session, stale_after_seconds=self._stale_running_after
                 )
                 for job_id in recovered:
                     result = await session.execute(
-                        select(UsageReservation).where(
-                            UsageReservation.job_id == job_id
-                        )
+                        select(UsageReservation).where(UsageReservation.job_id == job_id)
                     )
                     ledger = result.scalar_one_or_none()
                     if ledger is not None:
@@ -188,12 +167,7 @@ class GenerationWorker:
                         extra={"count": len(recovered)},
                     )
 
-    async def _emit_progress(
-        self,
-        job: GenerationJob,
-        stage: GenerationStage,
-        progress: int,
-    ) -> None:
+    async def _emit_progress(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
         if self._progress_sink is None:
             return
         try:
@@ -208,24 +182,16 @@ class GenerationWorker:
         async with self._session_factory() as session:
             async with session.begin():
                 job_result = await session.execute(
-                    select(GenerationJob)
-                    .where(GenerationJob.id == job_id)
-                    .with_for_update()
+                    select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
                 )
                 job = job_result.scalar_one_or_none()
                 if job is None or job.status != "QUEUED":
                     return
-                await mark_running(
-                    session,
-                    job_id,
-                    GenerationStage.RESEARCHING.value,
-                )
+                await mark_running(session, job_id, GenerationStage.RESEARCHING.value)
 
         try:
             async with self._session_factory() as session:
-                job_result = await session.execute(
-                    select(GenerationJob).where(GenerationJob.id == job_id)
-                )
+                job_result = await session.execute(select(GenerationJob).where(GenerationJob.id == job_id))
                 job = job_result.scalar_one()
 
             reporter = ThrottledProgressReporter()
@@ -237,10 +203,7 @@ class GenerationWorker:
                 async with self._session_factory() as progress_session:
                     async with progress_session.begin():
                         await update_progress(
-                            progress_session,
-                            job_id,
-                            stage=stage.value,
-                            progress=value,
+                            progress_session, job_id, stage=stage.value, progress=value
                         )
                 await self._emit_progress(job, stage, value)
 
@@ -250,9 +213,7 @@ class GenerationWorker:
             async with self._session_factory() as session:
                 async with session.begin():
                     usage_result = await session.execute(
-                        select(UsageReservation).where(
-                            UsageReservation.job_id == job_id
-                        )
+                        select(UsageReservation).where(UsageReservation.job_id == job_id)
                     )
                     ledger = usage_result.scalar_one_or_none()
                     if ledger is not None:
@@ -277,17 +238,17 @@ class GenerationWorker:
                     )
 
             await self._emit_progress(job, GenerationStage.QUALITY_CONTROL, 100)
+            if self._delivery_sink is not None:
+                try:
+                    await self._delivery_sink(job, stored)
+                except Exception:
+                    logger.exception("generation_delivery_failed", extra={"job_id": str(job_id)})
         except Exception as exc:
-            logger.exception(
-                "generation_job_failed",
-                extra={"job_id": str(job_id)},
-            )
+            logger.exception("generation_job_failed", extra={"job_id": str(job_id)})
             async with self._session_factory() as session:
                 async with session.begin():
                     usage_result = await session.execute(
-                        select(UsageReservation).where(
-                            UsageReservation.job_id == job_id
-                        )
+                        select(UsageReservation).where(UsageReservation.job_id == job_id)
                     )
                     ledger = usage_result.scalar_one_or_none()
                     if ledger is not None:
@@ -309,6 +270,7 @@ class GenerationWorker:
 
 
 __all__ = [
+    "DeliverySink",
     "GenerationWorker",
     "JobQueue",
     "ProgressSink",
