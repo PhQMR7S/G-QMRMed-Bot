@@ -105,19 +105,18 @@ async def buy_handler(message: Message, session: AsyncSession) -> None:
         await message.answer("الخطة غير صالحة. استخدم /buy PLUS أو /buy PRO.")
         return
 
-    result = await session.execute(
-        select(Plan).where(
-            Plan.code == requested_code,
-            Plan.is_active.is_(True),
-        )
-    )
-    plan = result.scalar_one_or_none()
-    if plan is None or plan.code == PlanCode.FREE:
-        await message.answer("الخطة المطلوبة غير متاحة حالياً.")
-        return
-
     try:
         async with session.begin():
+            result = await session.execute(
+                select(Plan).where(
+                    Plan.code == requested_code,
+                    Plan.is_active.is_(True),
+                )
+            )
+            plan = result.scalar_one_or_none()
+            if plan is None or plan.code == PlanCode.FREE:
+                raise ValueError("plan_unavailable")
+
             user = await _user_from_message(session, message)
             if not user.is_active:
                 raise PermissionError("user_inactive")
@@ -133,8 +132,11 @@ async def buy_handler(message: Message, session: AsyncSession) -> None:
     except PermissionError:
         await message.answer("هذا الحساب غير نشط حالياً.")
         return
-    except ValueError:
-        await message.answer("تعذر إنشاء طلب الدفع حالياً.")
+    except ValueError as exc:
+        if str(exc) == "plan_unavailable":
+            await message.answer("الخطة المطلوبة غير متاحة حالياً.")
+        else:
+            await message.answer("تعذر إنشاء طلب الدفع حالياً.")
         return
 
     status_text = (
