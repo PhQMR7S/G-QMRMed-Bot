@@ -11,7 +11,7 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
@@ -22,7 +22,7 @@ from gqmrmed.services.jobs import (
     recover_stale_running_jobs,
     update_progress,
 )
-from gqmrmed.services.usage import Reservation, commit_generation, release_generation
+from gqmrmed.services.usage import commit_generation, release_generation, Reservation
 
 logger = logging.getLogger(__name__)
 
