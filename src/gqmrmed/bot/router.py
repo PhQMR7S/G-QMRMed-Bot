@@ -132,19 +132,14 @@ async def _submit_generation(
     try:
         async with session.begin():
             user = await _user_from_message(session, message)
-            queued = await create_user_generation(session, user=user, request=request)
+            await create_user_generation(session, user=user, request=request)
     except QuotaExceededError:
         await message.answer(
             "انتهت حصتك اليومية المجانية (3 تصاميم).\n"
             "استخدم /plans لعرض الخطط المتاحة."
         )
-        return
     except PermissionError:
         await message.answer("هذا الحساب غير نشط حالياً.")
-        return
-
-    # The worker owns user-facing progress and final image delivery.
-    del queued
 
 
 @router.message()
@@ -160,7 +155,11 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
             text=text,
             storage_key=f"telegram://photo/{photo.file_id}",
             mime_type="image/jpeg",
-            metadata={"telegram_file_id": photo.file_id, "width": photo.width, "height": photo.height},
+            metadata={
+                "telegram_file_id": photo.file_id,
+                "width": photo.width,
+                "height": photo.height,
+            },
         )
     elif message.document:
         document = message.document
@@ -169,7 +168,11 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
             text=text,
             storage_key=f"telegram://document/{document.file_id}",
             mime_type=document.mime_type,
-            metadata={"telegram_file_id": document.file_id, "file_name": document.file_name, "file_size": document.file_size},
+            metadata={
+                "telegram_file_id": document.file_id,
+                "file_name": document.file_name,
+                "file_size": document.file_size,
+            },
         )
     elif message.audio:
         audio = message.audio
@@ -178,7 +181,12 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
             text=text,
             storage_key=f"telegram://audio/{audio.file_id}",
             mime_type=audio.mime_type or "audio/mpeg",
-            metadata={"telegram_file_id": audio.file_id, "file_name": audio.file_name, "duration": audio.duration, "file_size": audio.file_size},
+            metadata={
+                "telegram_file_id": audio.file_id,
+                "file_name": audio.file_name,
+                "duration": audio.duration,
+                "file_size": audio.file_size,
+            },
         )
     elif message.voice:
         voice = message.voice
@@ -187,7 +195,11 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
             text=text,
             storage_key=f"telegram://voice/{voice.file_id}",
             mime_type=voice.mime_type or "audio/ogg",
-            metadata={"telegram_file_id": voice.file_id, "duration": voice.duration, "file_size": voice.file_size},
+            metadata={
+                "telegram_file_id": voice.file_id,
+                "duration": voice.duration,
+                "file_size": voice.file_size,
+            },
         )
     elif message.video:
         video = message.video
@@ -196,7 +208,13 @@ async def content_handler(message: Message, session: AsyncSession) -> None:
             text=text,
             storage_key=f"telegram://video/{video.file_id}",
             mime_type=video.mime_type or "video/mp4",
-            metadata={"telegram_file_id": video.file_id, "width": video.width, "height": video.height, "duration": video.duration, "file_size": video.file_size},
+            metadata={
+                "telegram_file_id": video.file_id,
+                "width": video.width,
+                "height": video.height,
+                "duration": video.duration,
+                "file_size": video.file_size,
+            },
         )
     elif text:
         request = GenerationRequest(input_type=InputType.TEXT, text=text)
