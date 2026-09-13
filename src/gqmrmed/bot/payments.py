@@ -97,9 +97,13 @@ async def stars_plan_callback(callback: CallbackQuery, session: AsyncSession) ->
         await create_stars_payment(session, user_id=user.id, plan=plan, invoice_payload=payload)
 
     await callback.answer("تم تجهيز الفاتورة.")
+    description = (
+        f"اشتراك {plan.name}: {plan.daily_limit} تصاميم يومياً "
+        f"لمدة {plan.duration_days} يوماً."
+    )
     await callback.message.answer_invoice(
         title=f"GQMRMed {plan.name}",
-        description=f"اشتراك {plan.name}: {plan.daily_limit} تصاميم يومياً لمدة {plan.duration_days} يوماً.",
+        description=description,
         payload=payload,
         provider_token="",
         currency="XTR",
@@ -153,7 +157,8 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
             )
     except ValueError:
         await message.answer(
-            "تم استلام إشعار دفع غير متوافق مع الطلب. لم يتم منح الاشتراك تلقائياً؛ تواصل مع /paysupport."
+            "تم استلام إشعار دفع غير متوافق مع الطلب. لم يتم منح الاشتراك تلقائياً؛ "
+            "تواصل مع /paysupport."
         )
         return
 
