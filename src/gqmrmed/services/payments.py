@@ -1,8 +1,8 @@
 """Payment lifecycle helpers for manual and provider-backed payment flows."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,6 +114,7 @@ async def _activate_paid_subscription(
     existing = result.scalar_one_or_none()
     start = now if existing is None or existing.expires_at is None else existing.expires_at
     subscription = Subscription(
+        id=uuid4(),
         user_id=payment.user_id,
         plan_id=plan.id,
         status=SubscriptionStatus.ACTIVE.value,
