@@ -19,9 +19,10 @@ from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationProvider
 from gqmrmed.rendering.raster import render_png
 from gqmrmed.rendering.svg import render_svg
+from gqmrmed.services.quality import validate_png_contract, validate_svg_contract
 from gqmrmed.services.research import (
-    research_medical_topic,
     ResearchProvider,
+    research_medical_topic,
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
@@ -90,8 +91,20 @@ class ProductionGenerationPipeline:
             visual_plan=visual_plan,
             illustration_href=_data_uri(illustration),
         )
+        validate_svg_contract(
+            svg,
+            title=content.title,
+            watermark=visual_plan.watermark,
+            width=self._config.width,
+            height=self._config.height,
+        )
         png = render_png(svg, width=self._config.width, height=self._config.height)
         await progress(GenerationStage.QUALITY_CONTROL, 98)
+        validate_png_contract(
+            png,
+            width=self._config.width,
+            height=self._config.height,
+        )
         return GeneratedIllustration(
             image_bytes=png,
             width=self._config.width,
