@@ -17,7 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from gqmrmed.contracts.generation import GenerationStage, InputType
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
-from gqmrmed.services.jobs import finish_job, mark_running, recover_stale_running_jobs, update_progress
+from gqmrmed.services.jobs import (
+    finish_job,
+    mark_running,
+    recover_stale_running_jobs,
+    update_progress,
+)
 from gqmrmed.services.media_ingestion import MediaIngestor
 from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
@@ -171,7 +176,10 @@ class GenerationWorker:
                             ),
                         )
                 if recovered:
-                    logger.warning("generation_stale_jobs_recovered", extra={"count": len(recovered)})
+                    logger.warning(
+                        "generation_stale_jobs_recovered",
+                        extra={"count": len(recovered)},
+                    )
 
     async def _emit_progress(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
         if self._progress_sink is None:
