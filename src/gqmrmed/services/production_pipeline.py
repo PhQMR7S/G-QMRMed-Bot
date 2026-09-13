@@ -20,8 +20,8 @@ from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationP
 from gqmrmed.rendering.raster import render_png
 from gqmrmed.rendering.svg import render_svg
 from gqmrmed.services.research import (
-    ResearchProvider,
     research_medical_topic,
+    ResearchProvider,
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
