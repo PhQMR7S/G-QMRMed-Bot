@@ -1,3 +1,7 @@
+import asyncio
+import contextlib
+
+from aiogram import Bot
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
@@ -13,6 +17,42 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 app.include_router(admin_router)
 app.include_router(admin_panel_router)
+
+
+@app.on_event("startup")
+async def start_embedded_worker() -> None:
+    """Run the durable generation worker in the free API instance when enabled."""
+    if settings.service_role != "api" or not settings.run_worker_in_api:
+        app.state.worker_task = None
+        app.state.worker_stop = None
+        app.state.worker_bot = None
+        return
+
+    if not settings.telegram_bot_token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is required when RUN_WORKER_IN_API=true")
+
+    from gqmrmed.services.runtime import build_worker
+
+    bot = Bot(token=settings.telegram_bot_token)
+    worker = build_worker(settings, bot)
+    stop_event = asyncio.Event()
+    app.state.worker_bot = bot
+    app.state.worker_stop = stop_event
+    app.state.worker_task = asyncio.create_task(worker.run(stop_event))
+
+
+@app.on_event("shutdown")
+async def stop_embedded_worker() -> None:
+    stop_event = getattr(app.state, "worker_stop", None)
+    worker_task = getattr(app.state, "worker_task", None)
+    bot = getattr(app.state, "worker_bot", None)
+    if stop_event is not None:
+        stop_event.set()
+    if worker_task is not None:
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker_task
+    if bot is not None:
+        await bot.session.close()
 
 
 @app.get("/health", tags=["system"])
