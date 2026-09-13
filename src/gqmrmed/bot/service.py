@@ -48,13 +48,19 @@ async def create_user_generation(
     *,
     user: User,
     request: GenerationRequest,
+    telegram_chat_id: int | None = None,
     usage_date: date | None = None,
 ) -> EnqueuedGeneration:
     """Atomically create a job and reserve exactly one usage slot."""
     if not user.is_active:
         raise PermissionError("user_inactive")
+    if telegram_chat_id is not None and telegram_chat_id <= 0:
+        raise ValueError("invalid_telegram_chat_id")
 
     entitlement = await resolve_entitlement(session, user_id=user.id)
+    metadata = dict(request.metadata or {})
+    if telegram_chat_id is not None:
+        metadata["telegram_chat_id"] = telegram_chat_id
     job = await create_generation_job(
         session,
         user_id=user.id,
@@ -62,7 +68,7 @@ async def create_user_generation(
         input_text=request.text,
         input_storage_key=request.storage_key,
         input_mime_type=request.mime_type,
-        input_metadata=request.metadata,
+        input_metadata=metadata or None,
     )
     reservation = await reserve_generation(
         session,
