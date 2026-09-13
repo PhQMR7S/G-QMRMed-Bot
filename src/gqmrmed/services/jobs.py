@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -55,7 +55,7 @@ async def mark_dispatched(
     *,
     dispatched_at: datetime | None = None,
 ) -> bool:
-    """Record a successful queue publish; harmless when already recorded."""
+    """Record a successful queue publish and refresh its dispatch lease."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
@@ -64,8 +64,7 @@ async def mark_dispatched(
         return False
     if job.status != JobStatus.QUEUED.value:
         return False
-    if job.enqueued_at is None:
-        job.enqueued_at = dispatched_at or datetime.now(UTC)
+    job.enqueued_at = dispatched_at or datetime.now(UTC)
     job.dispatch_attempts += 1
     job.last_dispatch_error = None
     await session.flush()
@@ -95,15 +94,22 @@ async def get_undispatched_jobs(
     session: AsyncSession,
     *,
     limit: int = 50,
+    recovery_after_seconds: int = 60,
 ) -> list[UUID]:
-    """Return queued jobs not yet durably marked as published to Redis."""
+    """Return queued jobs needing initial dispatch or stale-dispatch recovery."""
     if not 1 <= limit <= 500:
         raise ValueError("invalid_dispatch_batch_size")
+    if recovery_after_seconds <= 0:
+        raise ValueError("invalid_dispatch_recovery_window")
+    cutoff = datetime.now(UTC) - timedelta(seconds=recovery_after_seconds)
     result = await session.execute(
         select(GenerationJob.id)
         .where(
             GenerationJob.status == JobStatus.QUEUED.value,
-            GenerationJob.enqueued_at.is_(None),
+            (
+                GenerationJob.enqueued_at.is_(None)
+                | (GenerationJob.enqueued_at <= cutoff)
+            ),
         )
         .order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
         .limit(limit)
@@ -192,3 +198,16 @@ async def finish_job(
     if success:
         job.current_stage = GenerationStage.QUALITY_CONTROL.value
     await session.flush()
+
+
+__all__ = [
+    "VALID_STAGES",
+    "cancel_queued_job",
+    "create_generation_job",
+    "finish_job",
+    "get_undispatched_jobs",
+    "mark_dispatched",
+    "mark_running",
+    "record_dispatch_failure",
+    "update_progress",
+]
