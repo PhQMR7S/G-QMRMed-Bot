@@ -11,13 +11,18 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
-from gqmrmed.services.jobs import finish_job, mark_running, update_progress
-from gqmrmed.services.usage import commit_generation, release_generation, Reservation
+from gqmrmed.services.jobs import (
+    finish_job,
+    mark_running,
+    recover_stale_running_jobs,
+    update_progress,
+)
+from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
 
@@ -107,17 +112,27 @@ class GenerationWorker:
         result_store: ResultStore,
         progress_sink: ProgressSink | None = None,
         poll_timeout_seconds: int = 2,
+        recovery_interval_seconds: int = 60,
+        stale_running_after_seconds: int = 900,
     ) -> None:
         if poll_timeout_seconds <= 0:
             raise ValueError("invalid_worker_poll_timeout")
+        if recovery_interval_seconds <= 0:
+            raise ValueError("invalid_worker_recovery_interval")
+        if stale_running_after_seconds <= 0:
+            raise ValueError("invalid_stale_running_window")
         self._queue = queue
         self._session_factory = session_factory
         self._pipeline = pipeline
         self._result_store = result_store
         self._progress_sink = progress_sink
         self._poll_timeout = poll_timeout_seconds
+        self._recovery_interval = recovery_interval_seconds
+        self._stale_running_after = stale_running_after_seconds
+        self._last_recovery = 0.0
 
     async def run_once(self) -> bool:
+        await self._recover_stale_jobs_if_due()
         raw_job_id = await self._queue.dequeue(timeout_seconds=self._poll_timeout)
         if raw_job_id is None:
             return False
@@ -138,6 +153,40 @@ class GenerationWorker:
                 await self.run_once()
             except Exception:
                 logger.exception("generation_worker_iteration_failed")
+
+    async def _recover_stale_jobs_if_due(self) -> None:
+        now = time.monotonic()
+        if now - self._last_recovery < self._recovery_interval:
+            return
+        self._last_recovery = now
+        async with self._session_factory() as session:
+            async with session.begin():
+                recovered = await recover_stale_running_jobs(
+                    session,
+                    stale_after_seconds=self._stale_running_after,
+                )
+                for job_id in recovered:
+                    result = await session.execute(
+                        select(UsageReservation).where(
+                            UsageReservation.job_id == job_id
+                        )
+                    )
+                    ledger = result.scalar_one_or_none()
+                    if ledger is not None:
+                        await release_generation(
+                            session,
+                            Reservation(
+                                id=ledger.id,
+                                user_id=ledger.user_id,
+                                job_id=ledger.job_id,
+                                usage_date=ledger.usage_date,
+                            ),
+                        )
+                if recovered:
+                    logger.warning(
+                        "generation_stale_jobs_recovered",
+                        extra={"count": len(recovered)},
+                    )
 
     async def _emit_progress(
         self,
