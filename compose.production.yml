@@ -68,6 +68,8 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_BUCKET: ${S3_BUCKET:-gqmrmed}
       S3_REGION: ${S3_REGION:-}
+      GOOGLE_DRIVE_CREDENTIALS_JSON: ${GOOGLE_DRIVE_CREDENTIALS_JSON:-}
+      GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID:-}
       AI_PROVIDER: ${AI_PROVIDER:-}
       AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openrouter_free,groq_free,openai_compatible,openai}
       AI_ALLOW_PAID: ${AI_ALLOW_PAID:-false}
