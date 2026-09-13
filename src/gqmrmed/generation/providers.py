@@ -6,7 +6,7 @@ import asyncio
 import copy
 import time
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 import httpx
@@ -70,7 +70,7 @@ class HuggingFaceImageProvider:
 
         def generate_sync() -> bytes:
             client = InferenceClient(
-                provider=self.config.provider,
+                provider=cast(Any, self.config.provider),
                 api_key=self.config.token,
             )
             image = client.text_to_image(
