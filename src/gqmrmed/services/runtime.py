@@ -48,7 +48,11 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         PubMedConfig(api_key=settings.research_api_key, email=settings.research_email)
     )
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
-    order = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
+    order = [
+        item.strip().lower()
+        for item in settings.ai_provider_order.split(",")
+        if item.strip()
+    ]
     for name in order:
         if name == "ollama":
             providers.append(
@@ -72,7 +76,8 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
             providers.append(
                 (
                     ProviderDescriptor(
-                        name="openai_compatible", model=settings.ai_compatible_model
+                        name="openai_compatible",
+                        model=settings.ai_compatible_model,
                     ),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
@@ -111,7 +116,10 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         research_provider=research.search,
         synthesis_provider=synthesis,
         image_provider=image,
-        config=ProductionPipelineConfig(width=settings.image_width, height=settings.image_height),
+        config=ProductionPipelineConfig(
+            width=settings.image_width,
+            height=settings.image_height,
+        ),
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
