@@ -72,8 +72,8 @@ async def test_router_falls_back_then_pipeline_validates_evidence() -> None:
 async def test_router_reports_all_provider_failures() -> None:
     router = ProviderRouter(
         [
-            (ProviderDescriptor(name="first", model="test"), FailingProvider()),
-            (ProviderDescriptor(name="second", model="test"), FailingProvider()),
+            (ProviderDescriptor(name="first", model="test", cost_tier="local"), FailingProvider()),
+            (ProviderDescriptor(name="second", model="test", cost_tier="local"), FailingProvider()),
         ]
     )
     with pytest.raises(RuntimeError, match="all_synthesis_providers_failed"):
