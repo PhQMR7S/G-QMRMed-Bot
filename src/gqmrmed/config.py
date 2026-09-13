@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     # are disabled unless explicitly enabled by configuration.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,openrouter_free,openai_compatible,openai", alias="AI_PROVIDER_ORDER"
+        default="ollama,openrouter_free,openai_compatible,openai",
+        alias="AI_PROVIDER_ORDER",
     )
     ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
     ai_api_key: str | None = Field(default=None, alias="AI_API_KEY")
@@ -46,7 +47,9 @@ class Settings(BaseSettings):
     ai_compatible_base_url: str | None = Field(default=None, alias="AI_COMPATIBLE_BASE_URL")
     ai_compatible_model: str | None = Field(default=None, alias="AI_COMPATIBLE_MODEL")
     openrouter_api_key: str | None = Field(default=None, alias="OPENROUTER_API_KEY")
-    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL"
+    )
     openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
     openrouter_timeout_seconds: float = Field(
         default=120.0, gt=0, le=900, alias="OPENROUTER_TIMEOUT_SECONDS"
