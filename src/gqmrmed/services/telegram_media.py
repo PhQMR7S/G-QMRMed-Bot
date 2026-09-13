@@ -16,9 +16,12 @@ class TelegramMediaSource:
         self._bot = bot
 
     async def download(self, storage_key: str, destination: Path) -> None:
-        prefix, separator, file_id = storage_key.partition("/")
-        if prefix != "telegram:" or not separator or not file_id.strip():
+        prefix = "telegram://"
+        if not storage_key.startswith(prefix):
             raise MediaIngestionError("telegram_storage_key_invalid")
+        file_id = storage_key.removeprefix(prefix).rsplit("/", maxsplit=1)[-1].strip()
+        if not file_id:
+            raise MediaIngestionError("telegram_file_id_missing")
         try:
             await self._bot.download(file_id, destination=destination)
         except Exception as exc:
