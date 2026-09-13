@@ -83,14 +83,20 @@ class TelegramProgressSink:
         chat_id = (job.input_metadata or {}).get("telegram_chat_id")
         if not isinstance(chat_id, int) or chat_id <= 0:
             async with self._session_factory() as session:
-                result = await session.execute(select(User.telegram_id).where(User.id == job.user_id))
+                result = await session.execute(
+                    select(User.telegram_id).where(User.id == job.user_id)
+                )
                 chat_id = result.scalar_one_or_none()
         if not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("telegram_chat_id_unavailable")
 
         text = format_progress_message(stage, progress, elapsed_seconds=elapsed)
         if message_id is None:
-            sent = await self._bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            sent = await self._bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
+            )
             message_id = sent.message_id
             self._message_ids[job_id] = message_id
             async with self._session_factory() as session:
