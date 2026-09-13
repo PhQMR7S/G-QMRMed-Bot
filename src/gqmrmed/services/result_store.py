@@ -139,7 +139,7 @@ class GoogleDriveResultStore:
     credentials or file data are stored in the repository.
     """
 
-    _SCOPES = ("https://www.googleapis.com/auth/drive",)
+    _SCOPES = ("https://www.googleapis.com/auth/drive.file",)
     _PREFIX = "gdrive://"
 
     def __init__(self, *, credentials_json: str, folder_id: str) -> None:
@@ -168,18 +168,55 @@ class GoogleDriveResultStore:
 
     async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult:
         self._validate_image(image)
-        metadata = {
-            "name": f"{job_id}.png",
-            "parents": [self._folder_id],
-            "mimeType": "image/png",
-        }
-        media = MediaIoBaseUpload(io.BytesIO(image.image_bytes), mimetype="image/png", resumable=True)
-        response = await asyncio.to_thread(
+        filename = f"{job_id}.png"
+        existing = await asyncio.to_thread(
             lambda: self._drive.files()
-            .create(body=metadata, media_body=media, fields="id", supportsAllDrives=True)
+            .list(
+                q=(
+                    f"'{self._folder_id}' in parents and name='{filename}' "
+                    "and trashed=false"
+                ),
+                pageSize=1,
+                fields="files(id)",
+                spaces="drive",
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+            )
             .execute()
         )
-        file_id = response.get("id")
+        files = existing.get("files", [])
+        file_id = files[0].get("id") if files else None
+        media = MediaIoBaseUpload(
+            io.BytesIO(image.image_bytes), mimetype="image/png", resumable=True
+        )
+        if isinstance(file_id, str) and file_id:
+            await asyncio.to_thread(
+                lambda: self._drive.files()
+                .update(
+                    fileId=file_id,
+                    media_body=media,
+                    fields="id",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+        else:
+            metadata = {
+                "name": filename,
+                "parents": [self._folder_id],
+                "mimeType": "image/png",
+            }
+            response = await asyncio.to_thread(
+                lambda: self._drive.files()
+                .create(
+                    body=metadata,
+                    media_body=media,
+                    fields="id",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+            file_id = response.get("id")
         if not isinstance(file_id, str) or not file_id:
             raise ValueError("google_drive_upload_missing_file_id")
         return StoredResult(
