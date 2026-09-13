@@ -38,10 +38,7 @@ def test_telegram_id_uses_bigint() -> None:
 
 def test_daily_usage_has_atomic_uniqueness_key() -> None:
     constraints = DailyUsage.__table__.constraints
-    assert any(
-        constraint.name == "uq_daily_usage_user_date"
-        for constraint in constraints
-    )
+    assert any(constraint.name == "uq_daily_usage_user_date" for constraint in constraints)
 
 
 def test_generation_result_is_one_per_job() -> None:
@@ -63,18 +60,14 @@ def test_generation_dispatch_state_is_durable() -> None:
 
 
 def test_expected_core_columns_exist() -> None:
-    assert {"user_id", "plan_id", "status"}.issubset(
-        set(Subscription.__table__.c.keys())
-    )
+    assert {"user_id", "plan_id", "status"}.issubset(set(Subscription.__table__.c.keys()))
     assert {"plan_id", "duration_days", "status"}.issubset(
         set(ActivationCode.__table__.c.keys())
     )
-    assert {"user_id", "plan_id", "provider", "status"}.issubset(
+    assert {"user_id", "plan_id", "subscription_id", "provider", "status"}.issubset(
         set(Payment.__table__.c.keys())
     )
     assert {"user_id", "input_type", "status", "progress"}.issubset(
         set(GenerationJob.__table__.c.keys())
     )
-    assert {"name", "code", "price", "currency"}.issubset(
-        set(Plan.__table__.c.keys())
-    )
+    assert {"name", "code", "price", "currency"}.issubset(set(Plan.__table__.c.keys()))
