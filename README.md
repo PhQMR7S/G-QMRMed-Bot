@@ -90,3 +90,5 @@ Telegram User
 ## Current status
 
 The repository now contains the complete application-level text-to-infographic execution path: a Telegram job is durably queued, researched against PubMed, synthesized through the configured provider router, assigned a visual architecture, rendered with a real ComfyUI illustration provider, composed with exact SVG text, rasterized to PNG, persisted, and delivered back to Telegram. The remaining deployment dependency is external infrastructure/configuration: a real Telegram token, database/Redis endpoints, an AI provider credential or reachable Ollama instance, and a ComfyUI deployment with a concrete API-format workflow/model.
+
+CI is the source of truth for static typing, linting, migrations, package resolution, and automated tests after each push.
