@@ -32,7 +32,6 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="gqmrmed", alias="S3_BUCKET")
     s3_region: str | None = Field(default=None, alias="S3_REGION")
 
-    # AI routing: comma-separated provider names, highest priority first.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
         default="ollama,openai_compatible,openai",
@@ -46,20 +45,16 @@ class Settings(BaseSettings):
     ai_compatible_model: str | None = Field(default=None, alias="AI_COMPATIBLE_MODEL")
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
-    ollama_timeout_seconds: float = Field(default=180.0, gt=0, le=900, alias="OLLAMA_TIMEOUT_SECONDS")
+    ollama_timeout_seconds: float = Field(
+        default=180.0, gt=0, le=900, alias="OLLAMA_TIMEOUT_SECONDS"
+    )
     research_provider: str | None = Field(default="pubmed", alias="RESEARCH_PROVIDER")
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
     research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
 
-    comfyui_base_url: str = Field(
-        default="http://comfyui:8188",
-        alias="COMFYUI_BASE_URL",
-    )
+    comfyui_base_url: str = Field(default="http://comfyui:8188", alias="COMFYUI_BASE_URL")
     comfyui_timeout_seconds: float = Field(
-        default=120.0,
-        gt=0,
-        le=600,
-        alias="COMFYUI_TIMEOUT_SECONDS",
+        default=120.0, gt=0, le=600, alias="COMFYUI_TIMEOUT_SECONDS"
     )
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
     image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
