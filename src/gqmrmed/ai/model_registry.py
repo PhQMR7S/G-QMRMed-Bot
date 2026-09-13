@@ -66,6 +66,14 @@ OPENROUTER_FREE = ModelSpec(
     priority=20,
 )
 
+GROQ_FREE = ModelSpec(
+    provider="groq_free",
+    model="openai/gpt-oss-20b",
+    cost_tier=CostTier.FREE,
+    tasks=frozenset({ModelTask.SYNTHESIS, ModelTask.REASONING}),
+    priority=30,
+)
+
 OLLAMA_LOCAL = ModelSpec(
     provider="ollama",
     model="qwen3:8b",
@@ -85,11 +93,12 @@ OPENAI_PAID = ModelSpec(
 
 def default_registry() -> ModelRegistry:
     """Launch registry: local/free first; paid remains explicitly opt-in."""
-    return ModelRegistry([OLLAMA_LOCAL, OPENROUTER_FREE, OPENAI_PAID])
+    return ModelRegistry([OLLAMA_LOCAL, OPENROUTER_FREE, GROQ_FREE, OPENAI_PAID])
 
 
 __all__ = [
     "CostTier",
+    "GROQ_FREE",
     "ModelRegistry",
     "ModelSpec",
     "ModelTask",
