@@ -1,10 +1,18 @@
 """Telegram Stars checkout handlers for paid digital subscriptions."""
 
+from datetime import datetime, UTC
 from uuid import uuid4
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message, PreCheckoutQuery
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LabeledPrice,
+    Message,
+    PreCheckoutQuery,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +31,7 @@ TERMS_TEXT = (
     "5) إذا فشل التوليد قبل نجاحه تُعاد وحدة الاستخدام المحجوزة.\n"
     "6) لا تعتمد على لقطة شاشة أو رسالة دفع غير ناجحة كإثبات للاشتراك.\n"
     "7) للاستفسارات ومشاكل الدفع استخدم /paysupport.\n\n"
-    "بالضغط على «أوافق وأتابع» أنت تؤكد قراءة هذه الشروط والموافقة عليها."
+    "بالضغط على زر الخطة أنت تؤكد قراءة هذه الشروط والموافقة عليها قبل إنشاء فاتورة الدفع."
 )
 
 
@@ -31,14 +39,8 @@ def _terms_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="أوافق وأتابع شراء PLUS",
-                    callback_data="stars:PLUS",
-                ),
-                InlineKeyboardButton(
-                    text="أوافق وأتابع شراء PRO",
-                    callback_data="stars:PRO",
-                ),
+                InlineKeyboardButton(text="أوافق وأتابع شراء PLUS", callback_data="stars:PLUS"),
+                InlineKeyboardButton(text="أوافق وأتابع شراء PRO", callback_data="stars:PRO"),
             ]
         ]
     )
@@ -54,8 +56,8 @@ async def terms_handler(message: Message) -> None:
 async def payment_support_handler(message: Message) -> None:
     """Provide the required payment support route."""
     await message.answer(
-        "لدعم المدفوعات، أرسل رقم العملية/الإيصال أو تفاصيل المشكلة إلى دعم GQMRMed عبر @ID29i.\n"
-        "لا ترسل مفاتيح سرية أو كلمات مرور أو بيانات بطاقات كاملة."
+        "لدعم المدفوعات، أرسل رقم العملية أو تفاصيل المشكلة إلى دعم GQMRMed عبر @ID29i.\n"
+        "لا ترسل كلمات مرور أو مفاتيح سرية أو بيانات بطاقة كاملة."
     )
 
 
@@ -78,6 +80,7 @@ async def stars_plan_callback(callback: CallbackQuery, session: AsyncSession) ->
         if not user.is_active:
             await callback.answer("الحساب غير نشط.", show_alert=True)
             return
+        user.terms_accepted_at = datetime.now(UTC)
         plan = (
             await session.execute(
                 select(Plan).where(
@@ -91,19 +94,12 @@ async def stars_plan_callback(callback: CallbackQuery, session: AsyncSession) ->
             await callback.answer("الخطة غير متاحة حالياً.", show_alert=True)
             return
         payload = f"gqmrmed:stars:{plan.code}:{uuid4().hex}"
-        await create_stars_payment(
-            session,
-            user_id=user.id,
-            plan=plan,
-            invoice_payload=payload,
-        )
+        await create_stars_payment(session, user_id=user.id, plan=plan, invoice_payload=payload)
 
     await callback.answer("تم تجهيز الفاتورة.")
     await callback.message.answer_invoice(
         title=f"GQMRMed {plan.name}",
-        description=(
-            f"اشتراك {plan.name}: {plan.daily_limit} تصاميم يومياً لمدة {plan.duration_days} يوماً."
-        ),
+        description=f"اشتراك {plan.name}: {plan.daily_limit} تصاميم يومياً لمدة {plan.duration_days} يوماً.",
         payload=payload,
         provider_token="",
         currency="XTR",
