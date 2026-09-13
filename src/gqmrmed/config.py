@@ -96,7 +96,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """Reject unsafe secret defaults when the application is marked production."""
-        drive_configured = bool(self.google_drive_credentials_json) or bool(self.google_drive_folder_id)
+        drive_configured = bool(self.google_drive_credentials_json) or bool(
+            self.google_drive_folder_id
+        )
         if drive_configured and not (
             self.google_drive_credentials_json and self.google_drive_folder_id
         ):
