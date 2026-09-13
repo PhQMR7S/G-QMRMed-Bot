@@ -27,8 +27,8 @@ async def health_live() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/health/ready", tags=["system"])
-async def health_ready() -> JSONResponse | dict[str, str]:
+@app.get("/health/ready", tags=["system"], response_model=None)
+async def health_ready() -> JSONResponse:
     """Check the dependencies required before accepting generation work."""
     checks: dict[str, str] = {}
 
@@ -49,5 +49,5 @@ async def health_ready() -> JSONResponse | dict[str, str]:
         await redis.aclose()
 
     if all(value == "ok" for value in checks.values()):
-        return {"status": "ready", **checks}
+        return JSONResponse(content={"status": "ready", **checks})
     return JSONResponse(status_code=503, content={"status": "not_ready", **checks})
