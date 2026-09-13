@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import cairosvg
 
 from gqmrmed.rendering.layout import HEIGHT, WIDTH
@@ -20,11 +22,7 @@ def render_png(svg: str, *, width: int = WIDTH, height: int = HEIGHT) -> bytes:
     if width * 16 != height * 9:
         raise RasterRenderError("raster_dimensions_must_be_9_16")
     try:
-        data = cairosvg.svg2png(
-            bytestring=svg.encode("utf-8"),
-            output_width=width,
-            output_height=height,
-        )
+        data = cast(bytes, cairosvg.svg2png(bytestring=svg.encode("utf-8"), output_width=width, output_height=height))
     except Exception as exc:
         raise RasterRenderError("svg_rasterization_failed") from exc
     if not data:
