@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from gqmrmed.db.models import PaymentStatus, PlanCode, SubscriptionStatus
-from gqmrmed.services.payments import create_payment, set_payment_status
+from gqmrmed.services.payments import create_payment, create_stars_payment, set_payment_status
 
 
 class FakeResult:
@@ -14,6 +14,9 @@ class FakeResult:
 
     def scalar_one_or_none(self) -> object:
         return self.value
+
+    def all(self) -> list[object]:
+        return self.value if isinstance(self.value, list) else []
 
 
 class FakeSession:
@@ -37,9 +40,11 @@ class FakeSession:
 def make_plan(code: PlanCode = PlanCode.PLUS) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid4(),
-        code=code,
-        price=Decimal("5.00") if code == PlanCode.PLUS else Decimal("0.00"),
-        duration_days=30 if code == PlanCode.PLUS else None,
+        code=code.value,
+        price=Decimal("5.00") if code == PlanCode.PLUS else Decimal("20.00"),
+        stars_price=400 if code == PlanCode.PLUS else 1600,
+        duration_days=30 if code == PlanCode.PLUS else 90,
+        daily_limit=8 if code == PlanCode.PLUS else 15,
         is_active=True,
     )
 
@@ -50,8 +55,11 @@ def make_payment(plan: SimpleNamespace) -> SimpleNamespace:
         user_id=uuid4(),
         plan_id=plan.id,
         subscription_id=None,
+        activation_code_id=None,
         provider="manual",
         transaction_id=None,
+        invoice_payload=None,
+        stars_amount=None,
         amount=Decimal("5.00"),
         currency="USD",
         status=PaymentStatus.PENDING.value,
@@ -62,6 +70,9 @@ def make_payment(plan: SimpleNamespace) -> SimpleNamespace:
 @pytest.mark.asyncio
 async def test_create_payment_rejects_free_plan_and_wrong_amount() -> None:
     free = make_plan(PlanCode.FREE)
+    free.price = Decimal("0.00")
+    free.stars_price = None
+    free.duration_days = None
     with pytest.raises(ValueError, match="invalid_payment_amount"):
         await create_payment(
             FakeSession(),
@@ -104,11 +115,28 @@ async def test_create_payment_returns_existing_transaction() -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_stars_payment_uses_canonical_star_price() -> None:
+    plan = make_plan()
+    session = FakeSession(None)
+    result = await create_stars_payment(
+        session,
+        user_id=uuid4(),
+        plan=plan,
+        invoice_payload="gqmrmed:stars:PLUS:test",
+    )
+    assert result.provider == "telegram_stars"
+    assert result.currency == "XTR"
+    assert result.stars_amount == 400
+    assert result.amount == Decimal("400")
+    assert len(session.added) == 2
+
+
+@pytest.mark.asyncio
 async def test_approval_grants_subscription_and_is_replay_safe() -> None:
     plan = make_plan()
     payment = make_payment(plan)
     user = SimpleNamespace(id=payment.user_id)
-    session = FakeSession(payment, plan, user, None)
+    session = FakeSession(payment, plan, user, [])
 
     result = await set_payment_status(
         session,
@@ -119,7 +147,7 @@ async def test_approval_grants_subscription_and_is_replay_safe() -> None:
     assert result is payment
     assert payment.status == PaymentStatus.APPROVED.value
     assert payment.subscription_id is not None
-    assert len(session.added) == 1
+    assert len(session.added) == 2
     assert session.calls == 4
 
     replay_session = FakeSession(payment)
@@ -144,7 +172,7 @@ async def test_refund_cancels_only_linked_active_subscription() -> None:
     )
     payment.status = PaymentStatus.APPROVED.value
     payment.subscription_id = subscription.id
-    session = FakeSession(payment, subscription)
+    session = FakeSession(payment, plan, subscription)
 
     result = await set_payment_status(
         session,
