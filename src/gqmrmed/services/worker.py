@@ -186,25 +186,26 @@ class GenerationWorker:
 
     async def _prepare_media(self, job: GenerationJob) -> Path | None:
         """Download Telegram media and convert it into synthesis-ready text."""
-        if self._media_ingestor is None or not job.storage_key:
+        storage_key = job.input_storage_key
+        if self._media_ingestor is None or not storage_key:
             return None
         destination = self._media_temp_dir / f"{job.id}.bin"
         ingested = await self._media_ingestor.ingest(
-            storage_key=job.storage_key,
-            mime_type=job.mime_type,
+            storage_key=storage_key,
+            mime_type=job.input_mime_type,
             destination=destination,
         )
         if not ingested.extracted_text:
             raise ValueError("media_content_extraction_required")
         prefix = (job.input_text or "").strip()
-        if job.input_type is InputType.MIXED and prefix:
+        if job.input_type == InputType.MIXED.value and prefix:
             job.input_text = (
                 f"User caption/context:\n{prefix}\n\nExtracted media content:\n"
                 f"{ingested.extracted_text}"
             )
         else:
             job.input_text = ingested.extracted_text
-        job.input_type = InputType.TEXT
+        job.input_type = InputType.TEXT.value
         return destination
 
     async def process(self, job_id: UUID) -> None:
