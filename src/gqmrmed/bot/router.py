@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import create_user_generation, provision_user
 from gqmrmed.contracts.generation import GenerationRequest, InputType
-from gqmrmed.db.models import Plan, User
+from gqmrmed.db.models import PaymentStatus, Plan, PlanCode, User
+from gqmrmed.services.payments import create_payment
 from gqmrmed.services.subscriptions import activate_code
 from gqmrmed.services.usage import QuotaExceededError
 
@@ -19,7 +20,8 @@ WELCOME_TEXT = (
     "أرسل موضوعاً طبياً، نصاً، صورة، ملفاً، صوتاً أو فيديو، "
     "وسيعالجه النظام كطلب تصميم طبي.\n\n"
     "الخطة المجانية: 3 تصاميم يومياً.\n"
-    "استخدم /plans لعرض الخطط أو /activate CODE لتفعيل اشتراك."
+    "استخدم /plans لعرض الخطط، /buy PLUS أو /buy PRO لطلب اشتراك مدفوع، "
+    "أو /activate CODE لتفعيل اشتراك."
 )
 
 
@@ -65,6 +67,7 @@ async def help_handler(message: Message) -> None:
         "أرسل أي محتوى طبي تريد تحويله إلى تصميم.\n\n"
         "/start — بدء الاستخدام\n"
         "/plans — الخطط\n"
+        "/buy PLUS|PRO — طلب اشتراك مدفوع\n"
         "/activate CODE — تفعيل كود اشتراك\n"
         "/help — المساعدة"
     )
@@ -85,6 +88,65 @@ async def plans_handler(message: Message, session: AsyncSession) -> None:
         duration = "مستمر" if plan.duration_days is None else f"{plan.duration_days} يوم"
         lines.append(f"• {plan.name}: ${plan.price} — {duration} — {limit}")
     await message.answer("\n".join(lines))
+
+
+@router.message(Command("buy"))
+async def buy_handler(message: Message, session: AsyncSession) -> None:
+    """Create a pending manual purchase request for a paid public plan."""
+    if message.from_user is None:
+        return
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) != 2 or not parts[1].strip():
+        await message.answer("استخدم الأمر بهذا الشكل:\n/buy PLUS\nأو\n/buy PRO")
+        return
+
+    requested_code = parts[1].strip().upper()
+    if requested_code not in {PlanCode.PLUS.value, PlanCode.PRO.value}:
+        await message.answer("الخطة غير صالحة. استخدم /buy PLUS أو /buy PRO.")
+        return
+
+    result = await session.execute(
+        select(Plan).where(
+            Plan.code == requested_code,
+            Plan.is_active.is_(True),
+        )
+    )
+    plan = result.scalar_one_or_none()
+    if plan is None or plan.code == PlanCode.FREE:
+        await message.answer("الخطة المطلوبة غير متاحة حالياً.")
+        return
+
+    try:
+        async with session.begin():
+            user = await _user_from_message(session, message)
+            if not user.is_active:
+                raise PermissionError("user_inactive")
+            payment = await create_payment(
+                session,
+                user_id=user.id,
+                plan=plan,
+                provider="manual",
+                transaction_id=None,
+                amount=plan.price,
+                currency=plan.currency,
+            )
+    except PermissionError:
+        await message.answer("هذا الحساب غير نشط حالياً.")
+        return
+    except ValueError:
+        await message.answer("تعذر إنشاء طلب الدفع حالياً.")
+        return
+
+    status_text = "قيد المراجعة" if payment.status == PaymentStatus.PENDING.value else payment.status
+    await message.answer(
+        "تم إنشاء طلب الاشتراك ✅\n\n"
+        f"الخطة: {plan.name}\n"
+        f"المبلغ: {plan.price} {plan.currency}\n"
+        f"رقم الطلب: {payment.id}\n"
+        f"الحالة: {status_text}\n\n"
+        "أكمل الدفع عبر وسيلة الدفع التي يحددها مدير GQMRMed، "
+        "ثم تتم مراجعة الطلب وتفعيل الاشتراك."
+    )
 
 
 @router.message(Command("activate"))
