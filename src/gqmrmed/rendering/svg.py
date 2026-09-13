@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
-from gqmrmed.rendering.layout import build_layout, HEIGHT, WIDTH
+from gqmrmed.rendering.layout import HEIGHT, WIDTH, LayoutBox, build_layout
 
 
 class SVGRenderError(RuntimeError):
@@ -74,7 +74,7 @@ def write_svg(
 
 
 def _text_box(
-    box,
+    box: LayoutBox,
     text: str,
     size: int,
     *,
