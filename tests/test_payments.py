@@ -132,12 +132,30 @@ async def test_create_stars_payment_uses_canonical_star_price() -> None:
 
 
 @pytest.mark.asyncio
-async def test_approval_grants_subscription_and_is_replay_safe() -> None:
+async def test_approval_grants_subscription_and_is_replay_safe(monkeypatch: pytest.MonkeyPatch) -> None:
     plan = make_plan()
     payment = make_payment(plan)
-    user = SimpleNamespace(id=payment.user_id)
-    session = FakeSession(payment, plan, user, [])
+    subscription = SimpleNamespace(
+        id=uuid4(),
+        user_id=payment.user_id,
+        plan_id=plan.id,
+        status=SubscriptionStatus.ACTIVE.value,
+    )
+    grant_calls: list[tuple[object, object, object]] = []
 
+    async def fake_grant_paid_subscription(
+        session: FakeSession, *, user_id: object, plan: object
+    ) -> SimpleNamespace:
+        grant_calls.append((session, user_id, plan))
+        session.add(subscription)
+        return subscription
+
+    monkeypatch.setattr(
+        "gqmrmed.services.payments.grant_paid_subscription",
+        fake_grant_paid_subscription,
+    )
+
+    session = FakeSession(payment, plan)
     result = await set_payment_status(
         session,
         payment_id=payment.id,
@@ -146,9 +164,11 @@ async def test_approval_grants_subscription_and_is_replay_safe() -> None:
 
     assert result is payment
     assert payment.status == PaymentStatus.APPROVED.value
-    assert payment.subscription_id is not None
+    assert payment.subscription_id == subscription.id
+    assert len(grant_calls) == 1
+    assert grant_calls[0][1:] == (payment.user_id, plan)
     assert len(session.added) == 2
-    assert session.calls == 4
+    assert session.calls == 2
 
     replay_session = FakeSession(payment)
     replay = await set_payment_status(
