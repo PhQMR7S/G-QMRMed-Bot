@@ -108,7 +108,7 @@ async def test_openai_compatible_adapter_parses_structured_response(
     payload = {"choices": [{"message": {"content": json.dumps(content().model_dump())}}]}
 
     async def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/chat/completions"
+        assert request.url.path == "/v1/chat/completions"
         assert request.headers["authorization"] == "Bearer test-key"
         body = json.loads(request.content)
         assert body["response_format"] == {"type": "json_object"}
