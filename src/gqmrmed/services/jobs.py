@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from uuid import UUID
 
 from sqlalchemy import select
@@ -123,13 +123,7 @@ async def recover_stale_running_jobs(
     stale_after_seconds: int = 900,
     limit: int = 100,
 ) -> list[UUID]:
-    """Fail jobs whose worker lease has clearly expired.
-
-    A worker can disappear after claiming a job. Without recovery, its usage
-    reservation would remain held forever and the job would never be retried.
-    The conservative default is 15 minutes, well above the configured image
-    generation timeout, and only jobs with a recorded start time are eligible.
-    """
+    """Fail jobs whose worker lease has clearly expired."""
     if stale_after_seconds <= 0:
         raise ValueError("invalid_running_recovery_window")
     if not 1 <= limit <= 500:
