@@ -9,17 +9,28 @@ from typing import Protocol
 
 from gqmrmed.ai.image_generation import build_illustration_request
 from gqmrmed.contracts.generation import GenerationStage
-from gqmrmed.contracts.research import ResearchRequest, SynthesizedContent, VisualPlan
+from gqmrmed.contracts.research import (
+    ResearchBundle,
+    ResearchRequest,
+    SynthesizedContent,
+    VisualPlan,
+)
 from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationProvider
 from gqmrmed.rendering.raster import render_png
 from gqmrmed.rendering.svg import render_svg
-from gqmrmed.services.medical_pipeline import MedicalPlan, build_medical_plan
-from gqmrmed.services.research import ResearchProvider
+from gqmrmed.services.research import (
+    ResearchProvider,
+    research_medical_topic,
+    validate_synthesis_evidence,
+)
+from gqmrmed.services.visual_architecture import select_visual_architecture
 
 
 class SynthesisService(Protocol):
-    async def synthesize(self, *, user_input: str, research: object) -> SynthesizedContent: ...
+    async def synthesize(
+        self, *, user_input: str, research: ResearchBundle
+    ) -> SynthesizedContent: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,28 +65,32 @@ class ProductionGenerationPipeline:
             raise ValueError("text_input_required_for_medical_pipeline")
 
         await progress(GenerationStage.RESEARCHING, 10)
-        plan = await build_medical_plan(
-            user_input=user_input,
-            research_request=ResearchRequest(query=user_input, max_sources=8),
-            research_provider=self._research_provider,
-            synthesis_provider=self._synthesis_provider,
+        research = await research_medical_topic(
+            ResearchRequest(query=user_input, max_sources=8),
+            self._research_provider,
         )
 
-        await progress(GenerationStage.SYNTHESIZING, 35)
+        await progress(GenerationStage.SYNTHESIZING, 30)
+        content = await self._synthesis_provider.synthesize(
+            user_input=user_input,
+            research=research,
+        )
+        validate_synthesis_evidence(
+            claim_evidence_ids=[claim.evidence_ids for claim in content.claims],
+            evidence=research,
+        )
+
         await progress(GenerationStage.ARCHITECTURE, 50)
-        illustration = await self._generate_illustration(plan.visual_plan, progress)
+        visual_plan = select_visual_architecture(topic=user_input, content=content)
+        illustration = await self._generate_illustration(visual_plan, progress)
 
         await progress(GenerationStage.RENDERING, 85)
         svg = render_svg(
-            content=plan.content,
-            visual_plan=plan.visual_plan,
+            content=content,
+            visual_plan=visual_plan,
             illustration_href=_data_uri(illustration),
         )
-        png = render_png(
-            svg,
-            width=self._config.width,
-            height=self._config.height,
-        )
+        png = render_png(svg, width=self._config.width, height=self._config.height)
         await progress(GenerationStage.QUALITY_CONTROL, 98)
         return GeneratedIllustration(
             image_bytes=png,
