@@ -124,9 +124,9 @@ async def set_payment_status(session: AsyncSession, *, payment_id: UUID, status:
         await _ledger(session, event_type="PAYMENT_REJECTED", payment=payment, plan=plan, amount=payment.amount, currency=payment.currency, metadata={"approved_by": str(approved_by) if approved_by else "system"})
     else:
         if payment.subscription_id is not None:
-            subscription = (await session.execute(select(Subscription).where(Subscription.id == payment.subscription_id).with_for_update())).scalar_one_or_none()
-            if subscription is not None and subscription.status == SubscriptionStatus.ACTIVE.value:
-                subscription.status = SubscriptionStatus.CANCELLED.value
+            linked_subscription = (await session.execute(select(Subscription).where(Subscription.id == payment.subscription_id).with_for_update())).scalar_one_or_none()
+            if linked_subscription is not None and linked_subscription.status == SubscriptionStatus.ACTIVE.value:
+                linked_subscription.status = SubscriptionStatus.CANCELLED.value
         payment.status = status.value
         await _ledger(session, event_type="PAYMENT_REFUNDED", payment=payment, plan=plan, amount=payment.amount, currency=payment.currency, stars_amount=payment.stars_amount)
     await session.flush()
