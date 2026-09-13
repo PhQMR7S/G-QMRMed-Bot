@@ -96,19 +96,25 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """Reject unsafe secret defaults when the application is marked production."""
+        drive_configured = bool(self.google_drive_credentials_json) or bool(self.google_drive_folder_id)
+        if drive_configured and not (
+            self.google_drive_credentials_json and self.google_drive_folder_id
+        ):
+            raise ValueError("Google Drive credentials and folder ID must be configured together")
+        s3_configured = any(
+            (self.s3_endpoint, self.s3_access_key_id, self.s3_secret_access_key)
+        )
+        if s3_configured and not (
+            self.s3_endpoint and self.s3_access_key_id and self.s3_secret_access_key
+        ):
+            raise ValueError("complete S3 credentials are required when S3 is configured")
+        if drive_configured and s3_configured:
+            raise ValueError("S3 and Google Drive result storage cannot be enabled together")
         if self.app_env.strip().lower() == "production":
             if not self.telegram_bot_token:
                 raise ValueError("TELEGRAM_BOT_TOKEN is required in production")
             if not self.admin_secret or len(self.admin_secret) < 32:
                 raise ValueError("ADMIN_SECRET must be at least 32 characters in production")
-            if self.s3_endpoint and (
-                not self.s3_access_key_id or not self.s3_secret_access_key
-            ):
-                raise ValueError("complete S3 credentials are required when S3 is configured")
-            if bool(self.google_drive_credentials_json) != bool(self.google_drive_folder_id):
-                raise ValueError(
-                    "Google Drive credentials and folder ID must be configured together"
-                )
         return self
 
 
