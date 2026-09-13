@@ -66,8 +66,8 @@ class FailingProvider:
 async def test_router_falls_back_in_configured_order(research: ResearchBundle) -> None:
     router = ProviderRouter(
         [
-            (ProviderDescriptor("local", "qwen3:8b", "free-local"), FailingProvider()),
-            (ProviderDescriptor("gateway", "model", "free-tier"), SuccessProvider()),
+            (ProviderDescriptor("local", "qwen3:8b", "local"), FailingProvider()),
+            (ProviderDescriptor("gateway", "model", "free"), SuccessProvider()),
         ]
     )
     result = await router.synthesize(user_input="diabetes", research=research)
@@ -75,8 +75,15 @@ async def test_router_falls_back_in_configured_order(research: ResearchBundle) -
 
 
 @pytest.mark.asyncio
+async def test_router_rejects_paid_provider_by_default(research: ResearchBundle) -> None:
+    router = ProviderRouter([(ProviderDescriptor("paid", "model", "paid"), SuccessProvider())])
+    with pytest.raises(ValueError, match="provider_router_requires_enabled_provider"):
+        await router.synthesize(user_input="diabetes", research=research)
+
+
+@pytest.mark.asyncio
 async def test_router_raises_when_all_providers_fail(research: ResearchBundle) -> None:
-    router = ProviderRouter([(ProviderDescriptor("local", "qwen3:8b"), FailingProvider())])
+    router = ProviderRouter([(ProviderDescriptor("local", "qwen3:8b", "local"), FailingProvider())])
     with pytest.raises(ProviderRoutingError, match="all_synthesis_providers_failed"):
         await router.synthesize(user_input="diabetes", research=research)
 
