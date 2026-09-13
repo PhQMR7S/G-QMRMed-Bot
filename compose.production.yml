@@ -1,0 +1,114 @@
+services:
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      SERVICE_ROLE: api
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      ADMIN_SECRET: ${ADMIN_SECRET:?ADMIN_SECRET is required}
+      APP_NAME: ${APP_NAME:-GQMRMed}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      SERVICE_ROLE: bot
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      ADMIN_SECRET: ${ADMIN_SECRET:?ADMIN_SECRET is required}
+      RESULT_STORAGE_DIR: /data/results
+      MEDIA_TEMP_DIR: /tmp/gqmrmed-media
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openai_compatible,openai}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_MODEL: ${AI_MODEL:-gpt-5.6-luna}
+      AI_COMPATIBLE_API_KEY: ${AI_COMPATIBLE_API_KEY:-}
+      AI_COMPATIBLE_BASE_URL: ${AI_COMPATIBLE_BASE_URL:-}
+      AI_COMPATIBLE_MODEL: ${AI_COMPATIBLE_MODEL:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      RESEARCH_PROVIDER: ${RESEARCH_PROVIDER:-pubmed}
+      RESEARCH_API_KEY: ${RESEARCH_API_KEY:-}
+      RESEARCH_EMAIL: ${RESEARCH_EMAIL:-}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:?COMFYUI_BASE_URL is required}
+      COMFYUI_WORKFLOW_JSON: ${COMFYUI_WORKFLOW_JSON:?COMFYUI_WORKFLOW_JSON is required}
+      COMFYUI_TIMEOUT_SECONDS: ${COMFYUI_TIMEOUT_SECONDS:-180}
+    volumes:
+      - gqmrmed_results:/data/results
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: production
+      SERVICE_ROLE: worker
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      ADMIN_SECRET: ${ADMIN_SECRET:?ADMIN_SECRET is required}
+      RESULT_STORAGE_DIR: /data/results
+      MEDIA_TEMP_DIR: /tmp/gqmrmed-media
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openai_compatible,openai}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
+      AI_MODEL: ${AI_MODEL:-gpt-5.6-luna}
+      AI_COMPATIBLE_API_KEY: ${AI_COMPATIBLE_API_KEY:-}
+      AI_COMPATIBLE_BASE_URL: ${AI_COMPATIBLE_BASE_URL:-}
+      AI_COMPATIBLE_MODEL: ${AI_COMPATIBLE_MODEL:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      RESEARCH_PROVIDER: ${RESEARCH_PROVIDER:-pubmed}
+      RESEARCH_API_KEY: ${RESEARCH_API_KEY:-}
+      RESEARCH_EMAIL: ${RESEARCH_EMAIL:-}
+      COMFYUI_BASE_URL: ${COMFYUI_BASE_URL:?COMFYUI_BASE_URL is required}
+      COMFYUI_WORKFLOW_JSON: ${COMFYUI_WORKFLOW_JSON:?COMFYUI_WORKFLOW_JSON is required}
+      COMFYUI_TIMEOUT_SECONDS: ${COMFYUI_TIMEOUT_SECONDS:-180}
+    volumes:
+      - gqmrmed_results:/data/results
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  gqmrmed_results:
