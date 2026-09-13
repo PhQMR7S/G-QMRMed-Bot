@@ -28,9 +28,16 @@ from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
 from gqmrmed.services.media_routing import RoutingMediaExtractor
-from gqmrmed.services.production_pipeline import ProductionGenerationPipeline, ProductionPipelineConfig
+from gqmrmed.services.production_pipeline import (
+    ProductionGenerationPipeline,
+    ProductionPipelineConfig,
+)
 from gqmrmed.services.redis_queue import RedisJobQueue
-from gqmrmed.services.result_store import FilesystemResultStore, S3ResultStore, TelegramResultDelivery
+from gqmrmed.services.result_store import (
+    FilesystemResultStore,
+    S3ResultStore,
+    TelegramResultDelivery,
+)
 from gqmrmed.services.telegram_media import TelegramMediaSource
 from gqmrmed.services.worker import GenerationWorker
 
@@ -55,7 +62,9 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         if name == "ollama":
             providers.append(
                 (
-                    ProviderDescriptor(name="ollama", model=settings.ollama_model, cost_tier="local"),
+                    ProviderDescriptor(
+                        name="ollama", model=settings.ollama_model, cost_tier="local"
+                    ),
                     OllamaSynthesizer(
                         OllamaConfig(
                             base_url=settings.ollama_base_url,
@@ -109,7 +118,9 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         elif name == "openai" and settings.ai_api_key:
             providers.append(
                 (
-                    ProviderDescriptor(name="openai", model=settings.ai_model, cost_tier="paid"),
+                    ProviderDescriptor(
+                        name="openai", model=settings.ai_model, cost_tier="paid"
+                    ),
                     OpenAIResponsesSynthesizer(
                         OpenAIResponsesConfig(
                             api_key=settings.ai_api_key,
@@ -150,7 +161,9 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         research_provider=research.search,
         synthesis_provider=synthesis,
         image_provider=image,
-        config=ProductionPipelineConfig(width=settings.image_width, height=settings.image_height),
+        config=ProductionPipelineConfig(
+            width=settings.image_width, height=settings.image_height
+        ),
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
