@@ -10,8 +10,8 @@ from gqmrmed.contracts.research import (
     VisualPlan,
 )
 from gqmrmed.services.research import (
-    ResearchProvider,
     research_medical_topic,
+    ResearchProvider,
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
