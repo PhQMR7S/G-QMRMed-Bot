@@ -132,7 +132,9 @@ async def test_create_stars_payment_uses_canonical_star_price() -> None:
 
 
 @pytest.mark.asyncio
-async def test_approval_grants_subscription_and_is_replay_safe(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_approval_grants_subscription_and_is_replay_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     plan = make_plan()
     payment = make_payment(plan)
     subscription = SimpleNamespace(
