@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.config import get_settings
 from gqmrmed.db.models import ActivationCode, Payment, PaymentStatus, Plan, User
+from gqmrmed.db.session import get_session
 from gqmrmed.services.activation import create_activation_code
 from gqmrmed.services.payments import set_payment_status
 
@@ -36,7 +37,7 @@ class PaymentStatusRequest(BaseModel):
 
 
 @router.get("/overview", dependencies=[Depends(require_admin)])
-async def overview(session: AsyncSession) -> dict[str, int]:
+async def overview(session: AsyncSession = Depends(get_session)) -> dict[str, int]:
     """Return small operational counters without exposing private user data."""
     users = await session.scalar(select(func.count()).select_from(User))
     active_plans = await session.scalar(
@@ -59,17 +60,23 @@ async def overview(session: AsyncSession) -> dict[str, int]:
 
 
 @router.post("/activation-codes", dependencies=[Depends(require_admin)])
-async def issue_codes(request: CodeRequest, session: AsyncSession) -> dict[str, list[str]]:
+async def issue_codes(
+    request: CodeRequest,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, list[str]]:
     """Issue plaintext activation codes; plaintext is returned only in this response."""
-    plan = (
-        await session.execute(
-            select(Plan).where(Plan.code == request.plan.upper(), Plan.is_active.is_(True))
-        )
-    ).scalar_one_or_none()
-    if plan is None:
-        raise HTTPException(status_code=404, detail="plan_not_found")
     codes: list[str] = []
     async with session.begin():
+        plan = (
+            await session.execute(
+                select(Plan).where(
+                    Plan.code == request.plan.upper(),
+                    Plan.is_active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if plan is None:
+            raise HTTPException(status_code=404, detail="plan_not_found")
         for _ in range(request.count):
             _, plaintext = await create_activation_code(
                 session,
@@ -85,7 +92,7 @@ async def issue_codes(request: CodeRequest, session: AsyncSession) -> dict[str, 
 async def update_payment(
     payment_id: UUID,
     request: PaymentStatusRequest,
-    session: AsyncSession,
+    session: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     """Approve, reject, or refund a payment under a database row lock."""
     try:
@@ -103,7 +110,9 @@ async def update_payment(
 
 
 @router.get("/payments", dependencies=[Depends(require_admin)])
-async def list_pending_payments(session: AsyncSession) -> list[dict[str, str]]:
+async def list_pending_payments(
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, str]]:
     """List pending payments for the private admin workflow."""
     result = await session.execute(
         select(Payment)
