@@ -1,6 +1,8 @@
 """Persistent result storage and Telegram delivery adapters."""
 
 import asyncio
+import io
+import json
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -8,6 +10,9 @@ from uuid import UUID
 import boto3
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration
@@ -126,6 +131,90 @@ class S3ResultStore:
         )
 
 
+class GoogleDriveResultStore:
+    """Persist final PNGs in a dedicated Google Drive folder.
+
+    Authentication uses a service-account JSON document supplied at runtime.
+    The service account must have access to the configured folder; no Drive
+    credentials or file data are stored in the repository.
+    """
+
+    _SCOPES = ("https://www.googleapis.com/auth/drive",)
+    _PREFIX = "gdrive://"
+
+    def __init__(self, *, credentials_json: str, folder_id: str) -> None:
+        if not credentials_json.strip():
+            raise ValueError("google_drive_credentials_required")
+        if not folder_id.strip():
+            raise ValueError("google_drive_folder_id_required")
+        try:
+            info = json.loads(credentials_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("invalid_google_drive_credentials_json") from exc
+        if not isinstance(info, dict) or not info:
+            raise ValueError("invalid_google_drive_credentials_json")
+        credentials = service_account.Credentials.from_service_account_info(
+            info, scopes=self._SCOPES
+        )
+        self._folder_id = folder_id
+        self._drive: Any = build("drive", "v3", credentials=credentials, cache_discovery=False)
+
+    @staticmethod
+    def _validate_image(image: GeneratedIllustration) -> None:
+        if image.mime_type != "image/png":
+            raise ValueError("final_result_must_be_png")
+        if image.width <= 0 or image.height <= 0 or not image.image_bytes:
+            raise ValueError("invalid_final_result")
+
+    async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult:
+        self._validate_image(image)
+        metadata = {
+            "name": f"{job_id}.png",
+            "parents": [self._folder_id],
+            "mimeType": "image/png",
+        }
+        media = MediaIoBaseUpload(io.BytesIO(image.image_bytes), mimetype="image/png", resumable=True)
+        response = await asyncio.to_thread(
+            lambda: self._drive.files()
+            .create(body=metadata, media_body=media, fields="id", supportsAllDrives=True)
+            .execute()
+        )
+        file_id = response.get("id")
+        if not isinstance(file_id, str) or not file_id:
+            raise ValueError("google_drive_upload_missing_file_id")
+        return StoredResult(
+            storage_key=f"{self._PREFIX}{file_id}",
+            width=image.width,
+            height=image.height,
+            mime_type=image.mime_type,
+            image_bytes=image.image_bytes,
+        )
+
+    async def load(self, storage_key: str) -> StoredResult:
+        """Reload a Drive file for durable Telegram delivery retry."""
+        if not storage_key.startswith(self._PREFIX):
+            raise ValueError("invalid_google_drive_storage_key")
+        file_id = storage_key[len(self._PREFIX) :]
+        if not file_id:
+            raise ValueError("invalid_google_drive_storage_key")
+        stream = io.BytesIO()
+        request = self._drive.files().get_media(fileId=file_id, supportsAllDrives=True)
+        downloader = MediaIoBaseDownload(stream, request)
+        done = False
+        while not done:
+            _, done = await asyncio.to_thread(downloader.next_chunk)
+        data = stream.getvalue()
+        if not data:
+            raise ValueError("stored_result_empty")
+        return StoredResult(
+            storage_key=storage_key,
+            width=0,
+            height=0,
+            mime_type="image/png",
+            image_bytes=data,
+        )
+
+
 class TelegramResultDelivery:
     """Send only the completed infographic to the originating Telegram chat."""
 
@@ -145,4 +234,9 @@ class TelegramResultDelivery:
         return sent.message_id
 
 
-__all__ = ["FilesystemResultStore", "S3ResultStore", "TelegramResultDelivery"]
+__all__ = [
+    "FilesystemResultStore",
+    "GoogleDriveResultStore",
+    "S3ResultStore",
+    "TelegramResultDelivery",
+]
