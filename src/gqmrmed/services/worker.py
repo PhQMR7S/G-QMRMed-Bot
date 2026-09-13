@@ -1,4 +1,4 @@
-"""Phase 7 worker orchestration with durable live progress delivery."""
+"""Phase 7 worker orchestration with durable progress, heartbeat and delivery retry."""
 
 from __future__ import annotations
 
@@ -15,12 +15,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from gqmrmed.contracts.generation import GenerationStage, InputType
-from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
+from gqmrmed.db.models import GenerationJob, GenerationResult, JobStatus, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
 from gqmrmed.services.jobs import (
     finish_job,
+    mark_delivery_pending,
+    mark_delivery_succeeded,
     mark_running,
     recover_stale_running_jobs,
+    touch_job_heartbeat,
     update_progress,
 )
 from gqmrmed.services.media_ingestion import MediaIngestor
@@ -52,9 +55,11 @@ class GenerationPipeline(Protocol):
 class ResultStore(Protocol):
     async def put(self, *, job_id: UUID, image: GeneratedIllustration) -> StoredResult: ...
 
+    async def load(self, storage_key: str) -> StoredResult: ...
+
 
 class DeliverySink(Protocol):
-    async def __call__(self, job: GenerationJob, result: StoredResult) -> None: ...
+    async def __call__(self, job: GenerationJob, result: StoredResult) -> int | None: ...
 
 
 class ProgressSink(Protocol):
@@ -94,7 +99,7 @@ class JobQueue(Protocol):
 
 
 class GenerationWorker:
-    """Consume durable job IDs and settle DB state exactly once per execution."""
+    """Consume durable jobs with heartbeat leases and at-least-once result delivery."""
 
     def __init__(
         self,
@@ -110,13 +115,14 @@ class GenerationWorker:
         poll_timeout_seconds: int = 2,
         recovery_interval_seconds: int = 60,
         stale_running_after_seconds: int = 900,
+        heartbeat_interval_seconds: int = 30,
     ) -> None:
-        if poll_timeout_seconds <= 0:
-            raise ValueError("invalid_worker_poll_timeout")
-        if recovery_interval_seconds <= 0:
-            raise ValueError("invalid_worker_recovery_interval")
-        if stale_running_after_seconds <= 0:
-            raise ValueError("invalid_stale_running_window")
+        if poll_timeout_seconds <= 0 or recovery_interval_seconds <= 0:
+            raise ValueError("invalid_worker_timing")
+        if stale_running_after_seconds <= heartbeat_interval_seconds * 2:
+            raise ValueError("stale_window_must_exceed_heartbeat_interval")
+        if heartbeat_interval_seconds <= 0:
+            raise ValueError("invalid_heartbeat_interval")
         self._queue = queue
         self._session_factory = session_factory
         self._pipeline = pipeline
@@ -128,10 +134,12 @@ class GenerationWorker:
         self._poll_timeout = poll_timeout_seconds
         self._recovery_interval = recovery_interval_seconds
         self._stale_running_after = stale_running_after_seconds
+        self._heartbeat_interval = heartbeat_interval_seconds
         self._last_recovery = 0.0
 
     async def run_once(self) -> bool:
         await self._recover_stale_jobs_if_due()
+        await self._retry_pending_deliveries()
         raw_job_id = await self._queue.dequeue(timeout_seconds=self._poll_timeout)
         if raw_job_id is None:
             return False
@@ -181,6 +189,58 @@ class GenerationWorker:
                         extra={"count": len(recovered)},
                     )
 
+    async def _retry_pending_deliveries(self) -> None:
+        if self._delivery_sink is None:
+            return
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(GenerationResult, GenerationJob)
+                .join(GenerationJob, GenerationJob.id == GenerationResult.job_id)
+                .where(GenerationJob.status == JobStatus.SUCCEEDED.value)
+                .order_by(GenerationResult.created_at.asc())
+                .limit(20)
+            )
+            candidates = list(result.all())
+        for stored_row, job in candidates:
+            status = (job.input_metadata or {}).get("telegram_delivery_status")
+            if status == "DELIVERED":
+                continue
+            try:
+                stored = await self._result_store.load(stored_row.storage_key)
+                stored = StoredResult(
+                    storage_key=stored.storage_key,
+                    width=stored_row.width,
+                    height=stored_row.height,
+                    mime_type=stored_row.mime_type,
+                    image_bytes=stored.image_bytes,
+                )
+                message_id = await self._delivery_sink(job, stored)
+            except Exception as exc:
+                logger.exception(
+                    "generation_delivery_retry_failed",
+                    extra={"job_id": str(job.id)},
+                )
+                async with self._session_factory() as error_session:
+                    async with error_session.begin():
+                        fresh = await error_session.execute(
+                            select(GenerationJob).where(GenerationJob.id == job.id).with_for_update()
+                        )
+                        current = fresh.scalar_one_or_none()
+                        if current is not None:
+                            metadata = dict(current.input_metadata or {})
+                            attempts = int(metadata.get("telegram_delivery_attempts", 0)) + 1
+                            metadata["telegram_delivery_attempts"] = attempts
+                            metadata["telegram_delivery_last_error"] = f"{type(exc).__name__}: {exc}"[:2000]
+                            current.input_metadata = metadata
+                continue
+            async with self._session_factory() as success_session:
+                async with success_session.begin():
+                    await mark_delivery_succeeded(
+                        success_session,
+                        job.id,
+                        message_id=message_id,
+                    )
+
     async def _emit_progress(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
         if self._progress_sink is None:
             return
@@ -191,6 +251,21 @@ class GenerationWorker:
                 "generation_progress_delivery_failed",
                 extra={"job_id": str(job.id), "stage": stage.value, "progress": progress},
             )
+
+    async def _heartbeat(self, job_id: UUID, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=self._heartbeat_interval)
+            except TimeoutError:
+                pass
+            if stop.is_set():
+                return
+            try:
+                async with self._session_factory() as session:
+                    async with session.begin():
+                        await touch_job_heartbeat(session, job_id)
+            except Exception:
+                logger.exception("generation_heartbeat_failed", extra={"job_id": str(job_id)})
 
     async def _prepare_media(self, job: GenerationJob) -> Path | None:
         """Download Telegram media and convert it into synthesis-ready text."""
@@ -223,11 +298,13 @@ class GenerationWorker:
                     select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
                 )
                 job = job_result.scalar_one_or_none()
-                if job is None or job.status != "QUEUED":
+                if job is None or job.status != JobStatus.QUEUED.value:
                     return
                 await mark_running(session, job_id, GenerationStage.RESEARCHING.value)
 
         media_destination: Path | None = None
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task: asyncio.Task[None] | None = None
         try:
             async with self._session_factory() as session:
                 job_result = await session.execute(
@@ -235,6 +312,7 @@ class GenerationWorker:
                 )
                 job = job_result.scalar_one()
 
+            heartbeat_task = asyncio.create_task(self._heartbeat(job_id, heartbeat_stop))
             reporter = ThrottledProgressReporter()
             await self._emit_progress(job, GenerationStage.RESEARCHING, 1)
             media_destination = await self._prepare_media(job)
@@ -281,13 +359,18 @@ class GenerationWorker:
                             height=stored.height,
                         )
                     )
+                    await mark_delivery_pending(session, job_id)
 
             await self._emit_progress(job, GenerationStage.QUALITY_CONTROL, 100)
             if self._delivery_sink is not None:
                 try:
-                    await self._delivery_sink(job, stored)
+                    message_id = await self._delivery_sink(job, stored)
                 except Exception:
                     logger.exception("generation_delivery_failed", extra={"job_id": str(job_id)})
+                else:
+                    async with self._session_factory() as session:
+                        async with session.begin():
+                            await mark_delivery_succeeded(session, job_id, message_id=message_id)
         except Exception as exc:
             logger.exception("generation_job_failed", extra={"job_id": str(job_id)})
             async with self._session_factory() as session:
@@ -313,6 +396,9 @@ class GenerationWorker:
                         error=f"{type(exc).__name__}: {exc}"[:4000],
                     )
         finally:
+            heartbeat_stop.set()
+            if heartbeat_task is not None:
+                await heartbeat_task
             if media_destination is not None:
                 media_destination.unlink(missing_ok=True)
 
