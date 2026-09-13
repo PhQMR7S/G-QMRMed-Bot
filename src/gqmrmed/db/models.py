@@ -3,21 +3,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import (
-    BigInteger,
-    Boolean,
-    CheckConstraint,
-    Date,
-    DateTime,
-    ForeignKey,
-    Integer,
-    JSON,
-    Numeric,
-    String,
-    Text,
-    UniqueConstraint,
-    Uuid,
-)
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from gqmrmed.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -156,7 +142,7 @@ class BillingLedger(UUIDPrimaryKeyMixin, Base):
     amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     currency: Mapped[str | None] = mapped_column(String(8))
     stars_amount: Mapped[int | None] = mapped_column(Integer)
-    metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    ledger_metadata: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON)
 
 
 class DailyUsage(UUIDPrimaryKeyMixin, Base):
