@@ -45,13 +45,43 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
         top += subtitle_h + gap
 
     footer = LayoutBox(margin, HEIGHT - margin - footer_h, WIDTH - 2 * margin, footer_h)
-    illustration_h = min(560, max(360, int((footer.y - top) * 0.38)))
+    box_count = len(content.key_points)
+    if box_count < 1:
+        raise ValueError("layout_requires_key_points")
+
+    total_content_gap = gap * (box_count - 1)
+    available_for_content = footer.y - top - gap
+    minimum_box_h = 48
+    minimum_illustration_h = 280
+    illustration_h = min(
+        560,
+        max(
+            minimum_illustration_h,
+            int((footer.y - top) * 0.38),
+        ),
+    )
+
+    required_content = minimum_box_h * box_count + total_content_gap
+    if top + illustration_h + gap + required_content > footer.y:
+        illustration_h = max(
+            minimum_illustration_h,
+            footer.y - top - gap - required_content,
+        )
+    if top + illustration_h + gap + required_content > footer.y:
+        minimum_box_h = max(
+            1,
+            (footer.y - top - illustration_h - gap - total_content_gap) // box_count,
+        )
+
     illustration = LayoutBox(margin, top, WIDTH - 2 * margin, illustration_h)
     top += illustration_h + gap
 
-    available = footer.y - top - gap
-    box_count = len(content.key_points)
-    box_h = max(72, (available - gap * (box_count - 1)) // box_count)
+    available = max(0, footer.y - top - gap)
+    box_h = max(
+        1,
+        (available - total_content_gap) // box_count,
+    )
+    box_h = max(1, min(box_h, max(minimum_box_h, box_h)))
     boxes = tuple(
         LayoutBox(margin, top + i * (box_h + gap), WIDTH - 2 * margin, box_h)
         for i in range(box_count)
