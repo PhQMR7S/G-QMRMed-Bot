@@ -19,23 +19,38 @@ logger = logging.getLogger(__name__)
 class GenerationDispatcher:
     """Continuously publish queued DB jobs to Redis with recovery after crashes."""
 
-    def __init__(self, redis: Redis, *, interval_seconds: float = 2.0) -> None:
+    def __init__(
+        self,
+        redis: Redis,
+        *,
+        interval_seconds: float = 2.0,
+        recovery_after_seconds: int = 60,
+    ) -> None:
         if interval_seconds <= 0:
             raise ValueError("invalid_dispatch_interval")
+        if recovery_after_seconds <= 0:
+            raise ValueError("invalid_dispatch_recovery_window")
         self._queue = RedisJobQueue(redis)
         self._interval = interval_seconds
+        self._recovery_after_seconds = recovery_after_seconds
 
     async def dispatch_once(self) -> int:
         """Publish one bounded batch and return the number successfully recorded."""
         async with SessionFactory() as session:
-            job_ids = await get_undispatched_jobs(session)
+            job_ids = await get_undispatched_jobs(
+                session,
+                recovery_after_seconds=self._recovery_after_seconds,
+            )
 
         dispatched = 0
         for job_id in job_ids:
             try:
                 await self._queue.enqueue(job_id=job_id)
             except Exception as exc:
-                logger.exception("generation_queue_publish_failed", extra={"job_id": str(job_id)})
+                logger.exception(
+                    "generation_queue_publish_failed",
+                    extra={"job_id": str(job_id)},
+                )
                 async with SessionFactory() as session:
                     async with session.begin():
                         await record_dispatch_failure(
