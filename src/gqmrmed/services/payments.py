@@ -20,6 +20,12 @@ from gqmrmed.db.models import (
 from gqmrmed.services.subscriptions import grant_paid_subscription
 
 
+def _plan_code(plan: Plan) -> str:
+    """Normalize ORM/test-double plan codes at a trust boundary."""
+    value = plan.code
+    return value.value if isinstance(value, PlanCode) else str(value)
+
+
 async def _ledger(
     session: AsyncSession,
     *,
@@ -62,7 +68,8 @@ async def create_payment(
     stars_amount: int | None = None,
 ) -> Payment:
     """Create or return an idempotent pending payment snapshot."""
-    if plan.code == PlanCode.FREE.value or amount < 0:
+    code = _plan_code(plan)
+    if code == PlanCode.FREE.value or amount < 0:
         raise ValueError("invalid_payment_amount")
     if provider.strip().lower() == "telegram_stars":
         if currency.upper() != "XTR" or stars_amount != plan.stars_price:
@@ -129,7 +136,7 @@ async def create_stars_payment(
     invoice_payload: str,
 ) -> Payment:
     """Create the pending server-side order backing a Telegram Stars invoice."""
-    if plan.code == PlanCode.FREE.value or plan.stars_price is None:
+    if _plan_code(plan) == PlanCode.FREE.value or plan.stars_price is None:
         raise ValueError("stars_not_available_for_plan")
     return await create_payment(
         session,
