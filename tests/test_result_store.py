@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from io import BytesIO
 from uuid import uuid4
 
@@ -83,7 +85,13 @@ class FakeDriveFiles:
                 return FakeDriveRequest({"files": [{"id": file_id}]})
         return FakeDriveRequest({"files": []})
 
-    def create(self, *, body: dict[str, object], media_body: FakeDriveUpload, **_: object) -> object:
+    def create(
+        self,
+        *,
+        body: dict[str, object],
+        media_body: FakeDriveUpload,
+        **_: object,
+    ) -> object:
         file_id = f"file-{self.next_id}"
         self.next_id += 1
         self.names[file_id] = str(body["name"])
