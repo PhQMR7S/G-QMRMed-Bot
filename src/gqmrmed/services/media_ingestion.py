@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from gqmrmed.contracts.generation import GenerationJob if False else InputType
+from gqmrmed.contracts.generation import InputType
 
 
 class MediaIngestionError(RuntimeError):
@@ -39,7 +39,11 @@ class MediaIngestionConfig:
 class MediaIngestor:
     """Download, validate, hash and classify media without interpreting it."""
 
-    def __init__(self, source: MediaSource, config: MediaIngestionConfig | None = None) -> None:
+    def __init__(
+        self,
+        source: MediaSource,
+        config: MediaIngestionConfig | None = None,
+    ) -> None:
         self._source = source
         self._config = config or MediaIngestionConfig()
         if self._config.max_bytes <= 0:
@@ -64,7 +68,8 @@ class MediaIngestor:
         if size > self._config.max_bytes:
             raise MediaIngestionError("media_too_large")
         digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-        normalized_mime = (mime_type or mimetypes.guess_type(destination.name)[0] or "application/octet-stream").lower()
+        guessed = mimetypes.guess_type(destination.name)[0]
+        normalized_mime = (mime_type or guessed or "application/octet-stream").lower()
         return IngestedMedia(
             path=destination,
             mime_type=normalized_mime,
@@ -84,4 +89,10 @@ def _input_type_for_mime(mime_type: str) -> InputType:
     return InputType.DOCUMENT
 
 
-__all__ = ["IngestedMedia", "MediaIngestionConfig", "MediaIngestionError", "MediaIngestor", "MediaSource"]
+__all__ = [
+    "IngestedMedia",
+    "MediaIngestionConfig",
+    "MediaIngestionError",
+    "MediaIngestor",
+    "MediaSource",
+]
