@@ -15,6 +15,7 @@ from gqmrmed.ai.providers import (
     OllamaSynthesizer,
     OpenAICompatibleChatSynthesizer,
     OpenAICompatibleConfig,
+    OpenRouterFreeSynthesizer,
     ProviderDescriptor,
     ProviderRouter,
     TextSynthesisProvider,
@@ -27,22 +28,15 @@ from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
 from gqmrmed.services.media_routing import RoutingMediaExtractor
-from gqmrmed.services.production_pipeline import (
-    ProductionGenerationPipeline,
-    ProductionPipelineConfig,
-)
+from gqmrmed.services.production_pipeline import ProductionGenerationPipeline, ProductionPipelineConfig
 from gqmrmed.services.redis_queue import RedisJobQueue
-from gqmrmed.services.result_store import (
-    FilesystemResultStore,
-    S3ResultStore,
-    TelegramResultDelivery,
-)
+from gqmrmed.services.result_store import FilesystemResultStore, S3ResultStore, TelegramResultDelivery
 from gqmrmed.services.telegram_media import TelegramMediaSource
 from gqmrmed.services.worker import GenerationWorker
 
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
-    """Assemble the real research, synthesis, media, image, rendering and delivery chain."""
+    """Assemble the research, free-first AI routing, image and delivery chain."""
     if not settings.comfyui_workflow_json:
         raise RuntimeError("COMFYUI_WORKFLOW_JSON is required for the generation worker")
     try:
@@ -61,12 +55,31 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         if name == "ollama":
             providers.append(
                 (
-                    ProviderDescriptor(name="ollama", model=settings.ollama_model),
+                    ProviderDescriptor(name="ollama", model=settings.ollama_model, cost_tier="local"),
                     OllamaSynthesizer(
                         OllamaConfig(
                             base_url=settings.ollama_base_url,
                             model=settings.ollama_model,
                             timeout_seconds=settings.ollama_timeout_seconds,
+                        )
+                    ),
+                )
+            )
+        elif name == "openrouter_free" and settings.openrouter_api_key:
+            providers.append(
+                (
+                    ProviderDescriptor(
+                        name="openrouter_free",
+                        model=settings.openrouter_model,
+                        cost_tier="free",
+                    ),
+                    OpenRouterFreeSynthesizer(
+                        OpenAICompatibleConfig(
+                            api_key=settings.openrouter_api_key,
+                            base_url=settings.openrouter_base_url,
+                            model=settings.openrouter_model,
+                            timeout_seconds=settings.openrouter_timeout_seconds,
+                            extra_headers=(("X-Title", "GQMRMed"),),
                         )
                     ),
                 )
@@ -82,6 +95,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
                     ProviderDescriptor(
                         name="openai_compatible",
                         model=settings.ai_compatible_model,
+                        cost_tier="paid",
                     ),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
@@ -95,7 +109,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         elif name == "openai" and settings.ai_api_key:
             providers.append(
                 (
-                    ProviderDescriptor(name="openai", model=settings.ai_model),
+                    ProviderDescriptor(name="openai", model=settings.ai_model, cost_tier="paid"),
                     OpenAIResponsesSynthesizer(
                         OpenAIResponsesConfig(
                             api_key=settings.ai_api_key,
@@ -124,7 +138,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         RoutingMediaExtractor(LocalMediaExtractor(), rich_media),
     )
 
-    synthesis = ProviderRouter(providers)
+    synthesis = ProviderRouter(providers, allow_paid=settings.ai_allow_paid)
     image = ComfyUIImageProvider(
         ComfyUIConfig(
             base_url=settings.comfyui_base_url,
@@ -136,10 +150,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         research_provider=research.search,
         synthesis_provider=synthesis,
         image_provider=image,
-        config=ProductionPipelineConfig(
-            width=settings.image_width,
-            height=settings.image_height,
-        ),
+        config=ProductionPipelineConfig(width=settings.image_width, height=settings.image_height),
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
