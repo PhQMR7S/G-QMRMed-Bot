@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # are disabled unless explicitly enabled by configuration.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,openrouter_free,openai_compatible,openai",
+        default="ollama,openrouter_free,groq_free,openai_compatible,openai",
         alias="AI_PROVIDER_ORDER",
     )
     ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
     openrouter_timeout_seconds: float = Field(
         default=120.0, gt=0, le=900, alias="OPENROUTER_TIMEOUT_SECONDS"
+    )
+    groq_api_key: str | None = Field(default=None, alias="GROQ_API_KEY")
+    groq_base_url: str = Field(default="https://api.groq.com/openai/v1", alias="GROQ_BASE_URL")
+    groq_model: str = Field(default="openai/gpt-oss-20b", alias="GROQ_MODEL")
+    groq_timeout_seconds: float = Field(
+        default=120.0, gt=0, le=900, alias="GROQ_TIMEOUT_SECONDS"
     )
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
