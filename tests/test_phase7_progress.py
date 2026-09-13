@@ -1,8 +1,8 @@
 """Phase 7 live Telegram progress presentation tests."""
 
+from gqmrmed.bot.progress import format_progress_message
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.services.worker import ThrottledProgressReporter
-from gqmrmed.bot.progress import format_progress_message
 
 
 def test_progress_message_contains_stage_progress_and_elapsed() -> None:
