@@ -1,4 +1,4 @@
-"""Phase 6 worker orchestration, progress reporting, and result persistence."""
+"""Phase 7 worker orchestration with durable live progress delivery."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from typing import Protocol
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.db.models import GenerationJob, GenerationResult, UsageReservation
 from gqmrmed.generation.providers import GeneratedIllustration
 from gqmrmed.services.jobs import finish_job, mark_running, update_progress
-from gqmrmed.services.usage import commit_generation, release_generation, Reservation
+from gqmrmed.services.usage import Reservation, commit_generation, release_generation
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class ProgressSink(Protocol):
 
 
 class ThrottledProgressReporter:
-    """Emit Telegram-safe progress updates at a bounded cadence."""
+    """Emit progress updates at a bounded cadence."""
 
     def __init__(self, *, interval_seconds: float = 4.0) -> None:
         if interval_seconds < 1.0:
@@ -139,6 +139,22 @@ class GenerationWorker:
             except Exception:
                 logger.exception("generation_worker_iteration_failed")
 
+    async def _emit_progress(
+        self,
+        job: GenerationJob,
+        stage: GenerationStage,
+        progress: int,
+    ) -> None:
+        if self._progress_sink is None:
+            return
+        try:
+            await self._progress_sink(job, stage, progress)
+        except Exception:
+            logger.exception(
+                "generation_progress_delivery_failed",
+                extra={"job_id": str(job.id), "stage": stage.value, "progress": progress},
+            )
+
     async def process(self, job_id: UUID) -> None:
         async with self._session_factory() as session:
             async with session.begin():
@@ -164,6 +180,7 @@ class GenerationWorker:
                 job = job_result.scalar_one()
 
             reporter = ThrottledProgressReporter()
+            await self._emit_progress(job, GenerationStage.RESEARCHING, 1)
 
             async def progress(stage: GenerationStage, value: int) -> None:
                 if not reporter.should_emit(stage, value):
@@ -176,8 +193,7 @@ class GenerationWorker:
                             stage=stage.value,
                             progress=value,
                         )
-                if self._progress_sink is not None:
-                    await self._progress_sink(job, stage, value)
+                await self._emit_progress(job, stage, value)
 
             image = await self._pipeline.run(job, progress)
             stored = await self._result_store.put(job_id=job_id, image=image)
@@ -211,12 +227,7 @@ class GenerationWorker:
                         )
                     )
 
-            if self._progress_sink is not None:
-                await self._progress_sink(
-                    job,
-                    GenerationStage.QUALITY_CONTROL,
-                    100,
-                )
+            await self._emit_progress(job, GenerationStage.QUALITY_CONTROL, 100)
         except Exception as exc:
             logger.exception(
                 "generation_job_failed",
@@ -251,6 +262,7 @@ class GenerationWorker:
 __all__ = [
     "GenerationWorker",
     "JobQueue",
+    "ProgressSink",
     "ResultStore",
     "StoredResult",
     "ThrottledProgressReporter",
