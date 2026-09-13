@@ -32,7 +32,9 @@ class ImageGenerationRequest:
             raise ValueError("image_seed_invalid")
 
 
-def build_illustration_request(visual_plan: VisualPlan, *, seed: int | None = None) -> ImageGenerationRequest:
+def build_illustration_request(
+    visual_plan: VisualPlan, *, seed: int | None = None
+) -> ImageGenerationRequest:
     """Convert the visual plan into a safe 9:16 illustration request."""
     if visual_plan.aspect_ratio != "9:16":
         raise ValueError("visual_plan_must_be_9_16")
