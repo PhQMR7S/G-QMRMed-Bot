@@ -50,7 +50,6 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
         raise ValueError("layout_requires_key_points")
 
     total_content_gap = gap * (box_count - 1)
-    available_for_content = footer.y - top - gap
     minimum_box_h = 48
     minimum_illustration_h = 280
     illustration_h = min(
@@ -81,7 +80,6 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
         1,
         (available - total_content_gap) // box_count,
     )
-    box_h = max(1, min(box_h, max(minimum_box_h, box_h)))
     boxes = tuple(
         LayoutBox(margin, top + i * (box_h + gap), WIDTH - 2 * margin, box_h)
         for i in range(box_count)
@@ -94,3 +92,6 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
         content_boxes=boxes,
         footer=footer,
     )
+
+
+__all__ = ["HEIGHT", "WIDTH", "InfographicLayout", "LayoutBox", "build_layout"]
