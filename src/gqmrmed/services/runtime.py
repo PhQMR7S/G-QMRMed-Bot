@@ -24,17 +24,18 @@ from gqmrmed.config import Settings
 from gqmrmed.db.session import SessionFactory
 from gqmrmed.generation.providers import ComfyUIConfig, ComfyUIImageProvider
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
-from gqmrmed.services.production_pipeline import (
-    ProductionGenerationPipeline,
-    ProductionPipelineConfig,
-)
+from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
+from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
+from gqmrmed.services.media_routing import RoutingMediaExtractor
+from gqmrmed.services.production_pipeline import ProductionGenerationPipeline, ProductionPipelineConfig
 from gqmrmed.services.redis_queue import RedisJobQueue
 from gqmrmed.services.result_store import FilesystemResultStore, TelegramResultDelivery
+from gqmrmed.services.telegram_media import TelegramMediaSource
 from gqmrmed.services.worker import GenerationWorker
 
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
-    """Assemble the real research, synthesis, image, rendering and delivery chain."""
+    """Assemble the real research, synthesis, media, image, rendering and delivery chain."""
     if not settings.comfyui_workflow_json:
         raise RuntimeError("COMFYUI_WORKFLOW_JSON is required for the generation worker")
     try:
@@ -48,11 +49,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         PubMedConfig(api_key=settings.research_api_key, email=settings.research_email)
     )
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
-    order = [
-        item.strip().lower()
-        for item in settings.ai_provider_order.split(",")
-        if item.strip()
-    ]
+    order = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
     for name in order:
         if name == "ollama":
             providers.append(
@@ -75,10 +72,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         ):
             providers.append(
                 (
-                    ProviderDescriptor(
-                        name="openai_compatible",
-                        model=settings.ai_compatible_model,
-                    ),
+                    ProviderDescriptor(name="openai_compatible", model=settings.ai_compatible_model),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.ai_compatible_api_key,
@@ -104,6 +98,22 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     if not providers:
         raise RuntimeError("no_synthesis_provider_configured")
 
+    rich_media = (
+        OpenAIMediaExtractor(
+            api_key=settings.ai_api_key,
+            model=settings.ai_model,
+            transcription_model=settings.media_transcription_model,
+            base_url=settings.ai_base_url,
+        )
+        if settings.ai_api_key
+        else None
+    )
+    media_ingestor = MediaIngestor(
+        TelegramMediaSource(bot),
+        MediaIngestionConfig(max_bytes=settings.media_max_bytes),
+        RoutingMediaExtractor(LocalMediaExtractor(), rich_media),
+    )
+
     synthesis = ProviderRouter(providers)
     image = ComfyUIImageProvider(
         ComfyUIConfig(
@@ -116,10 +126,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         research_provider=research.search,
         synthesis_provider=synthesis,
         image_provider=image,
-        config=ProductionPipelineConfig(
-            width=settings.image_width,
-            height=settings.image_height,
-        ),
+        config=ProductionPipelineConfig(width=settings.image_width, height=settings.image_height),
     )
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
@@ -130,6 +137,8 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         result_store=FilesystemResultStore(Path(settings.result_storage_dir)),
         progress_sink=TelegramProgressSink(bot),
         delivery_sink=TelegramResultDelivery(bot),
+        media_ingestor=media_ingestor,
+        media_temp_dir=settings.media_temp_dir,
     )
 
 
