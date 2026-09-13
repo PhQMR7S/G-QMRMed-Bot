@@ -177,6 +177,27 @@ async def update_progress(
     await session.flush()
 
 
+async def set_progress_message_id(
+    session: AsyncSession,
+    job_id: UUID,
+    message_id: int,
+) -> bool:
+    """Persist the Telegram message used for live progress updates."""
+    if message_id <= 0:
+        raise ValueError("invalid_progress_message_id")
+    result = await session.execute(
+        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
+    )
+    job = result.scalar_one_or_none()
+    if job is None:
+        return False
+    metadata = dict(job.input_metadata or {})
+    metadata["telegram_progress_message_id"] = message_id
+    job.input_metadata = metadata
+    await session.flush()
+    return True
+
+
 async def finish_job(
     session: AsyncSession,
     job_id: UUID,
@@ -209,5 +230,6 @@ __all__ = [
     "mark_dispatched",
     "mark_running",
     "record_dispatch_failure",
+    "set_progress_message_id",
     "update_progress",
 ]
