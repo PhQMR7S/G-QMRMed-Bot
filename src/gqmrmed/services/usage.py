@@ -4,15 +4,11 @@ from dataclasses import dataclass
 from datetime import date, datetime, UTC
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.db.models import (
-    DailyUsage,
-    UsageReservation,
-    UsageReservationStatus,
-)
+from gqmrmed.db.models import DailyUsage, UsageReservation, UsageReservationStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,15 +31,41 @@ async def reserve_generation(
     usage_date: date,
     daily_limit: int | None,
 ) -> Reservation:
-    """Atomically reserve one generation slot for one generation job.
+    """Reserve one slot exactly once for a job, even when Telegram retries it.
 
-    ``None`` means unlimited. PostgreSQL's ON CONFLICT path makes the finite
-    quota check atomic, so concurrent Telegram updates cannot oversubscribe it.
-    The reservation ledger gives each slot an immutable job-scoped identity,
-    preventing one failed job from releasing another job's reservation.
+    The job-scoped ledger row is inserted first. A duplicate job returns its
+    existing reservation without touching DailyUsage, preventing retry-driven
+    quota inflation. Quota accounting itself remains an atomic PostgreSQL upsert.
     """
     if daily_limit is not None and daily_limit <= 0:
         raise QuotaExceededError
+
+    reservation_stmt = (
+        insert(UsageReservation)
+        .values(
+            user_id=user_id,
+            job_id=job_id,
+            usage_date=usage_date,
+            status=UsageReservationStatus.RESERVED.value,
+        )
+        .on_conflict_do_nothing(index_elements=[UsageReservation.job_id])
+        .returning(UsageReservation.id)
+    )
+    reservation_result = await session.execute(reservation_stmt)
+    reservation_id = reservation_result.scalar_one_or_none()
+    if reservation_id is None:
+        existing = (
+            await session.execute(
+                select(UsageReservation)
+                .where(UsageReservation.job_id == job_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            raise RuntimeError("usage reservation conflict without persisted ledger")
+        if existing.user_id != user_id or existing.usage_date != usage_date:
+            raise RuntimeError("usage reservation identity mismatch")
+        return Reservation(existing.id, existing.user_id, existing.job_id, existing.usage_date)
 
     if daily_limit is None:
         stmt = insert(DailyUsage).values(
@@ -69,22 +91,11 @@ async def reserve_generation(
 
     result = await session.execute(stmt.returning(DailyUsage.id))
     if result.scalar_one_or_none() is None:
+        await session.execute(delete(UsageReservation).where(UsageReservation.id == reservation_id))
         raise QuotaExceededError
 
-    reservation = UsageReservation(
-        user_id=user_id,
-        job_id=job_id,
-        usage_date=usage_date,
-        status=UsageReservationStatus.RESERVED.value,
-    )
-    session.add(reservation)
     await session.flush()
-    return Reservation(
-        id=reservation.id,
-        user_id=user_id,
-        job_id=job_id,
-        usage_date=usage_date,
-    )
+    return Reservation(reservation_id, user_id, job_id, usage_date)
 
 
 async def commit_generation(session: AsyncSession, reservation: Reservation) -> None:
@@ -109,10 +120,7 @@ async def commit_generation(session: AsyncSession, reservation: Reservation) -> 
             DailyUsage.usage_date == reservation.usage_date,
             DailyUsage.reserved > 0,
         )
-        .values(
-            reserved=DailyUsage.reserved - 1,
-            committed=DailyUsage.committed + 1,
-        )
+        .values(reserved=DailyUsage.reserved - 1, committed=DailyUsage.committed + 1)
         .returning(DailyUsage.id)
     )
     result = await session.execute(stmt)
@@ -164,7 +172,7 @@ async def get_usage(
     user_id: UUID,
     usage_date: date,
 ) -> DailyUsage | None:
-    """Return today's usage record without creating one."""
+    """Return a usage record without creating one."""
     result = await session.execute(
         select(DailyUsage).where(
             DailyUsage.user_id == user_id,
