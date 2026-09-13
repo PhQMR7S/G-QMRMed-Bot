@@ -1,4 +1,4 @@
-"""Provider-neutral image generation contracts and ComfyUI adapter."""
+"""Provider-neutral image generation contracts and ComfyUI/Hugging Face adapters."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import Any, Protocol
 from uuid import uuid4
 
 import httpx
+from huggingface_hub import InferenceClient
 
 
 class ImageGenerationError(RuntimeError):
@@ -35,6 +36,71 @@ class ImageGenerationProvider(Protocol):
         height: int,
     ) -> GeneratedIllustration:
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class HuggingFaceImageConfig:
+    token: str
+    model: str = "black-forest-labs/FLUX.1-dev"
+    provider: str = "auto"
+    timeout_seconds: float = 180.0
+
+
+class HuggingFaceImageProvider:
+    """Generate illustrations through Hugging Face Inference Providers."""
+
+    def __init__(self, config: HuggingFaceImageConfig) -> None:
+        self.config = config
+
+    async def generate(
+        self,
+        *,
+        prompt: str,
+        width: int,
+        height: int,
+    ) -> GeneratedIllustration:
+        if width <= 0 or height <= 0:
+            raise ImageGenerationError("invalid_image_dimensions")
+        if not prompt.strip():
+            raise ImageGenerationError("image_prompt_empty")
+        if not self.config.token.strip():
+            raise ImageGenerationError("huggingface_token_missing")
+        if not self.config.model.strip():
+            raise ImageGenerationError("huggingface_model_missing")
+
+        def generate_sync() -> bytes:
+            client = InferenceClient(
+                provider=self.config.provider,
+                api_key=self.config.token,
+            )
+            image = client.text_to_image(
+                prompt=prompt,
+                model=self.config.model,
+                width=width,
+                height=height,
+            )
+            from io import BytesIO
+
+            buffer = BytesIO()
+            image.save(buffer, format="PNG")
+            return buffer.getvalue()
+
+        try:
+            image_bytes = await asyncio.wait_for(
+                asyncio.to_thread(generate_sync),
+                timeout=self.config.timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise ImageGenerationError("huggingface_generation_timeout") from exc
+        except Exception as exc:  # noqa: BLE001 - provider boundary
+            raise ImageGenerationError("huggingface_generation_failed") from exc
+
+        return GeneratedIllustration(
+            image_bytes=image_bytes,
+            width=width,
+            height=height,
+            mime_type="image/png",
+        )
 
 
 @dataclass(frozen=True, slots=True)
