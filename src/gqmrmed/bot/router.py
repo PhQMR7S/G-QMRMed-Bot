@@ -8,8 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import create_user_generation, provision_user
 from gqmrmed.contracts.generation import GenerationRequest, InputType
-from gqmrmed.db.models import PaymentStatus, Plan, PlanCode, User
-from gqmrmed.services.payments import create_payment
+from gqmrmed.db.models import Plan, PlanCode, User
 from gqmrmed.services.subscriptions import activate_code
 from gqmrmed.services.usage import QuotaExceededError
 
@@ -20,8 +19,8 @@ WELCOME_TEXT = (
     "أرسل موضوعاً طبياً، نصاً، صورة، ملفاً، صوتاً أو فيديو، "
     "وسيعالجه النظام كطلب تصميم طبي.\n\n"
     "الخطة المجانية: 3 تصاميم يومياً.\n"
-    "استخدم /plans لعرض الخطط، /buy PLUS أو /buy PRO لطلب اشتراك مدفوع، "
-    "أو /activate CODE لتفعيل اشتراك."
+    "استخدم /plans لعرض الخطط، /terms لقراءة الشروط وشراء PLUS أو PRO عبر Telegram Stars، "
+    "أو /activate CODE لتفعيل كود إداري صالح."
 )
 
 
@@ -67,89 +66,36 @@ async def help_handler(message: Message) -> None:
         "أرسل أي محتوى طبي تريد تحويله إلى تصميم.\n\n"
         "/start — بدء الاستخدام\n"
         "/plans — الخطط\n"
-        "/buy PLUS|PRO — طلب اشتراك مدفوع\n"
-        "/activate CODE — تفعيل كود اشتراك\n"
+        "/terms — شروط الشراء والموافقة قبل الدفع\n"
+        "/activate CODE — تفعيل كود إداري صالح\n"
+        "/paysupport — دعم المدفوعات\n"
         "/help — المساعدة"
     )
 
 
 @router.message(Command("plans"))
 async def plans_handler(message: Message, session: AsyncSession) -> None:
-    """Display the active public plans."""
+    """Display the active public plans and their Telegram Stars prices."""
     result = await session.execute(
-        select(Plan)
-        .where(Plan.is_active.is_(True))
-        .order_by(Plan.price.asc(), Plan.code.asc())
+        select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price.asc(), Plan.code.asc())
     )
     plans = result.scalars().all()
-    lines = ["الخطط المتاحة:"]
+    lines = ["خطط GQMRMed:"]
     for plan in plans:
         limit = "غير محدود" if plan.daily_limit is None else f"{plan.daily_limit}/اليوم"
         duration = "مستمر" if plan.duration_days is None else f"{plan.duration_days} يوم"
-        lines.append(f"• {plan.name}: ${plan.price} — {duration} — {limit}")
+        stars = "—" if plan.stars_price is None else f"{plan.stars_price} ⭐"
+        lines.append(f"• {plan.name}: ${plan.price} — {duration} — {limit} — {stars}")
+    lines.append("\nلشراء خطة مدفوعة داخل Telegram استخدم /terms.")
     await message.answer("\n".join(lines))
 
 
 @router.message(Command("buy"))
-async def buy_handler(message: Message, session: AsyncSession) -> None:
-    """Create a pending manual purchase request for a paid public plan."""
-    if message.from_user is None:
-        return
-    parts = (message.text or "").split(maxsplit=1)
-    if len(parts) != 2 or not parts[1].strip():
-        await message.answer("استخدم الأمر بهذا الشكل:\n/buy PLUS\nأو\n/buy PRO")
-        return
-
-    requested_code = parts[1].strip().upper()
-    if requested_code not in {PlanCode.PLUS.value, PlanCode.PRO.value}:
-        await message.answer("الخطة غير صالحة. استخدم /buy PLUS أو /buy PRO.")
-        return
-
-    try:
-        async with session.begin():
-            result = await session.execute(
-                select(Plan).where(
-                    Plan.code == requested_code,
-                    Plan.is_active.is_(True),
-                )
-            )
-            plan = result.scalar_one_or_none()
-            if plan is None or plan.code == PlanCode.FREE:
-                raise ValueError("plan_unavailable")
-
-            user = await _user_from_message(session, message)
-            if not user.is_active:
-                raise PermissionError("user_inactive")
-            payment = await create_payment(
-                session,
-                user_id=user.id,
-                plan=plan,
-                provider="manual",
-                transaction_id=None,
-                amount=plan.price,
-                currency=plan.currency,
-            )
-    except PermissionError:
-        await message.answer("هذا الحساب غير نشط حالياً.")
-        return
-    except ValueError as exc:
-        if str(exc) == "plan_unavailable":
-            await message.answer("الخطة المطلوبة غير متاحة حالياً.")
-        else:
-            await message.answer("تعذر إنشاء طلب الدفع حالياً.")
-        return
-
-    status_text = (
-        "قيد المراجعة" if payment.status == PaymentStatus.PENDING.value else payment.status
-    )
+async def buy_handler(message: Message) -> None:
+    """Route digital-service purchases to the compliant Telegram Stars checkout."""
     await message.answer(
-        "تم إنشاء طلب الاشتراك ✅\n\n"
-        f"الخطة: {plan.name}\n"
-        f"المبلغ: {plan.price} {plan.currency}\n"
-        f"رقم الطلب: {payment.id}\n"
-        f"الحالة: {status_text}\n\n"
-        "أكمل الدفع عبر وسيلة الدفع التي يحددها مدير GQMRMed، "
-        "ثم تتم مراجعة الطلب وتفعيل الاشتراك."
+        "لأن GQMRMed خدمة رقمية داخل Telegram، يتم الدفع داخل Telegram حصراً عبر Telegram Stars.\n\n"
+        "استخدم /terms ثم اختر PLUS أو PRO."
     )
 
 
@@ -160,7 +106,7 @@ async def activate_handler(message: Message, session: AsyncSession) -> None:
         return
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) != 2 or not parts[1].strip():
-        await message.answer("أرسل الكود بهذا الشكل:\n/activate GQMR-PLUS-XXXX-XXXX")
+        await message.answer("أرسل الكود بهذا الشكل:\n/activate GQMR-PLUS-XXXXXX-XXXXXX")
         return
 
     try:
@@ -201,8 +147,8 @@ async def _submit_generation(
             await create_user_generation(session, user=user, request=request)
     except QuotaExceededError:
         await message.answer(
-            "انتهت حصتك اليومية المجانية (3 تصاميم).\n"
-            "استخدم /plans لعرض الخطط المتاحة."
+            "انتهت حصتك اليومية حسب خطتك الحالية.\n"
+            "استخدم /plans لعرض حدود الخطط المتاحة."
         )
     except PermissionError:
         await message.answer("هذا الحساب غير نشط حالياً.")
