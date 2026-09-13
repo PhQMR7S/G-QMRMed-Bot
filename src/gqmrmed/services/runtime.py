@@ -35,6 +35,7 @@ from gqmrmed.services.production_pipeline import (
 from gqmrmed.services.redis_queue import RedisJobQueue
 from gqmrmed.services.result_store import (
     FilesystemResultStore,
+    GoogleDriveResultStore,
     S3ResultStore,
     TelegramResultDelivery,
 )
@@ -186,8 +187,12 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     queue = RedisJobQueue(redis)
 
-    result_store: FilesystemResultStore | S3ResultStore
-    if settings.s3_endpoint:
+    if settings.google_drive_credentials_json and settings.google_drive_folder_id:
+        result_store = GoogleDriveResultStore(
+            credentials_json=settings.google_drive_credentials_json,
+            folder_id=settings.google_drive_folder_id,
+        )
+    elif settings.s3_endpoint:
         if not settings.s3_access_key_id or not settings.s3_secret_access_key:
             raise RuntimeError("complete S3 credentials are required when S3 is configured")
         result_store = S3ResultStore(
