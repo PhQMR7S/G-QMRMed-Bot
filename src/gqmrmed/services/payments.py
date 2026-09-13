@@ -1,6 +1,5 @@
 """Payment lifecycle helpers for Telegram Stars and operator-approved flows."""
 
-from datetime import datetime, UTC
 from decimal import Decimal
 from uuid import UUID
 
