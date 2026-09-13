@@ -23,7 +23,12 @@ from gqmrmed.ai.providers import (
 from gqmrmed.bot.progress import TelegramProgressSink
 from gqmrmed.config import Settings
 from gqmrmed.db.session import SessionFactory
-from gqmrmed.generation.providers import ComfyUIConfig, ComfyUIImageProvider
+from gqmrmed.generation.providers import (
+    ComfyUIConfig,
+    ComfyUIImageProvider,
+    HuggingFaceImageConfig,
+    HuggingFaceImageProvider,
+)
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
@@ -44,14 +49,15 @@ from gqmrmed.services.worker import GenerationWorker
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     """Assemble the research, free-first AI routing, image and delivery chain."""
-    if not settings.comfyui_workflow_json:
-        raise RuntimeError("COMFYUI_WORKFLOW_JSON is required for the generation worker")
-    try:
-        workflow = json.loads(settings.comfyui_workflow_json)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("COMFYUI_WORKFLOW_JSON must be valid JSON") from exc
-    if not isinstance(workflow, dict):
-        raise RuntimeError("COMFYUI_WORKFLOW_JSON must contain an API-format workflow object")
+    workflow: dict[str, object] | None = None
+    if settings.comfyui_workflow_json:
+        try:
+            parsed_workflow = json.loads(settings.comfyui_workflow_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("COMFYUI_WORKFLOW_JSON must be valid JSON") from exc
+        if not isinstance(parsed_workflow, dict):
+            raise RuntimeError("COMFYUI_WORKFLOW_JSON must contain an API-format workflow object")
+        workflow = cast(dict[str, object], parsed_workflow)
 
     research = PubMedResearchProvider(
         PubMedConfig(api_key=settings.research_api_key, email=settings.research_email)
@@ -107,6 +113,24 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
                             base_url=settings.groq_base_url,
                             model=settings.groq_model,
                             timeout_seconds=settings.groq_timeout_seconds,
+                        )
+                    ),
+                )
+            )
+        elif name == "huggingface_free" and settings.huggingface_token:
+            providers.append(
+                (
+                    ProviderDescriptor(
+                        name="huggingface_free",
+                        model=settings.huggingface_text_model,
+                        cost_tier="free",
+                    ),
+                    OpenAICompatibleChatSynthesizer(
+                        OpenAICompatibleConfig(
+                            api_key=settings.huggingface_token,
+                            base_url=settings.huggingface_base_url,
+                            model=settings.huggingface_text_model,
+                            timeout_seconds=settings.huggingface_timeout_seconds,
                         )
                     ),
                 )
@@ -168,13 +192,26 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
 
     synthesis = ProviderRouter(providers, allow_paid=settings.ai_allow_paid)
-    image = ComfyUIImageProvider(
-        ComfyUIConfig(
-            base_url=settings.comfyui_base_url,
-            timeout_seconds=settings.comfyui_timeout_seconds,
-            workflow=cast(dict[str, object], workflow),
+    if settings.huggingface_token:
+        image = HuggingFaceImageProvider(
+            HuggingFaceImageConfig(
+                token=settings.huggingface_token,
+                model=settings.huggingface_image_model,
+                provider=settings.huggingface_image_provider,
+                timeout_seconds=settings.huggingface_timeout_seconds,
+            )
         )
-    )
+    elif workflow is not None:
+        image = ComfyUIImageProvider(
+            ComfyUIConfig(
+                base_url=settings.comfyui_base_url,
+                timeout_seconds=settings.comfyui_timeout_seconds,
+                workflow=workflow,
+            )
+        )
+    else:
+        raise RuntimeError("no_image_provider_configured")
+
     pipeline = ProductionGenerationPipeline(
         research_provider=research.search,
         synthesis_provider=synthesis,
