@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 
+from gqmrmed.admin import router as admin_router
 from gqmrmed.config import get_settings
 
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version=settings.app_version)
+app.include_router(admin_router)
 
 
 @app.get("/health", tags=["system"])
