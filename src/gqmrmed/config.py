@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     comfyui_timeout_seconds: float = Field(
         default=120.0, gt=0, le=600, alias="COMFYUI_TIMEOUT_SECONDS"
     )
+    comfyui_workflow_json: str | None = Field(default=None, alias="COMFYUI_WORKFLOW_JSON")
+    result_storage_dir: str = Field(default="/data/results", alias="RESULT_STORAGE_DIR")
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
     image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
