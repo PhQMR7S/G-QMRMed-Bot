@@ -37,7 +37,7 @@ class PaymentStatusRequest(BaseModel):
 
 
 @router.get("/overview", dependencies=[Depends(require_admin)])
-async def overview(session: AsyncSession = Depends(get_session)) -> dict[str, int]:
+async def overview(session: AsyncSession = Depends(get_session)) -> dict[str, int]:  # noqa: B008
     """Return small operational counters without exposing private user data."""
     users = await session.scalar(select(func.count()).select_from(User))
     active_plans = await session.scalar(
@@ -60,7 +60,7 @@ async def overview(session: AsyncSession = Depends(get_session)) -> dict[str, in
 
 
 @router.post("/activation-codes", dependencies=[Depends(require_admin)])
-async def issue_codes(
+async def issue_codes(  # noqa: B008
     request: CodeRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, list[str]]:
@@ -89,7 +89,7 @@ async def issue_codes(
 
 
 @router.post("/payments/{payment_id}", dependencies=[Depends(require_admin)])
-async def update_payment(
+async def update_payment(  # noqa: B008
     payment_id: UUID,
     request: PaymentStatusRequest,
     session: AsyncSession = Depends(get_session),
@@ -110,7 +110,7 @@ async def update_payment(
 
 
 @router.get("/payments", dependencies=[Depends(require_admin)])
-async def list_pending_payments(
+async def list_pending_payments(  # noqa: B008
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, str]]:
     """List pending payments for the private admin workflow."""
