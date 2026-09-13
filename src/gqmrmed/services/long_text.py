@@ -1,9 +1,4 @@
-"""Phase 8 long-text processing for infographic generation.
-
-The engine is deterministic and dependency-light: it parses structure, creates
-semantic chunks, extracts topics, removes near-duplicates, ranks content, and
-selects a single-page or multi-page plan without changing usage accounting.
-"""
+"""Phase 8 long-text processing for infographic generation."""
 
 from __future__ import annotations
 
@@ -14,45 +9,17 @@ from dataclasses import dataclass
 _HEADING_RE = re.compile(r"^\s{0,3}(?:#{1,6}\s+|(?:\d+[.)]|[-*])\s+)(.+?)\s*$")
 _SENTENCE_RE = re.compile(r"(?<=[.!?؟])\s+|\n{2,}")
 _TOKEN_RE = re.compile(r"[\w\u0600-\u06ff]+", re.UNICODE)
-_MEDICAL_TERMS = frozenset(
-    {
-        "diagnosis",
-        "treatment",
-        "symptom",
-        "symptoms",
-        "cause",
-        "causes",
-        "mechanism",
-        "pathophysiology",
-        "laboratory",
-        "lab",
-        "drug",
-        "dose",
-        "differential",
-        "complication",
-        "management",
-        "تشخيص",
-        "علاج",
-        "أعراض",
-        "اعراض",
-        "سبب",
-        "أسباب",
-        "اسباب",
-        "آلية",
-        "الية",
-        "مرض",
-        "دواء",
-        "جرعة",
-        "مضاعفات",
-        "تحاليل",
-    }
-)
+_MEDICAL_TERMS = frozenset({
+    "diagnosis", "treatment", "symptom", "symptoms", "cause", "causes",
+    "mechanism", "pathophysiology", "laboratory", "lab", "drug", "dose",
+    "differential", "complication", "management", "تشخيص", "علاج", "أعراض",
+    "اعراض", "سبب", "أسباب", "اسباب", "آلية", "الية", "مرض", "دواء",
+    "جرعة", "مضاعفات", "تحاليل",
+})
 
 
 @dataclass(frozen=True, slots=True)
 class TextChunk:
-    """A semantically coherent unit ready for ranking and layout."""
-
     index: int
     text: str
     heading: str | None
@@ -62,8 +29,6 @@ class TextChunk:
 
 @dataclass(frozen=True, slots=True)
 class LongTextPlan:
-    """Complete Phase 8 output consumed by downstream architecture."""
-
     mode: str
     chunks: tuple[TextChunk, ...]
     topics: tuple[str, ...]
@@ -96,18 +61,28 @@ class LongTextEngine:
         self.max_page_chars = max_page_chars
         self.dedup_similarity = dedup_similarity
 
-    def build_plan(self, text: str, *, visual_identity: str = "gqmrmed-medical") -> LongTextPlan:
+    def build_plan(
+        self,
+        text: str,
+        *,
+        visual_identity: str = "gqmrmed-medical",
+    ) -> LongTextPlan:
         normalized = self._normalize(text)
         if not normalized:
             raise ValueError("long_text_required")
-        sections = self._parse_sections(normalized)
-        chunks = self._semantic_chunks(sections)
-        chunks = self._deduplicate(chunks)
+        chunks = self._deduplicate(self._semantic_chunks(self._parse_sections(normalized)))
         topics = self._extract_topics(chunks)
         ranked = self._prioritize(chunks, topics)
         total_chars = sum(len(chunk.text) for chunk in ranked)
-        page_count = max(1, (total_chars + self.max_page_chars - 1) // self.max_page_chars)
-        mode = "single" if total_chars <= self.max_single_page_chars and len(ranked) <= 6 else "multi_page"
+        page_count = max(
+            1,
+            (total_chars + self.max_page_chars - 1) // self.max_page_chars,
+        )
+        mode = (
+            "single"
+            if total_chars <= self.max_single_page_chars and len(ranked) <= 6
+            else "multi_page"
+        )
         return LongTextPlan(
             mode=mode,
             chunks=tuple(ranked),
@@ -118,7 +93,8 @@ class LongTextEngine:
 
     @staticmethod
     def _normalize(text: str) -> str:
-        return re.sub(r"[ \t]+", " ", text.replace("\r\n", "\n").replace("\r", "\n")).strip()
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        return re.sub(r"[ \t]+", " ", normalized).strip()
 
     @staticmethod
     def _parse_sections(text: str) -> list[tuple[str | None, str]]:
@@ -138,11 +114,18 @@ class LongTextEngine:
             sections.append((heading, " ".join(buffer).strip()))
         return sections or [(None, text)]
 
-    def _semantic_chunks(self, sections: list[tuple[str | None, str]]) -> list[TextChunk]:
+    def _semantic_chunks(
+        self,
+        sections: list[tuple[str | None, str]],
+    ) -> list[TextChunk]:
         chunks: list[TextChunk] = []
         index = 0
         for heading, body in sections:
-            sentences = [part.strip() for part in _SENTENCE_RE.split(body) if part.strip()]
+            sentences = [
+                part.strip()
+                for part in _SENTENCE_RE.split(body)
+                if part.strip()
+            ]
             current: list[str] = []
             size = 0
             for sentence in sentences:
@@ -160,7 +143,7 @@ class LongTextEngine:
     @staticmethod
     def _make_chunk(index: int, heading: str | None, text: str) -> TextChunk:
         topic = heading or LongTextEngine._topic_from_text(text)
-        return TextChunk(index=index, text=text, heading=heading, topic=topic, priority=0.0)
+        return TextChunk(index, text, heading, topic, 0.0)
 
     @staticmethod
     def _topic_from_text(text: str) -> str:
@@ -175,7 +158,8 @@ class LongTextEngine:
             if not tokens:
                 continue
             duplicate = any(
-                len(tokens & previous) / max(1, len(tokens | previous)) >= self.dedup_similarity
+                len(tokens & previous) / max(1, len(tokens | previous))
+                >= self.dedup_similarity
                 for previous in signatures
             )
             if not duplicate:
@@ -187,16 +171,15 @@ class LongTextEngine:
     def _extract_topics(chunks: list[TextChunk]) -> list[str]:
         scores: Counter[str] = Counter()
         for chunk in chunks:
-            words = _TOKEN_RE.findall(chunk.text.lower())
-            for word in words:
-                if word in _MEDICAL_TERMS:
-                    scores[word] += 3
-                elif len(word) >= 5:
-                    scores[word] += 1
+            for word in _TOKEN_RE.findall(chunk.text.lower()):
+                scores[word] += 3 if word in _MEDICAL_TERMS else 1
         return [word for word, _ in scores.most_common(8)]
 
     @staticmethod
-    def _prioritize(chunks: list[TextChunk], topics: list[str]) -> list[TextChunk]:
+    def _prioritize(
+        chunks: list[TextChunk],
+        topics: list[str],
+    ) -> list[TextChunk]:
         ranked: list[TextChunk] = []
         topic_set = set(topics)
         for chunk in chunks:
@@ -206,7 +189,15 @@ class LongTextEngine:
             heading_bonus = 1.5 if chunk.heading else 0.0
             position_bonus = max(0.0, 1.0 - chunk.index * 0.02)
             score = medical_hits * 2.0 + topic_hits + heading_bonus + position_bonus
-            ranked.append(TextChunk(chunk.index, chunk.text, chunk.heading, chunk.topic, round(score, 3)))
+            ranked.append(
+                TextChunk(
+                    chunk.index,
+                    chunk.text,
+                    chunk.heading,
+                    chunk.topic,
+                    round(score, 3),
+                )
+            )
         return sorted(ranked, key=lambda item: (-item.priority, item.index))
 
 
