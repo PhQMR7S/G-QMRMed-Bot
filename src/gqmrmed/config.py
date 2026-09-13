@@ -32,16 +32,25 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="gqmrmed", alias="S3_BUCKET")
     s3_region: str | None = Field(default=None, alias="S3_REGION")
 
+    # AI routing: free/local providers are the launch default. Paid providers
+    # are disabled unless explicitly enabled by configuration.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,openai_compatible,openai", alias="AI_PROVIDER_ORDER"
+        default="ollama,openrouter_free,openai_compatible,openai", alias="AI_PROVIDER_ORDER"
     )
+    ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
     ai_api_key: str | None = Field(default=None, alias="AI_API_KEY")
     ai_base_url: str = Field(default="https://api.openai.com/v1", alias="AI_BASE_URL")
     ai_model: str = Field(default="gpt-5.6-luna", alias="AI_MODEL")
     ai_compatible_api_key: str | None = Field(default=None, alias="AI_COMPATIBLE_API_KEY")
     ai_compatible_base_url: str | None = Field(default=None, alias="AI_COMPATIBLE_BASE_URL")
     ai_compatible_model: str | None = Field(default=None, alias="AI_COMPATIBLE_MODEL")
+    openrouter_api_key: str | None = Field(default=None, alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
+    openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
+    openrouter_timeout_seconds: float = Field(
+        default=120.0, gt=0, le=900, alias="OPENROUTER_TIMEOUT_SECONDS"
+    )
     ollama_base_url: str = Field(default="http://ollama:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default="qwen3:8b", alias="OLLAMA_MODEL")
     ollama_timeout_seconds: float = Field(
