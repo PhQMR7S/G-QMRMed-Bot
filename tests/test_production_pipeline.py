@@ -84,7 +84,14 @@ async def test_pipeline_returns_final_9_16_png() -> None:
         synthesis_provider=FakeSynthesis(),
         image_provider=FakeImage(),
     )
-    job = cast(GenerationJob, type("Job", (), {"input_text": "acute myocardial infarction", "id": uuid4()})())
+    job = cast(
+        GenerationJob,
+        type(
+            "Job",
+            (),
+            {"input_text": "acute myocardial infarction", "id": uuid4()},
+        )(),
+    )
     seen: list[GenerationStage] = []
 
     async def progress(stage: GenerationStage, value: int) -> None:
