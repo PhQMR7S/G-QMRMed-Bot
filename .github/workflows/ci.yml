@@ -45,3 +45,6 @@ jobs:
 
       - name: Pytest
         run: python -m pytest
+
+      - name: Build production container
+        run: docker build --tag gqmrmed:ci .
