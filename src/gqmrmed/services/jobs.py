@@ -1,6 +1,6 @@
 """Generation-job lifecycle and durable queue-dispatch primitives."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,6 +13,20 @@ VALID_STAGES = tuple(stage.value for stage in GenerationStage)
 _STAGE_INDEX = {stage: index for index, stage in enumerate(VALID_STAGES)}
 
 
+def _metadata_int(metadata: dict[str, object], key: str, default: int = 0) -> int:
+    value = metadata.get(key, default)
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
+
+
 async def create_generation_job(
     session: AsyncSession,
     *,
@@ -23,94 +37,110 @@ async def create_generation_job(
     input_mime_type: str | None = None,
     input_metadata: dict[str, object] | None = None,
 ) -> GenerationJob:
-    """Create a normalized queued generation job."""
-    if not input_type.strip():
-        raise ValueError("input_type_required")
-    if input_text is not None and not input_text.strip():
-        input_text = None
-    if input_text is None and input_storage_key is None:
+    """Create a queued job for text, image, file, or mixed input."""
+    normalized_type = input_type.strip()
+    normalized_text = input_text.strip() if input_text is not None else None
+    normalized_storage_key = input_storage_key.strip() if input_storage_key is not None else None
+    normalized_mime_type = input_mime_type.strip() if input_mime_type is not None else None
+    if not normalized_type:
+        raise ValueError("generation_input_type_required")
+    if len(normalized_type) > 32:
+        raise ValueError("generation_input_type_too_long")
+    if not normalized_text and not normalized_storage_key:
         raise ValueError("generation_input_required")
     job = GenerationJob(
         user_id=user_id,
-        input_type=input_type,
-        input_text=input_text,
-        input_storage_key=input_storage_key,
-        input_mime_type=input_mime_type,
-        input_metadata=input_metadata or {},
+        input_type=normalized_type,
+        input_text=normalized_text or None,
+        input_storage_key=normalized_storage_key or None,
+        input_mime_type=normalized_mime_type[:128] if normalized_mime_type else None,
+        input_metadata=input_metadata,
         status=JobStatus.QUEUED.value,
         progress=0,
-        stage=GenerationStage.RESEARCHING.value,
     )
     session.add(job)
     await session.flush()
     return job
 
 
-async def claim_queued_job(session: AsyncSession, job_id: UUID) -> GenerationJob | None:
-    """Claim a queued job under a row lock."""
+async def mark_dispatched(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    dispatched_at: datetime | None = None,
+) -> bool:
+    """Record a successful queue publish and refresh its dispatch lease."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None or job.status != JobStatus.QUEUED.value:
-        return None
-    return job
+        return False
+    job.enqueued_at = dispatched_at or datetime.now(UTC)
+    job.dispatch_attempts += 1
+    job.last_dispatch_error = None
+    await session.flush()
+    return True
 
 
-async def mark_enqueued(session: AsyncSession, job_id: UUID) -> None:
-    """Persist that a queued job has been published to Redis."""
+async def record_dispatch_failure(
+    session: AsyncSession,
+    job_id: UUID,
+    *,
+    error: str,
+) -> bool:
+    """Record a failed queue publish without changing the source-of-truth state."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None or job.status != JobStatus.QUEUED.value:
-        return
-    job.enqueued_at = datetime.now(UTC)
-
-
-async def record_dispatch_failure(session: AsyncSession, job_id: UUID, error: str) -> None:
-    """Clear the dispatch lease after a Redis publish failure."""
-    result = await session.execute(
-        select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
-    )
-    job = result.scalar_one_or_none()
-    if job is None or job.status != JobStatus.QUEUED.value:
-        return
+        return False
+    job.dispatch_attempts += 1
+    job.last_dispatch_error = error[:2000]
     job.enqueued_at = None
-    metadata = dict(job.input_metadata or {})
-    metadata["dispatch_last_error"] = error[:2000]
-    metadata["dispatch_attempts"] = int(metadata.get("dispatch_attempts", 0)) + 1
-    job.input_metadata = metadata
+    await session.flush()
+    return True
 
 
-async def recover_stale_queued_jobs(
+async def get_undispatched_jobs(
     session: AsyncSession,
     *,
-    stale_after_seconds: int = 120,
+    limit: int = 50,
+    recovery_after_seconds: int = 60,
 ) -> list[UUID]:
-    """Clear stale Redis dispatch leases so queued jobs can be re-published."""
-    cutoff = datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
+    """Return queued jobs needing initial dispatch or stale-dispatch recovery."""
+    if not 1 <= limit <= 500:
+        raise ValueError("invalid_dispatch_batch_size")
+    if recovery_after_seconds <= 0:
+        raise ValueError("invalid_dispatch_recovery_window")
+    cutoff = datetime.now(UTC) - timedelta(seconds=recovery_after_seconds)
     result = await session.execute(
-        select(GenerationJob)
+        select(GenerationJob.id)
         .where(
             GenerationJob.status == JobStatus.QUEUED.value,
-            GenerationJob.enqueued_at.is_not(None),
-            GenerationJob.enqueued_at <= cutoff,
+            (
+                GenerationJob.enqueued_at.is_(None)
+                | (GenerationJob.enqueued_at <= cutoff)
+            ),
         )
-        .with_for_update(skip_locked=True)
+        .order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
+        .limit(limit)
     )
-    jobs = list(result.scalars())
-    for job in jobs:
-        job.enqueued_at = None
-    return [job.id for job in jobs]
+    return list(result.scalars().all())
 
 
 async def recover_stale_running_jobs(
     session: AsyncSession,
     *,
     stale_after_seconds: int = 900,
+    limit: int = 100,
 ) -> list[UUID]:
-    """Reset jobs whose worker heartbeat/updated_at lease has expired."""
+    """Fail jobs whose worker heartbeat/updated-at lease has clearly expired."""
+    if stale_after_seconds <= 0:
+        raise ValueError("invalid_running_recovery_window")
+    if not 1 <= limit <= 500:
+        raise ValueError("invalid_running_recovery_batch_size")
     cutoff = datetime.now(UTC) - timedelta(seconds=stale_after_seconds)
     result = await session.execute(
         select(GenerationJob)
@@ -118,30 +148,38 @@ async def recover_stale_running_jobs(
             GenerationJob.status == JobStatus.RUNNING.value,
             GenerationJob.updated_at <= cutoff,
         )
+        .order_by(GenerationJob.updated_at.asc(), GenerationJob.id.asc())
+        .limit(limit)
         .with_for_update(skip_locked=True)
     )
-    jobs = list(result.scalars())
+    jobs = list(result.scalars().all())
+    recovered: list[UUID] = []
+    now = datetime.now(UTC)
     for job in jobs:
-        job.status = JobStatus.QUEUED.value
-        job.progress = 0
-        job.stage = GenerationStage.RESEARCHING.value
-        job.error = "worker_lease_expired"
-        job.enqueued_at = None
-    return [job.id for job in jobs]
+        job.status = JobStatus.FAILED.value
+        job.completed_at = now
+        job.error = "generation_worker_lease_expired"
+        recovered.append(job.id)
+    await session.flush()
+    return recovered
 
 
 async def mark_running(session: AsyncSession, job_id: UUID, stage: str) -> None:
-    """Move a queued job to running under a row lock."""
+    """Transition a queued job to running and set its current stage."""
+    if stage not in _STAGE_INDEX:
+        raise ValueError("invalid_generation_stage")
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
-    job = result.scalar_one_or_none()
-    if job is None or job.status != JobStatus.QUEUED.value:
-        return
+    job = result.scalar_one()
+    if job.status != JobStatus.QUEUED.value:
+        raise ValueError("invalid_job_transition")
     job.status = JobStatus.RUNNING.value
-    job.stage = stage
+    job.current_stage = stage
     job.progress = max(job.progress, 1)
+    job.started_at = datetime.now(UTC)
     job.enqueued_at = None
+    await session.flush()
 
 
 async def touch_job_heartbeat(session: AsyncSession, job_id: UUID) -> None:
@@ -155,10 +193,11 @@ async def touch_job_heartbeat(session: AsyncSession, job_id: UUID) -> None:
     metadata = dict(job.input_metadata or {})
     metadata["worker_heartbeat_at"] = datetime.now(UTC).isoformat()
     job.input_metadata = metadata
+    await session.flush()
 
 
 async def mark_delivery_pending(session: AsyncSession, job_id: UUID) -> None:
-    """Persist the delivery state before attempting Telegram delivery."""
+    """Persist delivery state before attempting Telegram delivery."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
@@ -169,6 +208,7 @@ async def mark_delivery_pending(session: AsyncSession, job_id: UUID) -> None:
     metadata["telegram_delivery_status"] = "PENDING"
     metadata.setdefault("telegram_delivery_attempts", 0)
     job.input_metadata = metadata
+    await session.flush()
 
 
 async def mark_delivery_succeeded(
@@ -189,18 +229,25 @@ async def mark_delivery_succeeded(
     if message_id is not None:
         metadata["telegram_delivery_message_id"] = message_id
     job.input_metadata = metadata
+    await session.flush()
 
 
 async def cancel_queued_job(session: AsyncSession, job_id: UUID) -> bool:
-    """Cancel a queued job; running/succeeded jobs are not mutated."""
+    """Cancel a queued job before execution begins."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
-    if job is None or job.status != JobStatus.QUEUED.value:
+    if job is None:
+        return False
+    if job.status == JobStatus.CANCELLED.value:
+        return True
+    if job.status != JobStatus.QUEUED.value:
         return False
     job.status = JobStatus.CANCELLED.value
+    job.completed_at = datetime.now(UTC)
     job.enqueued_at = None
+    await session.flush()
     return True
 
 
@@ -211,7 +258,7 @@ async def update_progress(
     stage: str,
     progress: int,
 ) -> None:
-    """Update monotonic stage/progress state under a row lock."""
+    """Update progress while enforcing monotonic stage and progress order."""
     if stage not in _STAGE_INDEX:
         raise ValueError("invalid_generation_stage")
     if not 0 <= progress <= 100:
@@ -219,29 +266,35 @@ async def update_progress(
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
-    job = result.scalar_one_or_none()
-    if job is None or job.status != JobStatus.RUNNING.value:
-        return
-    current_index = _STAGE_INDEX.get(job.stage, -1)
-    next_index = _STAGE_INDEX[stage]
-    if next_index < current_index or progress < job.progress:
-        raise ValueError("non_monotonic_generation_progress")
-    job.stage = stage
-    job.progress = progress
+    job = result.scalar_one()
+    if job.status != JobStatus.RUNNING.value:
+        raise ValueError("invalid_job_transition")
+    if job.current_stage is not None and _STAGE_INDEX[stage] < _STAGE_INDEX[job.current_stage]:
+        raise ValueError("generation_stage_regression")
+    job.current_stage = stage
+    job.progress = max(job.progress, progress)
+    await session.flush()
 
 
 async def set_progress_message_id(
     session: AsyncSession,
     job_id: UUID,
     message_id: int,
-) -> None:
-    """Persist the Telegram progress message identifier."""
+) -> bool:
+    """Persist the Telegram message used for live progress updates."""
+    if message_id <= 0:
+        raise ValueError("invalid_progress_message_id")
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
-    if job is not None:
-        job.progress_message_id = message_id
+    if job is None:
+        return False
+    metadata = dict(job.input_metadata or {})
+    metadata["telegram_progress_message_id"] = message_id
+    job.input_metadata = metadata
+    await session.flush()
+    return True
 
 
 async def finish_job(
@@ -251,14 +304,35 @@ async def finish_job(
     success: bool,
     error: str | None = None,
 ) -> None:
-    """Finalize a job after its result/usage transaction is ready."""
+    """Finalize a running job exactly once."""
     result = await session.execute(
         select(GenerationJob).where(GenerationJob.id == job_id).with_for_update()
     )
-    job = result.scalar_one_or_none()
-    if job is None:
-        return
+    job = result.scalar_one()
+    if job.status != JobStatus.RUNNING.value:
+        raise ValueError("invalid_job_transition")
     job.status = JobStatus.SUCCEEDED.value if success else JobStatus.FAILED.value
     job.progress = 100 if success else job.progress
-    job.stage = GenerationStage.QUALITY_CONTROL.value if success else job.stage
-    job.error = None if success else (error or "generation_failed")
+    job.completed_at = datetime.now(UTC)
+    job.error = error if not success else None
+    if success:
+        job.current_stage = GenerationStage.QUALITY_CONTROL.value
+    await session.flush()
+
+
+__all__ = [
+    "VALID_STAGES",
+    "cancel_queued_job",
+    "create_generation_job",
+    "finish_job",
+    "get_undispatched_jobs",
+    "mark_delivery_pending",
+    "mark_delivery_succeeded",
+    "mark_dispatched",
+    "mark_running",
+    "record_dispatch_failure",
+    "recover_stale_running_jobs",
+    "set_progress_message_id",
+    "touch_job_heartbeat",
+    "update_progress",
+]
