@@ -46,6 +46,19 @@ jobs:
       - name: Pytest
         run: python -m pytest
 
+      - name: Validate production release gate
+        env:
+          APP_ENV: production
+          DATABASE_URL: postgresql+asyncpg://gqmrmed:gqmrmed@db:5432/gqmrmed
+          REDIS_URL: redis://redis:6379/0
+          TELEGRAM_BOT_TOKEN: ci-token
+          ADMIN_SECRET: ci-admin-secret-012345678901234567890123456789
+          COMFYUI_BASE_URL: http://comfyui:8188
+          COMFYUI_WORKFLOW_JSON: '{"ci":{"class_type":"CheckpointLoaderSimple","inputs":{}}}'
+          AI_PROVIDER_ORDER: ollama
+          OLLAMA_BASE_URL: http://ollama:11434
+        run: bash scripts/release-gate.sh
+
       - name: Validate production Compose contract
         run: |
           export DATABASE_URL='postgresql+asyncpg://gqmrmed:gqmrmed@db:5432/gqmrmed'
