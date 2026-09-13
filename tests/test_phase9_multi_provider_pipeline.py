@@ -1,5 +1,6 @@
 import pytest
 
+from gqmrmed.ai.providers import ProviderDescriptor, ProviderRouter
 from gqmrmed.contracts.research import (
     EvidenceSource,
     MedicalClaim,
@@ -9,7 +10,6 @@ from gqmrmed.contracts.research import (
     SynthesizedContent,
 )
 from gqmrmed.services.medical_pipeline import build_medical_plan
-from gqmrmed.services.providers import ProviderDescriptor, ProviderRouter
 
 
 class FakeResearchProvider:
