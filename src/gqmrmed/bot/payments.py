@@ -1,6 +1,6 @@
 """Telegram Stars checkout handlers for paid digital subscriptions."""
 
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from uuid import uuid4
 
 from aiogram import F, Router
@@ -113,8 +113,14 @@ async def pre_checkout_handler(query: PreCheckoutQuery, session: AsyncSession) -
     from gqmrmed.services.payments import get_payment_by_invoice_payload
 
     payment = await get_payment_by_invoice_payload(session, invoice_payload=query.invoice_payload)
+    stale = (
+        payment is not None
+        and payment.created_at is not None
+        and datetime.now(UTC) - payment.created_at > timedelta(minutes=30)
+    )
     if (
         payment is None
+        or stale
         or payment.provider != "telegram_stars"
         or payment.status != PaymentStatus.PENDING.value
         or payment.stars_amount != query.total_amount
