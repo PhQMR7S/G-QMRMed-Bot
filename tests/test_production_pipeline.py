@@ -1,18 +1,20 @@
+from typing import cast
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import inspect
 
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.contracts.research import (
     ArchitectureType,
     EvidenceSource,
     MedicalClaim,
+    ResearchBundle,
     ResearchRequest,
     SourceType,
     SynthesizedContent,
     VisualPlan,
 )
+from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration
 from gqmrmed.rendering.raster import render_png
 from gqmrmed.rendering.svg import render_svg
@@ -20,12 +22,17 @@ from gqmrmed.services.production_pipeline import ProductionGenerationPipeline
 
 
 class FakeSynthesis:
-    async def synthesize(self, *, user_input: str, research: object) -> SynthesizedContent:
+    async def synthesize(
+        self, *, user_input: str, research: ResearchBundle
+    ) -> SynthesizedContent:
         del user_input, research
         return SynthesizedContent(
             title="Acute myocardial infarction",
             subtitle="Core pathophysiology",
-            key_points=["Plaque rupture can trigger coronary thrombosis.", "Ischemia reduces myocardial oxygen supply."],
+            key_points=[
+                "Plaque rupture can trigger coronary thrombosis.",
+                "Ischemia reduces myocardial oxygen supply.",
+            ],
             claims=[
                 MedicalClaim(
                     claim_id="c1",
@@ -39,9 +46,14 @@ class FakeSynthesis:
 
 
 class FakeImage:
-    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
+    async def generate(
+        self, *, prompt: str, width: int, height: int
+    ) -> GeneratedIllustration:
         del prompt
-        svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"><rect width="100%" height="100%" fill="#dddddd"/></svg>'
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
+            f'height="{height}"><rect width="100%" height="100%" fill="#dddddd"/></svg>'
+        )
         return GeneratedIllustration(
             image_bytes=render_png(svg, width=width, height=height),
             width=width,
@@ -72,11 +84,7 @@ async def test_pipeline_returns_final_9_16_png() -> None:
         synthesis_provider=FakeSynthesis(),
         image_provider=FakeImage(),
     )
-    job = type(
-        "Job",
-        (),
-        {"input_text": "acute myocardial infarction", "id": uuid4()},
-    )()
+    job = cast(GenerationJob, type("Job", (), {"input_text": "acute myocardial infarction", "id": uuid4()})())
     seen: list[GenerationStage] = []
 
     async def progress(stage: GenerationStage, value: int) -> None:
