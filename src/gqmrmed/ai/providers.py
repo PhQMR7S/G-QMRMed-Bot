@@ -90,13 +90,20 @@ def _is_transient_provider_error(exc: Exception) -> bool:
     return any(
         marker in text
         for marker in (
-            "network_error",
-            "request_failed:408",
-            "request_failed:429",
-            "request_failed:500",
-            "request_failed:502",
-            "request_failed:503",
-            "request_failed:504",
+            "provider_network_error",
+            "provider_request_failed:408",
+            "provider_request_failed:429",
+            "provider_request_failed:500",
+            "provider_request_failed:502",
+            "provider_request_failed:503",
+            "provider_request_failed:504",
+            "ollama_network_error",
+            "ollama_request_failed:408",
+            "ollama_request_failed:429",
+            "ollama_request_failed:500",
+            "ollama_request_failed:502",
+            "ollama_request_failed:503",
+            "ollama_request_failed:504",
         )
     )
 
