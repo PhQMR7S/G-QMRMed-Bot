@@ -35,10 +35,13 @@ Telegram User
 - FREE entitlement is exactly 3 designs per UTC calendar day.
 - PLUS entitlement is exactly 8 designs per UTC calendar day while an active 30-day subscription exists.
 - PRO entitlement is exactly 15 designs per UTC calendar day while an active 90-day subscription exists.
-- Quota reservations are atomic at the PostgreSQL level and are released on failed/cancelled work.
+- Quota reservations are atomic at the PostgreSQL level and are idempotent by generation job, so Telegram retries cannot consume the same slot twice.
 - Telegram IDs use PostgreSQL BIGINT.
 - Activation codes are stored only as SHA-256 hashes and are single-use.
-- Provider transaction IDs are protected against duplicates per provider.
+- Provider transaction IDs and Telegram Stars invoice payloads are protected against duplicates.
+- Billing events are recorded in an append-only ledger protected against update/delete mutation.
+- Subscription resolution is server-authoritative and UTC-based; expired/cancelled entitlements never remain active because of a missing cron job.
+- Same-plan purchases extend from the current expiry; stronger-plan upgrades start immediately and preserve remaining paid value; weaker-plan purchases are queued after the current entitlement.
 - Generation jobs support text, image, document, audio, video, and mixed input through validated contracts and references.
 - Job progress is bounded to 0..100 and lifecycle transitions are guarded.
 - Queued jobs have durable dispatch state; PostgreSQL remains the source of truth and Redis delivery is at-least-once.
@@ -71,15 +74,33 @@ Telegram User
 
 ## Subscription plans
 
-| Plan | Price | Duration | Daily limit |
-| --- | ---: | ---: | ---: |
-| FREE | $0 | ongoing | 3 |
-| PLUS | $5 | 30 days | 8 |
-| PRO | $20 | 90 days | 15 |
+| Plan | Price | Duration | Daily limit | Telegram Stars |
+| --- | ---: | ---: | ---: | ---: |
+| FREE | $0 | ongoing | 3 | — |
+| PLUS | $5 | 30 days | 8 | 400 ⭐ |
+| PRO | $20 | 90 days | 15 | 1,600 ⭐ |
 
-The limits above are enforced from the active database plan entitlement at job creation time, not merely displayed in Telegram. Each generation reserves one durable usage slot before queue dispatch; concurrent requests cannot oversubscribe the plan quota, and a failed generation releases the reservation exactly once.
+Telegram's official documentation states that the amount a user pays to acquire Stars can vary by user/region due to VAT and other fees, and Telegram currently assigns a $0.013 reward value per Star to developers. The launch Star amounts therefore target approximately $5.20 and $20.80 of current reward value; they are not a promise that every user will pay exactly $5/$20 when acquiring Stars. citeturn3search0
 
-Payment approval is transactional: an approved paid payment creates the corresponding subscription, while invalid plan/amount transitions are rejected. `/buy PLUS` and `/buy PRO` currently create manual pending payment requests; provider-specific payment gateways are not claimed as integrated until their APIs and credentials are configured.
+Inside Telegram, GQMRMed sells a digital service. Telegram requires digital goods/services in bots to be sold exclusively using Telegram Stars (`XTR`), so the bot does not expose Mastercard, Zain Cash, bank-transfer, or other alternative payment instructions as an in-Telegram purchase path. citeturn6search0turn3search0
+
+The bot requires explicit purchase-terms confirmation before creating a Stars invoice, validates the exact server-side order during `pre_checkout_query`, and grants access only after a verified `successful_payment`. Telegram also requires `/terms` and payment support for live digital-service sales; GQMRMed exposes `/terms` and `/paysupport`. citeturn6search0turn4search0
+
+All successful Stars transactions persist the Telegram charge ID for audit/refund handling. Telegram documents `telegram_payment_charge_id` as the identifier needed for refunds. citeturn4search0
+
+## Activation codes and admin operations
+
+Activation codes are intended for operator-controlled grants and other approved administrative workflows. The admin panel generates single-use hashed codes and returns the plaintext code only at issuance time. The user activates a code with `/activate CODE`; the server validates the code, resolves the plan, applies the subscription lifecycle rules, and marks the code consumed in the same transaction.
+
+## Payment and audit model
+
+- Payment provider + transaction ID is unique.
+- Telegram Stars invoice payload is unique and maps one invoice to one server-side pending order.
+- Successful Stars payment must match user, currency, amount, plan, and pending order before activation.
+- Replayed successful-payment updates are idempotent.
+- Manual approval cannot be used to bypass the Telegram Stars settlement path for a Stars order.
+- Refund transitions are locked and auditable.
+- Billing ledger records creation, approval, rejection, and refund events and is append-only at the database trigger level.
 
 ## Stack
 
@@ -104,14 +125,14 @@ Payment approval is transactional: an approved paid payment creates the correspo
 4. Research, verification, synthesis, and visual architecture — implemented
 5. Image generation + exact-text renderer — wired
 6. Queue, live progress, heartbeat recovery, media ingestion, and durable Telegram delivery — implemented
-7. Subscriptions, activation, payments, and private admin panel — implemented
+7. Subscriptions, activation, Telegram Stars payments, immutable billing audit, and private admin panel — implemented
 8. End-to-end testing, deployment, hardening, monitoring, and release — in progress
 
 ## Current status
 
 The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-Subscription entitlements and activation codes are implemented, and the private admin API/panel can issue codes and approve/reject/refund payments. The launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days. Approving a valid paid payment grants the purchased subscription transactionally. Result storage can use an S3-compatible object store so worker restarts or ephemeral application filesystems do not discard completed images.
+Subscription entitlements, activation codes, Telegram Stars checkout, payment replay protection, idempotent usage reservations, immutable billing audit, and the private admin API/panel are implemented. The launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days.
 
 The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
 
