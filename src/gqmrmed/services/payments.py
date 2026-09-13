@@ -48,6 +48,23 @@ async def create_payment(
         ).scalar_one_or_none()
         if existing is not None:
             return existing
+    else:
+        existing = (
+            await session.execute(
+                select(Payment)
+                .where(
+                    Payment.user_id == user_id,
+                    Payment.plan_id == plan.id,
+                    Payment.provider == provider,
+                    Payment.transaction_id.is_(None),
+                    Payment.status == PaymentStatus.PENDING.value,
+                )
+                .order_by(Payment.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
     payment = Payment(
         user_id=user_id,
         plan_id=plan.id,
