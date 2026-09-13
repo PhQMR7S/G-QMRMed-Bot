@@ -29,6 +29,7 @@ from gqmrmed.generation.providers import (
     HuggingFaceImageConfig,
     HuggingFaceImageProvider,
     ImageGenerationProvider,
+    ProceduralMedicalIllustrationProvider,
 )
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
@@ -212,7 +213,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
             )
         )
     else:
-        raise RuntimeError("no_image_provider_configured")
+        image = ProceduralMedicalIllustrationProvider()
 
     pipeline = ProductionGenerationPipeline(
         research_provider=research.search,
