@@ -1,6 +1,6 @@
 """Payment lifecycle helpers for manual and provider-backed payment flows."""
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from gqmrmed.db.models import (
     PlanCode,
     Subscription,
     SubscriptionStatus,
+    User,
 )
 
 
@@ -50,8 +51,8 @@ async def create_payment(
     payment = Payment(
         user_id=user_id,
         plan_id=plan.id,
-        provider=provider,
         transaction_id=transaction_id,
+        provider=provider,
         amount=amount,
         currency=currency.upper(),
         status=PaymentStatus.PENDING.value,
@@ -70,6 +71,16 @@ async def _activate_paid_subscription(
     """Create the subscription granted by a newly approved payment."""
     if plan.code == PlanCode.FREE or plan.duration_days is None or plan.duration_days <= 0:
         raise ValueError("plan_not_paid_or_invalid_duration")
+
+    # Serialize subscription grants for one user. Locking the user row is stronger
+    # than locking only the current subscription because two concurrent approvals
+    # may otherwise both observe that no active subscription exists.
+    user_result = await session.execute(
+        select(User).where(User.id == payment.user_id).with_for_update()
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise ValueError("user_not_found")
+
     now = datetime.now(UTC)
     result = await session.execute(
         select(Subscription)
@@ -114,6 +125,12 @@ async def set_payment_status(
     if payment is None:
         raise ValueError("payment_not_found")
     current = PaymentStatus(payment.status)
+
+    # Replaying an already-applied terminal state is intentionally idempotent.
+    # This is important for webhook retries and admin double-clicks.
+    if status == current:
+        return payment
+
     allowed = {
         PaymentStatus.PENDING: {
             PaymentStatus.APPROVED,
@@ -123,9 +140,10 @@ async def set_payment_status(
         PaymentStatus.REJECTED: set(),
         PaymentStatus.REFUNDED: set(),
     }
-    if status != current and status not in allowed[current]:
+    if status not in allowed[current]:
         raise ValueError("invalid_payment_transition")
-    if status == PaymentStatus.APPROVED and current != PaymentStatus.APPROVED:
+
+    if status == PaymentStatus.APPROVED:
         plan = (
             await session.execute(
                 select(Plan).where(Plan.id == payment.plan_id, Plan.is_active.is_(True))
@@ -144,6 +162,7 @@ async def set_payment_status(
         ).scalar_one_or_none()
         if subscription is not None and subscription.status == SubscriptionStatus.ACTIVE.value:
             subscription.status = SubscriptionStatus.CANCELLED.value
+
     payment.status = status.value
     if status == PaymentStatus.APPROVED:
         payment.approved_by = approved_by
