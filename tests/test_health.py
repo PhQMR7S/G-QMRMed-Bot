@@ -66,7 +66,8 @@ async def test_health_ready_reports_dependencies_as_ready(monkeypatch: pytest.Mo
 
     response = await main.health_ready()
 
-    assert response == {"status": "ready", "database": "ok", "redis": "ok"}
+    assert response.status_code == 200
+    assert response.body == b'{"status":"ready","database":"ok","redis":"ok"}'
 
 
 class FailingRedis:
