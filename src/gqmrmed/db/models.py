@@ -205,7 +205,7 @@ class AdminAction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(64))
     target_id: Mapped[UUID | None] = mapped_column(Uuid)
-    metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    action_metadata: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON)
 
 
 class SystemSetting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
