@@ -277,7 +277,7 @@ async def pro_plans(callback: CallbackQuery, session: AsyncSession) -> None:
                 ]
             ),
         )
-    await callback.answer()
+    await callback.answer(_emoji(e, "plans"))
 
 
 @router.callback_query(F.data == "pro:credits")
