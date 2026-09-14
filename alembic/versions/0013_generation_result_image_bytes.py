@@ -1,7 +1,7 @@
 """Add optional inline image bytes for durable Telegram delivery retry."""
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 
 
 revision = "0013_result_image_bytes"
