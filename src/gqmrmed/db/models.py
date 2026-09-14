@@ -239,6 +239,7 @@ class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "usage_reservations"
     __table_args__ = (
         UniqueConstraint("job_id", name="uq_usage_reservations_job_id"),
+        CheckConstraint("status IN ('RESERVED', 'COMMITTED', 'RELEASED')", name="ck_usage_reservation_status"),
         CheckConstraint("source IN ('DAILY', 'CREDIT')", name="ck_usage_reservations_source"),
     )
 
