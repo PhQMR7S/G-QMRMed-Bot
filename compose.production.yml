@@ -99,7 +99,7 @@ services:
       MEDIA_MAX_BYTES: ${MEDIA_MAX_BYTES:-26214400}
       MEDIA_TRANSCRIPTION_MODEL: ${MEDIA_TRANSCRIPTION_MODEL:-gpt-4o-mini-transcribe}
       IMAGE_WIDTH: ${IMAGE_WIDTH:-1080}
-      IMAGE_HEIGHT: ${IMAGE_HEIGHT:-1920}
+      IMAGE_HEIGHT: ${IMAGE_HEIGHT:-1350}
     volumes:
       - gqmrmed_results:/data/results
     depends_on:
