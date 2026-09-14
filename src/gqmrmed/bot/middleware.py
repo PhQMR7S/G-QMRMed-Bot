@@ -6,7 +6,6 @@ from typing import Any
 from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject
 
-from gqmrmed.bot.premium_emoji_runtime import emoji_settings
 from gqmrmed.db.session import SessionFactory
 
 
@@ -21,5 +20,4 @@ class DbSessionMiddleware(BaseMiddleware):
     ) -> Any:
         async with SessionFactory() as session:
             data["session"] = session
-            await emoji_settings(session)
             return await handler(event, data)
