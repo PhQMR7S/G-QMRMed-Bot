@@ -41,7 +41,11 @@ class GeminiResearchConfig:
 class GeminiGroundedResearchProvider:
     """Retrieve web-grounded evidence and preserve source-to-claim mappings."""
 
-    def __init__(self, config: GeminiResearchConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: GeminiResearchConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
@@ -56,13 +60,21 @@ class GeminiGroundedResearchProvider:
                 "Search the web and prioritize official guidelines, regulators, NIH/PubMed, "
                 "major medical societies, systematic reviews, and high-quality peer-reviewed "
                 "literature. Avoid blogs, SEO pages, forums, and unsourced claims. "
-                "Every factual statement in the response must be grounded in the retrieved sources. "
-                "Return a concise evidence-oriented synthesis; do not give patient-specific advice.\n\n"
+                "Every factual statement in the response must be grounded in the retrieved "
+                "sources. Return a concise evidence-oriented synthesis; do not give "
+                "patient-specific advice.\n\n"
                 f"TOPIC: {request.query}"
             )
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{self.config.model}:generateContent"
+            )
             response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{self.config.model}:generateContent",
-                headers={"x-goog-api-key": self.config.api_key, "Content-Type": "application/json"},
+                url,
+                headers={
+                    "x-goog-api-key": self.config.api_key,
+                    "Content-Type": "application/json",
+                },
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "tools": [{"google_search": {}}],
@@ -163,7 +175,10 @@ def _domain(url: str) -> str:
 
 
 def _domain_score(domain: str) -> float:
-    if any(domain == item or domain.endswith("." + item) for item in _TRUSTED_DOMAINS):
+    trusted = any(
+        domain == item or domain.endswith("." + item) for item in _TRUSTED_DOMAINS
+    )
+    if trusted:
         return 0.95
     if domain.endswith((".edu", ".gov")):
         return 0.90
