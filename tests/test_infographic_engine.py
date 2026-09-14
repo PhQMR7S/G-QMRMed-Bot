@@ -32,22 +32,24 @@ def _content() -> SynthesizedContent:
 def _visual_plan() -> VisualPlan:
     return VisualPlan(
         architecture=ArchitectureType.PATHOPHYSIOLOGY_FLOW,
+        aspect_ratio="4:5",
         sections=["trigger", "mechanism", "effect", "clinical result"],
         emphasis=["high-yield facts"],
         illustration_prompt="Clean medical pathway artwork without text or labels.",
     )
 
 
-def test_design_splits_long_content_into_coherent_pages() -> None:
+def test_design_always_produces_one_coherent_image() -> None:
     spec = build_design_spec(
         topic="DKA",
         content=_content(),
         visual_plan=_visual_plan(),
         max_blocks_per_page=4,
     )
-    assert len(spec.pages) >= 4
-    assert all(page.blocks[0].role == "title" for page in spec.pages)
-    assert all(page.title for page in spec.pages)
+    assert len(spec.pages) == 1
+    assert spec.aspect_ratio == "4:5"
+    assert spec.pages[0].page_number == 1
+    assert spec.pages[0].blocks[0].role == "title"
 
 
 def test_research_splits_long_input_into_bounded_queries() -> None:
@@ -68,7 +70,7 @@ def test_design_qa_rejects_visible_source_urls() -> None:
         raise AssertionError("expected QA failure")
 
 
-def test_renderer_returns_png_with_glass_signature_layout() -> None:
+def test_renderer_returns_single_4_5_png_with_glass_signature_layout() -> None:
     import cairosvg
 
     spec = build_design_spec(topic="DKA", content=_content(), visual_plan=_visual_plan())
