@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,19 +19,10 @@ router = Router(name="gqmrmed-premium-emoji-manager")
 BANK_KEY = f"{PREFIX}bank"
 PAGE_SIZE = 12
 SLOT_LABELS = {
-    "brand": "الهوية",
-    "medical": "الطب",
-    "create": "الإنشاء",
-    "plans": "الخطط",
-    "research": "البحث",
-    "ai": "الذكاء الاصطناعي",
-    "design": "التصميم",
-    "success": "النجاح",
-    "warning": "التحذير",
-    "support": "الدعم",
-    "free": "FREE",
-    "plus": "PLUS",
-    "pro": "PRO",
+    "brand": "الهوية", "medical": "الطب", "create": "الإنشاء", "plans": "الخطط",
+    "research": "البحث", "ai": "الذكاء الاصطناعي", "design": "التصميم",
+    "success": "النجاح", "warning": "التحذير", "support": "الدعم",
+    "free": "FREE", "plus": "PLUS", "pro": "PRO",
 }
 
 
@@ -42,22 +34,12 @@ def _kb(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _emoji_button(
-    text: str,
-    callback_data: str,
-    emoji_id: str | None = None,
-) -> InlineKeyboardButton:
-    return InlineKeyboardButton(
-        text=text,
-        callback_data=callback_data,
-        icon_custom_emoji_id=emoji_id,
-    )
+def _emoji_button(text: str, callback_data: str, emoji_id: str | None = None) -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=callback_data, icon_custom_emoji_id=emoji_id)
 
 
 async def _load_bank(session: AsyncSession) -> list[dict[str, Any]]:
-    setting = (
-        await session.execute(select(SystemSetting).where(SystemSetting.key == BANK_KEY))
-    ).scalar_one_or_none()
+    setting = (await session.execute(select(SystemSetting).where(SystemSetting.key == BANK_KEY))).scalar_one_or_none()
     if setting is None or not setting.value:
         return []
     try:
@@ -68,21 +50,13 @@ async def _load_bank(session: AsyncSession) -> list[dict[str, Any]]:
 
 
 async def _bound(session: AsyncSession) -> dict[str, str]:
-    rows = (
-        await session.execute(select(SystemSetting).where(SystemSetting.key.like(f"{PREFIX}%")))
-    ).scalars().all()
-    return {
-        row.key.removeprefix(PREFIX): row.value
-        for row in rows
-        if row.key.removeprefix(PREFIX) in SLOTS and row.value
-    }
+    rows = (await session.execute(select(SystemSetting).where(SystemSetting.key.like(f"{PREFIX}%")))).scalars().all()
+    return {row.key.removeprefix(PREFIX): row.value for row in rows if row.key.removeprefix(PREFIX) in SLOTS and row.value}
 
 
 async def _set_slot(session: AsyncSession, slot: str, emoji_id: str) -> None:
     key = f"{PREFIX}{slot}"
-    setting = (
-        await session.execute(select(SystemSetting).where(SystemSetting.key == key))
-    ).scalar_one_or_none()
+    setting = (await session.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
     if setting is None:
         session.add(SystemSetting(key=key, value=emoji_id))
     else:
@@ -102,25 +76,23 @@ def _render_emoji(item: dict[str, Any] | None) -> str:
 
 
 async def _show(callback: CallbackQuery, text: str, markup: InlineKeyboardMarkup) -> None:
-    if isinstance(callback.message, Message):
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
-    await callback.answer()
+    try:
+        if isinstance(callback.message, Message):
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+    finally:
+        await callback.answer()
 
 
 async def _home(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
     bank = await _load_bank(session)
     bound = await _bound(session)
     lines = [
-        "<b>🎨 مدير Premium Emoji الاحترافي</b>",
-        "",
-        f"المكتبة: <b>{len(bank)}</b> Emoji",
-        f"المربوط يدوياً: <b>{len(bound)}/{len(SLOTS)}</b>",
-        "",
-        (
-            "اختر أي قسم ثم اختر الـPremium Emoji الذي تريده. "
-            "الاختيار يُحفظ ويُستخدم بثبات في واجهات وأزرار البوت."
-        ),
-        "",
+        "<b>🎨 مدير Premium Emoji الاحترافي</b>", "", f"المكتبة: <b>{len(bank)}</b> Emoji",
+        f"المربوط يدوياً: <b>{len(bound)}/{len(SLOTS)}</b>", "",
+        "اختر أي قسم ثم اختر الـPremium Emoji الذي تريده. الاختيار يُحفظ ويُستخدم بثبات في واجهات وأزرار البوت.", "",
     ]
     rows: list[list[InlineKeyboardButton]] = []
     for index in range(0, len(SLOTS), 2):
@@ -131,14 +103,12 @@ async def _home(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
             state = "✓" if item else "—"
             row.append(_emoji_button(f"{state} {SLOT_LABELS[slot]}", f"pem:list:{slot}:0", icon))
         rows.append(row)
-    rows.extend(
-        [
-            [_emoji_button("📚 عرض المكتبة كاملة", "pem:catalog:0")],
-            [_emoji_button("⚡ ربط تلقائي ذكي", "pem:auto")],
-            [_emoji_button("🔄 تحديث الحالة", "pem:home")],
-            [_emoji_button("↩️ لوحة الإدارة", "adm:home")],
-        ]
-    )
+    rows.extend([
+        [_emoji_button("📚 عرض المكتبة كاملة", "pem:catalog:0")],
+        [_emoji_button("⚡ ربط تلقائي ذكي", "pem:auto")],
+        [_emoji_button("🔄 تحديث الحالة", "pem:home")],
+        [_emoji_button("↩️ لوحة الإدارة", "adm:home")],
+    ])
     return "\n".join(lines), _kb(rows)
 
 
@@ -160,11 +130,7 @@ async def manager_home(callback: CallbackQuery, session: AsyncSession) -> None:
     await _show(callback, text, markup)
 
 
-@router.callback_query(
-    F.data.regexp(
-        r"^pem:list:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"
-    )
-)
+@router.callback_query(F.data.regexp(r"^pem:list:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"))
 async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
@@ -181,13 +147,10 @@ async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
     items = bank[start : start + PAGE_SIZE]
     current = bound.get(slot)
     current_item = _bank_item(bank, current or "")
-
     lines = [
-        f"<b>اختيار Premium Emoji — {SLOT_LABELS[slot]}</b>",
-        "",
+        f"<b>اختيار Premium Emoji — {SLOT_LABELS[slot]}</b>", "",
         f"الحالي: {_render_emoji(current_item) or 'غير مرتبط'}",
-        f"صفحة <b>{page + 1}/{total_pages}</b> · اختر أي Emoji من المكتبة:",
-        "",
+        f"صفحة <b>{page + 1}/{total_pages}</b> · اختر أي Emoji من المكتبة:", "",
     ]
     rows: list[list[InlineKeyboardButton]] = []
     for offset in range(0, len(items), 3):
@@ -197,10 +160,8 @@ async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
             alt = str(item.get("alt") or "?")
             absolute = start + local_index
             marker = "✓" if emoji_id == current else ""
-            label = f"{marker} #{absolute + 1} {alt}"
-            row.append(_emoji_button(label, f"pem:pick:{slot}:{absolute}", emoji_id))
+            row.append(_emoji_button(f"{marker} #{absolute + 1} {alt}", f"pem:pick:{slot}:{absolute}", emoji_id))
         rows.append(row)
-
     nav: list[InlineKeyboardButton] = []
     if page > 0:
         nav.append(_emoji_button("‹ السابق", f"pem:list:{slot}:{page - 1}"))
@@ -212,11 +173,7 @@ async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
     await _show(callback, "\n".join(lines), _kb(rows))
 
 
-@router.callback_query(
-    F.data.regexp(
-        r"^pem:pick:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"
-    )
-)
+@router.callback_query(F.data.regexp(r"^pem:pick:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"))
 async def emoji_pick(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
@@ -236,7 +193,6 @@ async def emoji_pick(callback: CallbackQuery, session: AsyncSession) -> None:
     await _set_slot(session, slot, emoji_id)
     await session.commit()
     await emoji_settings(session)
-    await callback.answer("تم حفظ اختيارك 🔥")
     await emoji_picker(callback, session)
 
 
@@ -250,10 +206,10 @@ async def emoji_auto(callback: CallbackQuery, session: AsyncSession) -> None:
         await callback.answer("المكتبة فارغة.", show_alert=True)
         return
     for slot in SLOTS:
-        candidates = [item for item in bank if str(item.get("slot") or "brand") == slot]
-        if not candidates:
-            candidates = bank
-        await _set_slot(session, slot, str(candidates[0].get("id") or ""))
+        candidates = [item for item in bank if str(item.get("slot") or "brand") == slot] or bank
+        emoji_id = str(candidates[0].get("id") or "")
+        if emoji_id:
+            await _set_slot(session, slot, emoji_id)
     await session.commit()
     await emoji_settings(session)
     text, markup = await _home(session)
