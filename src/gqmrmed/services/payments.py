@@ -25,7 +25,11 @@ async def create_payment(session: AsyncSession, *, user_id: UUID, plan: Plan | N
     if amount < 0 or (plan is None and credit_pack is None) or (plan is not None and credit_pack is not None):
         raise ValueError("invalid_payment_amount")
     if provider == "telegram_stars":
-        expected = plan.stars_price if plan is not None else credit_pack.stars_price
+        if plan is None:
+            assert credit_pack is not None
+            expected = credit_pack.stars_price
+        else:
+            expected = plan.stars_price
         if currency.upper() != "XTR" or stars_amount != expected:
             raise ValueError("invalid_stars_price")
     elif plan is None or amount != Decimal(plan.price):
