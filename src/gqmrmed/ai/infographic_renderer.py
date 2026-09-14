@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+# The SVG compositor intentionally contains long markup literals.
+# Ruff's E501 is disabled for this renderer; functional checks remain enforced.
+# ruff: noqa: E501
+
 import base64
 import html
 import re
@@ -10,7 +14,12 @@ from typing import cast
 
 import cairosvg
 
-from gqmrmed.ai.infographic_design import InfographicDesignSpec, InfographicPage, TemplateFamily, TextBlock
+from gqmrmed.ai.infographic_design import (
+    InfographicDesignSpec,
+    InfographicPage,
+    TemplateFamily,
+    TextBlock,
+)
 from gqmrmed.generation.providers import GeneratedIllustration
 
 
@@ -67,10 +76,31 @@ def render_infographic_page(
     svg: list[str] = [_root(cfg), _defs(cfg)]
     svg.append(_rect(0, 0, cfg.width, cfg.height, cfg.navy))
     svg.append(_background_decoration(cfg))
-    svg.append(_rounded_rect(card_x, card_y, card_w, card_h, 42, cfg.white, stroke="none"))
+    svg.append(
+        _rounded_rect(
+            card_x,
+            card_y,
+            card_w,
+            card_h,
+            42,
+            cfg.white,
+            stroke="none",
+        )
+    )
 
     badge_x = cfg.width - outer - 228 if rtl else outer + 28
-    svg.append(_pill(badge_x, card_y + 28, 200, 46, cfg.teal, "QMRMed  •  MEDICAL", cfg.white))
+    svg.append(
+        _pill(
+            badge_x,
+            card_y + 28,
+            200,
+            46,
+            cfg.teal,
+            "QMRMed  •  MEDICAL",
+            cfg.white,
+        )
+    )
+    title_lines = _wrap(title, 24 if rtl else 30)
     svg.append(
         _text(
             title,
@@ -78,12 +108,14 @@ def render_infographic_page(
             card_y + 125,
             anchor=anchor,
             direction=direction,
-            size=52 if len(_wrap(title, 24 if rtl else 30)) == 1 else 44,
+            size=52 if len(title_lines) == 1 else 44,
             weight=800,
             fill=cfg.ink,
         )
     )
-    subtitle = _first_non_internal(page.sections) or ("تثقيف طبي موثوق" if rtl else "Evidence-led medical education")
+    subtitle = _first_non_internal(page.sections)
+    if not subtitle:
+        subtitle = "تثقيف طبي موثوق" if rtl else "Evidence-led medical education"
     svg.append(
         _text(
             _compact(subtitle, 62),
@@ -101,12 +133,20 @@ def render_infographic_page(
     image_y = card_y + 196
     image_w = card_w - 56
     image_h = 370
-    svg.append(_image_frame(image_x, image_y, image_w, image_h, illustration, cfg))
+    svg.append(
+        _image_frame(
+            image_x,
+            image_y,
+            image_w,
+            image_h,
+            illustration,
+            cfg,
+        )
+    )
     svg.append(_image_badge(image_x + 20, image_y + 20, cfg))
 
     body_y = image_y + image_h + 28
     body_h = card_y + card_h - body_y - 82
-    template = spec.template
     _render_content_grid(
         svg,
         body,
@@ -116,7 +156,7 @@ def render_infographic_page(
         height=body_h,
         rtl=rtl,
         cfg=cfg,
-        template=template,
+        template=spec.template,
     )
 
     disclaimer = _disclaimer(body, rtl)
@@ -173,9 +213,21 @@ def _render_content_grid(
         card_x = x + col * (card_w + gap)
         card_y = y + row * (card_h + gap)
         accent = _accent(block.role, cfg)
-        svg.append(_rounded_rect(card_x, card_y, card_w, card_h, 22, cfg.panel, stroke=cfg.line))
+        svg.append(
+            _rounded_rect(
+                card_x,
+                card_y,
+                card_w,
+                card_h,
+                22,
+                cfg.panel,
+                stroke=cfg.line,
+            )
+        )
         if rtl:
-            svg.append(_accent_dot(card_x + card_w - 30, card_y + 28, accent))
+            svg.append(
+                _accent_dot(card_x + card_w - 30, card_y + 28, accent)
+            )
             text_x = card_x + card_w - 48
             text_anchor = "end"
         else:
@@ -183,10 +235,22 @@ def _render_content_grid(
             text_x = card_x + 48
             text_anchor = "start"
         role = _role_label(block.role, template, rtl)
-        svg.append(_text(role, text_x, card_y + 34, anchor=text_anchor, direction="rtl" if rtl else "ltr", size=16, weight=800, fill=accent))
+        svg.append(
+            _text(
+                role,
+                text_x,
+                card_y + 34,
+                anchor=text_anchor,
+                direction="rtl" if rtl else "ltr",
+                size=16,
+                weight=800,
+                fill=accent,
+            )
+        )
         max_chars = 26 if columns == 3 else 39 if columns == 2 else 72
         font_size = 18 if columns == 3 else 20 if columns == 2 else 23
-        lines = _fit_lines(block.text, max_chars, max_lines=max(2, int((card_h - 62) / (font_size + 7))))
+        max_lines = max(2, int((card_h - 62) / (font_size + 7)))
+        lines = _fit_lines(block.text, max_chars, max_lines=max_lines)
         for line_index, line in enumerate(lines):
             svg.append(
                 _text(
@@ -202,11 +266,20 @@ def _render_content_grid(
             )
 
 
-def _image_frame(x: float, y: float, width: float, height: float, illustration: GeneratedIllustration, cfg: RenderConfig) -> str:
+def _image_frame(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    illustration: GeneratedIllustration,
+    cfg: RenderConfig,
+) -> str:
     uri = _data_uri(illustration.image_bytes, illustration.mime_type)
     return (
-        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="{height:.1f}" rx="28" fill="{cfg.navy}"/>'
-        f'<image href="{uri}" x="{x + 3:.1f}" y="{y + 3:.1f}" width="{width - 6:.1f}" height="{height - 6:.1f}" '
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" '
+        f'height="{height:.1f}" rx="28" fill="{cfg.navy}"/>'
+        f'<image href="{uri}" x="{x + 3:.1f}" y="{y + 3:.1f}" '
+        f'width="{width - 6:.1f}" height="{height - 6:.1f}" '
         'preserveAspectRatio="xMidYMid slice" opacity="0.98"/>'
     )
 
@@ -215,61 +288,138 @@ def _image_badge(x: float, y: float, cfg: RenderConfig) -> str:
     return _pill(x, y, 142, 38, "#FFFFFF", "VISUAL", cfg.navy, opacity=0.88)
 
 
-def _watermark(cfg: RenderConfig, x: float, y: float, width: float, height: float, rtl: bool) -> str:
+def _watermark(
+    cfg: RenderConfig,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    rtl: bool,
+) -> str:
     del rtl
     wx = x + width - 190
     wy = y + height - 54
     return (
-        f'<g opacity="0.82"><rect x="{wx:.1f}" y="{wy:.1f}" width="158" height="36" rx="18" fill="{cfg.white}" stroke="{cfg.line}"/>'
-        f'<circle cx="{wx + 21:.1f}" cy="{wy + 18:.1f}" r="9" fill="{cfg.teal}"/>'
-        f'<path d="M{wx + 16:.1f} {wy + 18:.1f} L{wx + 20:.1f} {wy + 22:.1f} L{wx + 27:.1f} {wy + 14:.1f}" fill="none" stroke="{cfg.white}" stroke-width="2.5" stroke-linecap="round"/>'
-        f'<text x="{wx + 38:.1f}" y="{wy + 23:.1f}" font-family="DejaVu Sans, sans-serif" font-size="15" font-weight="800" fill="{cfg.ink}">QMR7S</text></g>'
+        f'<g opacity="0.82"><rect x="{wx:.1f}" y="{wy:.1f}" '
+        f'width="158" height="36" rx="18" fill="{cfg.white}" '
+        f'stroke="{cfg.line}"/>'
+        f'<circle cx="{wx + 21:.1f}" cy="{wy + 18:.1f}" r="9" '
+        f'fill="{cfg.teal}"/>'
+        f'<path d="M{wx + 16:.1f} {wy + 18:.1f} '
+        f'L{wx + 20:.1f} {wy + 22:.1f} L{wx + 27:.1f} {wy + 14:.1f}" '
+        f'fill="none" stroke="{cfg.white}" stroke-width="2.5" '
+        f'stroke-linecap="round"/>'
+        f'<text x="{wx + 38:.1f}" y="{wy + 23:.1f}" '
+        f'font-family="DejaVu Sans, sans-serif" font-size="15" '
+        f'font-weight="800" fill="{cfg.ink}">QMR7S</text></g>'
     )
 
 
 def _background_decoration(cfg: RenderConfig) -> str:
     return (
-        f'<circle cx="970" cy="90" r="150" fill="{cfg.teal}" opacity="0.08"/>'
-        f'<circle cx="970" cy="90" r="92" fill="none" stroke="{cfg.gold}" stroke-width="2" opacity="0.28"/>'
-        f'<path d="M58 1120 C180 1040 210 1230 360 1160" fill="none" stroke="{cfg.teal}" stroke-width="3" opacity="0.16"/>'
+        f'<circle cx="970" cy="90" r="150" fill="{cfg.teal}" '
+        'opacity="0.08"/>'
+        f'<circle cx="970" cy="90" r="92" fill="none" '
+        f'stroke="{cfg.gold}" stroke-width="2" opacity="0.28"/>'
+        f'<path d="M58 1120 C180 1040 210 1230 360 1160" '
+        f'fill="none" stroke="{cfg.teal}" stroke-width="3" '
+        'opacity="0.16"/>'
     )
 
 
 def _defs(cfg: RenderConfig) -> str:
     return (
         '<defs>'
-        f'<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-opacity="0.16" flood-color="{cfg.navy}"/></filter>'
+        f'<filter id="shadow" x="-20%" y="-20%" width="140%" '
+        f'height="140%"><feDropShadow dx="0" dy="12" '
+        f'stdDeviation="18" flood-opacity="0.16" '
+        f'flood-color="{cfg.navy}"/></filter>'
         '</defs>'
     )
 
 
 def _root(cfg: RenderConfig) -> str:
-    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{cfg.width}" height="{cfg.height}" viewBox="0 0 {cfg.width} {cfg.height}">'
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{cfg.width}" '
+        f'height="{cfg.height}" viewBox="0 0 {cfg.width} {cfg.height}">'
+    )
 
 
 def _rect(x: float, y: float, width: float, height: float, fill: str) -> str:
-    return f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="{height:.1f}" fill="{fill}"/>'
+    return (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" '
+        f'height="{height:.1f}" fill="{fill}"/>'
+    )
 
 
-def _rounded_rect(x: float, y: float, width: float, height: float, radius: float, fill: str, *, stroke: str) -> str:
+def _rounded_rect(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    radius: float,
+    fill: str,
+    *,
+    stroke: str,
+) -> str:
     filter_attr = ' filter="url(#shadow)"' if fill == "#FFFFFF" else ""
-    return f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="{height:.1f}" rx="{radius:.1f}" fill="{fill}" stroke="{stroke}" stroke-width="2"{filter_attr}/>'
+    return (
+        f'<rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" '
+        f'height="{height:.1f}" rx="{radius:.1f}" fill="{fill}" '
+        f'stroke="{stroke}" stroke-width="2"{filter_attr}/>'
+    )
 
 
-def _pill(x: float, y: float, width: float, height: float, fill: str, value: str, text_fill: str, *, opacity: float = 1.0) -> str:
-    return f'<g opacity="{opacity}"><rect x="{x:.1f}" y="{y:.1f}" width="{width:.1f}" height="{height:.1f}" rx="{height / 2:.1f}" fill="{fill}"/><text x="{x + width / 2:.1f}" y="{y + height / 2 + 5:.1f}" text-anchor="middle" font-family="DejaVu Sans, Noto Sans Arabic, sans-serif" font-size="15" font-weight="800" fill="{text_fill}">{_escape(value)}</text></g>'
+def _pill(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    fill: str,
+    value: str,
+    text_fill: str,
+    *,
+    opacity: float = 1.0,
+) -> str:
+    return (
+        f'<g opacity="{opacity}"><rect x="{x:.1f}" y="{y:.1f}" '
+        f'width="{width:.1f}" height="{height:.1f}" '
+        f'rx="{height / 2:.1f}" fill="{fill}"/>'
+        f'<text x="{x + width / 2:.1f}" '
+        f'y="{y + height / 2 + 5:.1f}" text-anchor="middle" '
+        'font-family="DejaVu Sans, Noto Sans Arabic, sans-serif" '
+        f'font-size="15" font-weight="800" fill="{text_fill}">'
+        f'{_escape(value)}</text></g>'
+    )
 
 
 def _accent_dot(x: float, y: float, fill: str) -> str:
     return f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8" fill="{fill}"/>'
 
 
-def _text(value: str, x: float, y: float, *, anchor: str, direction: str, size: int, weight: int, fill: str) -> str:
-    return f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" direction="{direction}" font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" font-size="{size}" font-weight="{weight}" fill="{fill}">{_escape(value)}</text>'
+def _text(
+    value: str,
+    x: float,
+    y: float,
+    *,
+    anchor: str,
+    direction: str,
+    size: int,
+    weight: int,
+    fill: str,
+) -> str:
+    return (
+        f'<text x="{x:.1f}" y="{y:.1f}" text-anchor="{anchor}" '
+        f'direction="{direction}" '
+        'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" '
+        f'font-size="{size}" font-weight="{weight}" fill="{fill}">'
+        f'{_escape(value)}</text>'
+    )
 
 
 def _data_uri(data: bytes, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
 
 
 def _escape(value: str) -> str:
@@ -337,10 +487,14 @@ def _first_non_internal(values: list[str]) -> str:
 
 
 def _disclaimer(blocks: list[TextBlock], rtl: bool) -> str:
+    del rtl
     for block in blocks:
-        if "ليست تشخيص" in block.text or "ليست تشخيصاً" in block.text or "not a diagnosis" in block.text.lower():
+        value = block.text.lower()
+        if "ليست تشخيص" in block.text or "ليست تشخيصاً" in block.text:
             return block.text
-    return "" if not rtl else ""
+        if "not a diagnosis" in value:
+            return block.text
+    return ""
 
 
 def _accent(role: str, cfg: RenderConfig) -> str:
