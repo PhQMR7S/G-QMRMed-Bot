@@ -60,7 +60,8 @@ async def reserve_generation(
             raise RuntimeError("usage reservation conflict without persisted ledger")
         if existing.user_id != user_id or existing.usage_date != usage_date:
             raise RuntimeError("usage reservation identity mismatch")
-        return Reservation(existing.id, existing.user_id, existing.job_id, existing.usage_date, existing.source)
+        source = getattr(existing, "source", UsageReservationSource.DAILY.value)
+        return Reservation(existing.id, existing.user_id, existing.job_id, existing.usage_date, source)
 
     if daily_limit is None:
         daily_stmt = insert(DailyUsage).values(
