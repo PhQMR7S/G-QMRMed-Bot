@@ -14,6 +14,7 @@ from gqmrmed.admin import router as admin_router
 from gqmrmed.admin_panel import router as admin_panel_router
 from gqmrmed.admin_plans import router as admin_plans_router
 from gqmrmed.config import get_settings
+from gqmrmed.db.migrations import upgrade_head
 from gqmrmed.db.session import SessionFactory
 
 settings = get_settings()
@@ -22,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Manage the optional embedded worker for the complete API lifespan."""
+    """Migrate the database and manage the optional embedded worker."""
+    await upgrade_head()
     app.state.worker_task = None
     app.state.worker_stop = None
     app.state.worker_bot = None
@@ -50,9 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        stop_event_for_shutdown: asyncio.Event | None = getattr(
-            app.state, "worker_stop", None
-        )
+        stop_event_for_shutdown: asyncio.Event | None = getattr(app.state, "worker_stop", None)
         worker_task = getattr(app.state, "worker_task", None)
         bot_for_shutdown: Bot | None = getattr(app.state, "worker_bot", None)
         if stop_event_for_shutdown is not None:
