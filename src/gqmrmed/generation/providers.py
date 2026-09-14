@@ -58,22 +58,22 @@ class ProceduralMedicalIllustrationProvider:
         if width <= 0 or height <= 0:
             raise ImageGenerationError("invalid_image_dimensions")
         svg = f"""
-        <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 1080 1920">
+        <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
           <defs>
             <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stop-color="#0f172a"/>
               <stop offset="1" stop-color="#1e3a5f"/>
             </linearGradient>
           </defs>
-          <rect width="1080" height="1920" rx="48" fill="url(#bg)"/>
-          <circle cx="540" cy="770" r="300" fill="#ffffff" opacity="0.07"/>
-          <circle cx="540" cy="770" r="210" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.32"/>
-          <path d="M300 770 H410 L455 650 L520 900 L575 700 L625 770 H780" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-          <path d="M455 1030 C390 960 320 900 320 820 C320 735 430 700 540 810 C650 700 760 735 760 820 C760 900 690 960 625 1030 L540 1115 Z" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.55"/>
-          <circle cx="540" cy="770" r="34" fill="#ffffff" opacity="0.9"/>
-          <path d="M540 520 V410 M540 1130 V1240 M290 770 H180 M790 770 H900" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.35"/>
-          <text x="540" y="1420" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="54" font-weight="700">QMRMed</text>
-          <text x="540" y="1490" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="28" opacity="0.72">Medical infographic illustration</text>
+          <rect width="{width}" height="{height}" rx="48" fill="url(#bg)"/>
+          <circle cx="540" cy="600" r="260" fill="#ffffff" opacity="0.07"/>
+          <circle cx="540" cy="600" r="185" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.32"/>
+          <path d="M300 600 H410 L455 480 L520 730 L575 530 L625 600 H780" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+          <path d="M455 860 C390 790 320 730 320 650 C320 565 430 530 540 640 C650 530 760 565 760 650 C760 730 690 790 625 860 L540 945 Z" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.55"/>
+          <circle cx="540" cy="600" r="34" fill="#ffffff" opacity="0.9"/>
+          <path d="M540 350 V240 M540 960 V1070 M290 600 H180 M790 600 H900" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.35"/>
+          <text x="540" y="1190" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="54" font-weight="700">QMRMed</text>
+          <text x="540" y="1245" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="28" opacity="0.72">Medical infographic illustration</text>
         </svg>
         """
         image_bytes = await asyncio.to_thread(
@@ -217,9 +217,7 @@ class ComfyUIImageProvider:
                 image_bytes=image.content,
                 width=width,
                 height=height,
-                mime_type=image.headers.get(
-                    "content-type", "image/png"
-                ).split(";", 1)[0],
+                mime_type=image.headers.get("content-type", "image/png").split(";", 1)[0],
             )
         except httpx.HTTPError as exc:
             raise ImageGenerationError("comfyui_request_failed") from exc
