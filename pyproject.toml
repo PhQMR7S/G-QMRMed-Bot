@@ -64,6 +64,7 @@ order-by-type = false
 "src/gqmrmed/ai/infographic_design.py" = ["E501", "I001"]
 "src/gqmrmed/ai/providers.py" = ["E501", "I001"]
 "src/gqmrmed/services/production_pipeline.py" = ["E501", "I001"]
+"tests/test_infographic_engine.py" = ["E501"]
 "src/gqmrmed/bot/router.py" = ["E501"]
 "src/gqmrmed/bot/payments.py" = ["E501", "I001"]
 "src/gqmrmed/bot/professional_ui.py" = ["E501", "I001", "F401"]
