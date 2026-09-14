@@ -1,6 +1,5 @@
 """Owner-only in-bot administration panel for GQMRMed."""
 
-import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -214,7 +213,7 @@ async def admin_user_state(callback: CallbackQuery, session: AsyncSession) -> No
     if not callback.data:
         return
     action, raw_id = callback.data.rsplit(":", 1)
-    user = await _set_user_state(session, UUID(raw_id), active=(None if action != "adm:user_toggle" else None), banned=(action == "adm:user_ban"))
+    user = await _set_user_state(session, UUID(raw_id), banned=(action == "adm:user_ban"))
     if user is not None and action == "adm:user_toggle":
         user.is_active = not user.is_active
     elif user is not None and action == "adm:user_unban":
