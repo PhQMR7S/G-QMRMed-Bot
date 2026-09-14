@@ -100,21 +100,14 @@ class ProductionGenerationPipeline:
             width=self._config.width,
             height=self._config.height,
         )
-        if (
-            illustration.width != self._config.width
-            or illustration.height != self._config.height
-        ):
+        if illustration.width != self._config.width or illustration.height != self._config.height:
             raise ValueError("illustration_dimensions_mismatch")
 
         await progress(GenerationStage.RENDERING, 85)
         png = render_infographic_page(design, page, illustration)
 
         await progress(GenerationStage.QUALITY_CONTROL, 98)
-        validate_png_contract(
-            png,
-            width=self._config.width,
-            height=self._config.height,
-        )
+        validate_png_contract(png, width=self._config.width, height=self._config.height)
         return GeneratedIllustration(
             image_bytes=png,
             width=self._config.width,
@@ -134,13 +127,13 @@ def _validate_content_language(content: SynthesizedContent, language: str) -> No
             *content.cautions,
         ]
     )
-    has_ar = any("\u0600" <= char <= "\u06ff" for char in text)
-    has_lat = any("a" <= char.lower() <= "z" for char in text)
-    if language == "ar" and not has_ar:
+    ar_count = sum("\u0600" <= char <= "\u06ff" for char in text)
+    latin_count = sum("a" <= char.lower() <= "z" for char in text)
+    if language == "ar" and (ar_count < 20 or latin_count > ar_count * 0.35):
         raise ValueError("synthesis_language_mismatch_ar")
-    if language == "en" and has_ar:
+    if language == "en" and ar_count > 0:
         raise ValueError("synthesis_language_mismatch_en")
-    if language == "mixed" and not (has_ar and has_lat):
+    if language == "mixed" and not (ar_count >= 10 and latin_count >= 10):
         raise ValueError("synthesis_language_mismatch_mixed")
 
 
