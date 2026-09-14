@@ -1,4 +1,4 @@
-"""Publication-grade QMRMed editorial infographic renderer."""
+"""Publication-grade QMRMed editorial infographic renderer with deterministic RTL shaping."""
 from __future__ import annotations
 
 import io
@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 
+import arabic_reshaper
+from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
 from gqmrmed.ai.infographic_design import InfographicDesignSpec, InfographicPage, TextBlock
@@ -22,7 +24,6 @@ class RenderConfig:
     paper: str = "#FFFFFF"
     ink: str = "#241C2A"
     muted: str = "#6D6670"
-    navy: str = "#17345B"
     teal: str = "#2E9DAA"
     green: str = "#5C9B80"
     rose: str = "#B45478"
@@ -38,7 +39,7 @@ def render_infographic_page(
     *,
     config: RenderConfig | None = None,
 ) -> bytes:
-    """Render one 1080x1350 infographic with correct Arabic/English shaping."""
+    """Render one 1080x1350 infographic with correct Arabic, English, and mixed text."""
     cfg = config or RenderConfig()
     if cfg.width * 5 != cfg.height * 4:
         raise ValueError("render_canvas_must_be_4_5")
@@ -51,51 +52,35 @@ def render_infographic_page(
     draw = ImageDraw.Draw(image)
     _background(draw, cfg)
     language = spec.language.lower()
-
     margin = 58
+
     _badge(draw, (margin, 42), "QMRMed • MEDICAL", cfg.rose, cfg.paper)
     title = _clean(page.title)
     title_font = _font(68, True, language)
     if _width(draw, title, title_font) > 900:
         title_font = _font(56, True, language)
     title_lines = _wrap(draw, title, title_font, 900)
-    if len(title_lines) > 2:
-        title_lines = title_lines[:2]
+    title_lines = title_lines[:2]
+    if len(_wrap(draw, title, title_font, 900)) > 2:
         title_lines[-1] = _truncate(draw, title_lines[-1], title_font, 900)
     title_y = 125
     for index, line in enumerate(title_lines):
-        rtl = _is_arabic(line)
-        draw.text(
-            (cfg.width - margin if rtl else margin, title_y + index * (title_font.size + 4)),
-            line,
-            font=title_font,
-            fill=cfg.ink,
-            anchor="ra" if rtl else "la",
-            direction="rtl" if rtl else "ltr",
-        )
+        _text(draw, line, (cfg.width - margin if _is_rtl(line) else margin, title_y + index * (title_font.size + 4)), title_font, cfg.ink, anchor="ra" if _is_rtl(line) else "la")
+
     subtitle = _subtitle(language)
     sub_y = title_y + len(title_lines) * (title_font.size + 4) + 10
-    draw.text(
-        (cfg.width - margin if _is_arabic(subtitle) else margin, sub_y),
-        subtitle,
-        font=_font(22, False, language),
-        fill=cfg.muted,
-        anchor="ra" if _is_arabic(subtitle) else "la",
-        direction="rtl" if _is_arabic(subtitle) else "ltr",
-    )
+    _text(draw, subtitle, (cfg.width - margin if _is_rtl(subtitle) else margin, sub_y), _font(22, False, language), cfg.muted, anchor="ra" if _is_rtl(subtitle) else "la")
 
     art_y = max(245, sub_y + 48)
     _artwork(image, illustration, (margin, art_y, cfg.width - margin, art_y + 320), cfg)
     _small_label(draw, (margin + 20, art_y + 18), "مرئي" if language == "ar" else "VISUAL", cfg)
 
-    body = [b for b in page.blocks[1:] if _visible(b.text)]
-    body = sorted(body, key=lambda b: -b.importance)[:6]
+    body = [block for block in page.blocks[1:] if _visible(block.text)]
+    body = sorted(body, key=lambda block: -block.importance)[:6]
     if not body:
         raise ValueError("infographic_body_required")
-    top = art_y + 348
-    bottom = 1232
-    _cards(draw, body, language, cfg, margin, top, bottom)
-    _footer(draw, image, language, cfg)
+    _cards(draw, body, language, cfg, margin, art_y + 348, 1232)
+    _footer(draw, language, cfg)
     return _png(image)
 
 
@@ -104,8 +89,7 @@ def _cards(draw: ImageDraw.ImageDraw, blocks: list[TextBlock], language: str, cf
     cols = 2 if count <= 4 else 3
     rows = (count + cols - 1) // cols
     gap = 18
-    width = cfg.width - 2 * margin
-    card_w = (width - gap * (cols - 1)) // cols
+    card_w = (cfg.width - 2 * margin - gap * (cols - 1)) // cols
     card_h = (bottom - top - gap * (rows - 1)) // rows
     labels_ar = ("ما هو؟", "كيف يحدث؟", "أهم النقاط", "التشخيص", "العلاج", "ملاحظة مهمة")
     labels_en = ("What is it?", "How it happens", "Key points", "Diagnosis", "Treatment", "Important note")
@@ -118,16 +102,11 @@ def _cards(draw: ImageDraw.ImageDraw, blocks: list[TextBlock], language: str, cf
         header = 62 if cols == 2 else 58
         draw.rounded_rectangle((x, y, x + card_w, y + header), radius=26, fill=accent)
         draw.rectangle((x, y + header - 20, x + card_w, y + header), fill=accent)
-        rtl = language == "ar" or _is_arabic(block.text)
+
+        rtl = language == "ar" or _is_rtl(block.text)
         label = labels_ar[index] if rtl else labels_en[index]
-        draw.text(
-            (x + card_w - 22 if rtl else x + 22, y + header / 2),
-            label,
-            font=_font(23 if cols == 2 else 20, True, "ar" if rtl else "en"),
-            fill=cfg.paper,
-            anchor="rm" if rtl else "lm",
-            direction="rtl" if rtl else "ltr",
-        )
+        _text(draw, label, (x + card_w - 22 if rtl else x + 22, y + header / 2), _font(23 if cols == 2 else 20, True, "ar" if rtl else "en"), cfg.paper, anchor="rm" if rtl else "lm")
+
         pad = 22
         max_width = card_w - 2 * pad
         body_font = _fit_font(draw, block.text, _font(24 if cols == 2 else 20, False, language), max_width, card_h - header - 34, language)
@@ -136,16 +115,9 @@ def _cards(draw: ImageDraw.ImageDraw, blocks: list[TextBlock], language: str, cf
         if len(lines) > max_lines:
             lines = lines[:max_lines]
             lines[-1] = _truncate(draw, lines[-1], body_font, max_width)
-        rtl_body = _is_arabic(block.text)
+        rtl_body = _is_rtl(block.text)
         for line_no, line in enumerate(lines):
-            draw.text(
-                (x + card_w - pad if rtl_body else x + pad, y + header + 28 + line_no * (body_font.size + 8)),
-                line,
-                font=body_font,
-                fill=cfg.ink,
-                anchor="ra" if rtl_body else "la",
-                direction="rtl" if rtl_body else "ltr",
-            )
+            _text(draw, line, (x + card_w - pad if rtl_body else x + pad, y + header + 28 + line_no * (body_font.size + 8)), body_font, cfg.ink, anchor="ra" if rtl_body else "la")
 
 
 def _colors(role: str, index: int, cfg: RenderConfig) -> tuple[str, str]:
@@ -185,36 +157,34 @@ def _badge(draw: ImageDraw.ImageDraw, pos: tuple[int, int], text: str, fill: str
     font = _font(17, True, "en")
     box = draw.textbbox((0, 0), text, font=font)
     w = box[2] - box[0] + 28
-    h = 40
     x, y = pos
-    draw.rounded_rectangle((x, y, x + w, y + h), radius=20, fill=fill)
-    draw.text((x + w / 2, y + h / 2), text, font=font, fill=text_fill, anchor="mm")
+    draw.rounded_rectangle((x, y, x + w, y + 40), radius=20, fill=fill)
+    draw.text((x + w / 2, y + 20), text, font=font, fill=text_fill, anchor="mm")
 
 
 def _small_label(draw: ImageDraw.ImageDraw, pos: tuple[int, int], text: str, cfg: RenderConfig) -> None:
-    font = _font(15, True, "ar" if _is_arabic(text) else "en")
-    box = draw.textbbox((0, 0), text, font=font)
+    font = _font(15, True, "ar" if _is_rtl(text) else "en")
+    box = draw.textbbox((0, 0), _shape(text), font=font)
     w = box[2] - box[0] + 22
     x, y = pos
     draw.rounded_rectangle((x, y, x + w, y + 32), radius=16, fill=cfg.paper, outline=cfg.line)
-    draw.text((x + w / 2, y + 16), text, font=font, fill=cfg.ink, anchor="mm", direction="rtl" if _is_arabic(text) else "ltr")
+    _text(draw, text, (x + w / 2, y + 16), font, cfg.ink, anchor="mm")
 
 
-def _footer(draw: ImageDraw.ImageDraw, image: Image.Image, language: str, cfg: RenderConfig) -> None:
+def _footer(draw: ImageDraw.ImageDraw, language: str, cfg: RenderConfig) -> None:
     y = 1270
     draw.rounded_rectangle((58, y, 178, y + 32), radius=16, fill=cfg.paper, outline=cfg.line)
     draw.ellipse((70, y + 11, 82, y + 23), fill=cfg.rose)
     draw.text((92, y + 16), "QMR7S", font=_font(13, True, "en"), fill=cfg.ink, anchor="lm")
     text = "للتثقيف الطبي فقط؛ لا يغني عن التقييم السريري." if language == "ar" else "For medical education only; not a substitute for clinical evaluation."
-    draw.text((540, y + 16), text, font=_font(14, False, language), fill=cfg.muted, anchor="mm", direction="rtl" if _is_arabic(text) else "ltr")
+    _text(draw, text, (540, y + 16), _font(14, False, language), cfg.muted, anchor="mm")
 
 
 def _fit_font(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_width: int, max_height: int, language: str) -> ImageFont.FreeTypeFont:
     size = font.size
     while size >= 15:
         candidate = _font(size, False, language)
-        lines = _wrap(draw, text, candidate, max_width)
-        if len(lines) * (size + 8) <= max_height:
+        if len(_wrap(draw, text, candidate, max_width)) * (size + 8) <= max_height:
             return candidate
         size -= 1
     return _font(15, False, language)
@@ -245,12 +215,20 @@ def _truncate(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont
 
 
 def _width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
-    direction = "rtl" if _is_arabic(text) else "ltr"
-    try:
-        box = draw.textbbox((0, 0), text, font=font, direction=direction)
-    except ValueError:
-        box = draw.textbbox((0, 0), text, font=font)
+    box = draw.textbbox((0, 0), _shape(text), font=font)
     return box[2] - box[0]
+
+
+def _text(draw: ImageDraw.ImageDraw, text: str, pos: tuple[float, float], font: ImageFont.FreeTypeFont, fill: str, *, anchor: str) -> None:
+    draw.text(pos, _shape(text), font=font, fill=fill, anchor=anchor)
+
+
+def _shape(text: str) -> str:
+    """Shape Arabic before Pillow draws it; this works even without system RAQM fonts."""
+    if not _contains_arabic(text):
+        return text
+    reshaped = arabic_reshaper.reshape(text)
+    return get_display(reshaped, base_dir="R")
 
 
 @lru_cache(maxsize=64)
@@ -267,8 +245,12 @@ def _font(size: int, bold: bool, language: str) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype("DejaVuSans.ttf", size)
 
 
-def _is_arabic(text: str) -> bool:
-    return any("\u0600" <= c <= "\u06ff" for c in text)
+def _contains_arabic(text: str) -> bool:
+    return any("\u0600" <= char <= "\u06ff" for char in text)
+
+
+def _is_rtl(text: str) -> bool:
+    return _contains_arabic(text)
 
 
 def _clean(text: str) -> str:
