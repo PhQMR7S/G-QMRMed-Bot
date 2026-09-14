@@ -9,7 +9,11 @@ from urllib.parse import urlparse
 
 import httpx
 
-from gqmrmed.contracts.research import EvidenceSource, ResearchRequest, SourceType
+from gqmrmed.contracts.research import (
+    EvidenceSource,
+    ResearchRequest,
+    SourceType,
+)
 
 
 _TRUSTED_DOMAINS = {
@@ -60,9 +64,9 @@ class GeminiGroundedResearchProvider:
                 "Search the web and prioritize official guidelines, regulators, NIH/PubMed, "
                 "major medical societies, systematic reviews, and high-quality peer-reviewed "
                 "literature. Avoid blogs, SEO pages, forums, and unsourced claims. "
-                "Every factual statement in the response must be grounded in the retrieved "
-                "sources. Return a concise evidence-oriented synthesis; do not give "
-                "patient-specific advice.\n\n"
+                "Every factual statement must be grounded in retrieved sources. "
+                "Return a concise evidence-oriented synthesis; do not give patient-specific "
+                "advice.\n\n"
                 f"TOPIC: {request.query}"
             )
             url = (
