@@ -21,10 +21,14 @@ from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_pag
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
 from gqmrmed.config import Settings
-from gqmrmed.contracts.research import ResearchRequest
-from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationError, ImageGenerationProvider
-from gqmrmed.services.medical_pipeline import MedicalPlan
-from gqmrmed.services.research import research_medical_topic
+from gqmrmed.contracts.research import ResearchRequest, SynthesizedContent, VisualPlan
+from gqmrmed.generation.providers import (
+    GeneratedIllustration,
+    ImageGenerationError,
+    ImageGenerationProvider,
+)
+from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
+from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
 
@@ -55,7 +59,11 @@ class InfographicPipeline:
     def from_settings(cls, settings: Settings) -> "InfographicPipeline":
         providers: list[ImageGenerationProvider] = []
         for name in _csv(settings.image_provider_order):
-            if name == "cloudflare" and settings.cloudflare_api_token and settings.cloudflare_account_id:
+            if (
+                name == "cloudflare"
+                and settings.cloudflare_api_token
+                and settings.cloudflare_account_id
+            ):
                 providers.append(
                     CloudflareImageProvider(
                         CloudflareImageConfig(
@@ -90,7 +98,9 @@ class InfographicPipeline:
         providers.append(_BlankIllustrationProvider())
         return cls(image_providers=tuple(providers))
 
-    async def generate(self, *, user_input: str, plan: MedicalPlan) -> InfographicGenerationResult:
+    async def generate(
+        self, *, user_input: str, plan: MedicalPlan
+    ) -> InfographicGenerationResult:
         design = build_design_spec(
             topic=user_input,
             content=plan.content,
@@ -100,7 +110,14 @@ class InfographicPipeline:
         images: list[bytes] = []
         for page in design.pages:
             illustration = await self._generate_illustration(design.illustration_prompt)
-            images.append(render_infographic_page(design, page, illustration, config=self.renderer_config))
+            images.append(
+                render_infographic_page(
+                    design,
+                    page,
+                    illustration,
+                    config=self.renderer_config,
+                )
+            )
         return InfographicGenerationResult(
             images=tuple(images),
             design=design,
@@ -111,23 +128,20 @@ class InfographicPipeline:
         errors: list[str] = []
         for provider in self.image_providers:
             try:
-                return await provider.generate(
-                    prompt=prompt,
-                    width=1024,
-                    height=1280,
-                )
+                return await provider.generate(prompt=prompt, width=1024, height=1280)
             except (ImageGenerationError, RuntimeError) as exc:
                 errors.append(type(exc).__name__)
         raise ImageGenerationError("all_infographic_image_providers_failed:" + ",".join(errors))
 
 
-async def build_infographic_research_plan(
+async def build_infographic_medical_plan(
     *,
     user_input: str,
     settings: Settings,
+    synthesis_provider: SynthesisProvider,
 ) -> MedicalPlan:
-    """Build a research-first plan using grounded web evidence plus PubMed."""
-    providers = []
+    """Build the research-first medical plan used by the final compositor."""
+    providers: list[ResearchProvider] = []
     if settings.gemini_api_key:
         providers.append(
             GeminiGroundedResearchProvider(
@@ -147,16 +161,15 @@ async def build_infographic_research_plan(
         )
     )
     research_provider = HybridResearchProvider(*providers)
-    request = ResearchRequest(query=user_input, max_sources=10)
-    research = await research_medical_topic(request, research_provider)
-    if not research.sources:
-        raise RuntimeError("infographic_research_found_no_evidence")
+    return await build_medical_plan(
+        user_input=user_input,
+        research_request=ResearchRequest(query=user_input, max_sources=10),
+        research_provider=research_provider,
+        synthesis_provider=synthesis_provider,
+    )
 
-    # The content synthesis stage remains provider-neutral and is supplied by the caller.
-    raise RuntimeError("infographic_research_plan_requires_synthesis_provider")
 
-
-def build_visual_plan(*, topic: str, content) -> object:  # type: ignore[no-untyped-def]
+def build_visual_plan(*, topic: str, content: SynthesizedContent) -> VisualPlan:
     """Public helper for callers that already have evidence-locked content."""
     return select_visual_architecture(topic=topic, content=content)
 
@@ -184,13 +197,23 @@ class _BlankIllustrationProvider:
           <path d="M25% 42% H38% L44% 32% L50% 53% L57% 36% L63% 42% H75%" fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
         </svg>
         """
-        image_bytes = await asyncio.to_thread(cairosvg.svg2png, bytestring=svg.encode("utf-8"), output_width=width, output_height=height)
-        return GeneratedIllustration(image_bytes=image_bytes, width=width, height=height, mime_type="image/png")
+        image_bytes = await asyncio.to_thread(
+            cairosvg.svg2png,
+            bytestring=svg.encode("utf-8"),
+            output_width=width,
+            output_height=height,
+        )
+        return GeneratedIllustration(
+            image_bytes=image_bytes,
+            width=width,
+            height=height,
+            mime_type="image/png",
+        )
 
 
 __all__ = [
     "InfographicGenerationResult",
     "InfographicPipeline",
-    "build_infographic_research_plan",
+    "build_infographic_medical_plan",
     "build_visual_plan",
 ]
