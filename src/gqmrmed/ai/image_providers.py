@@ -151,7 +151,7 @@ class GeminiImageConfig:
 
 
 class GeminiImageProvider:
-    """Gemini image adapter without trusting model-generated readable text."""
+    """Gemini 3.1 Flash Image adapter using the current Interactions API."""
 
     def __init__(
         self,
@@ -171,52 +171,35 @@ class GeminiImageProvider:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(timeout=self.config.timeout_seconds)
         try:
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{self.config.model}:generateContent"
-            )
             response = await client.post(
-                url,
+                "https://generativelanguage.googleapis.com/v1beta/interactions",
                 headers={
                     "x-goog-api-key": self.config.api_key,
                     "Content-Type": "application/json",
                 },
                 json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "responseModalities": ["IMAGE"],
-                        "responseFormat": {
-                            "image": {
-                                "aspectRatio": aspect_ratio,
-                                "imageSize": "2K",
-                            }
-                        },
+                    "model": self.config.model,
+                    "input": prompt,
+                    "response_format": {
+                        "type": "image",
+                        "mime_type": "image/png",
+                        "aspect_ratio": aspect_ratio,
+                        "image_size": "2K",
                     },
                 },
             )
             response.raise_for_status()
             payload: dict[str, Any] = response.json()
-            candidates = payload.get("candidates")
-            if not isinstance(candidates, list) or not candidates:
-                raise ImageGenerationError("gemini_image_candidates_missing")
-            content = candidates[0].get("content")
-            parts = (
-                content.get("parts", [])
-                if isinstance(content, dict)
-                else []
+            image = _extract_interaction_image(payload)
+            if image is None:
+                raise ImageGenerationError("gemini_image_missing")
+            image_data, mime_type = image
+            return GeneratedIllustration(
+                image_bytes=base64.b64decode(image_data),
+                width=width,
+                height=height,
+                mime_type=mime_type,
             )
-            for part in parts:
-                if not isinstance(part, dict):
-                    continue
-                inline = part.get("inlineData")
-                if isinstance(inline, dict) and isinstance(inline.get("data"), str):
-                    return GeneratedIllustration(
-                        image_bytes=base64.b64decode(inline["data"]),
-                        width=width,
-                        height=height,
-                        mime_type=str(inline.get("mimeType", "image/png")),
-                    )
-            raise ImageGenerationError("gemini_image_missing")
         except httpx.HTTPError as exc:
             raise ImageGenerationError("gemini_image_request_failed") from exc
         except (ValueError, TypeError) as exc:
@@ -224,6 +207,30 @@ class GeminiImageProvider:
         finally:
             if owns_client:
                 await client.aclose()
+
+
+def _extract_interaction_image(
+    payload: dict[str, Any],
+) -> tuple[str, str] | None:
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        return None
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if step.get("type") != "model_output":
+            continue
+        content = step.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "image":
+                continue
+            data = block.get("data")
+            if isinstance(data, str) and data:
+                mime_type = str(block.get("mime_type", "image/png"))
+                return data, mime_type
+    return None
 
 
 def _validate_request(prompt: str, width: int, height: int) -> None:
