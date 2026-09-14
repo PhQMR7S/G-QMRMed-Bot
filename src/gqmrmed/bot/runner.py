@@ -10,6 +10,7 @@ from gqmrmed.bot.admin_ui import router as admin_router
 from gqmrmed.bot.dispatcher import GenerationDispatcher
 from gqmrmed.bot.middleware import DbSessionMiddleware
 from gqmrmed.bot.payments import router as payments_router
+from gqmrmed.bot.premium_emoji_manager import router as premium_emoji_manager_router
 from gqmrmed.bot.premium_emoji_registry import router as premium_emoji_router
 from gqmrmed.bot.premium_emoji_runtime import (
     patch_modules as patch_premium_emoji_modules,
@@ -33,6 +34,8 @@ async def run_bot() -> None:
     session_middleware = DbSessionMiddleware()
     admin_router.message.middleware(session_middleware)
     admin_router.callback_query.middleware(session_middleware)
+    premium_emoji_manager_router.message.middleware(session_middleware)
+    premium_emoji_manager_router.callback_query.middleware(session_middleware)
     professional_ui_router.message.middleware(session_middleware)
     professional_ui_router.callback_query.middleware(session_middleware)
     premium_emoji_router.message.middleware(session_middleware)
@@ -42,6 +45,9 @@ async def run_bot() -> None:
     payments_router.message.middleware(session_middleware)
     payments_router.callback_query.middleware(session_middleware)
     payments_router.pre_checkout_query.middleware(session_middleware)
+    # The visual Premium Emoji manager intentionally precedes admin_router so its
+    # enhanced adm:emoji entry point wins over the legacy admin screen.
+    dispatcher.include_router(premium_emoji_manager_router)
     dispatcher.include_router(admin_router)
     dispatcher.include_router(premium_emoji_router)
     dispatcher.include_router(professional_ui_router)
