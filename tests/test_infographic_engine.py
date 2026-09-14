@@ -52,6 +52,15 @@ def test_design_always_produces_one_coherent_image() -> None:
     assert spec.pages[0].blocks[0].role == "title"
 
 
+def test_design_filters_internal_provider_messages_and_caps_body() -> None:
+    content = _content()
+    content.claims[0].text = "Automatic synthesis provider was unavailable"
+    spec = build_design_spec(topic="DKA", content=content, visual_plan=_visual_plan())
+    body = spec.pages[0].blocks[1:]
+    assert len(body) <= 6
+    assert all("provider was unavailable" not in block.text.lower() for block in body)
+
+
 def test_research_splits_long_input_into_bounded_queries() -> None:
     query = " ".join(["DKA treatment and diagnosis."] * 80)
     queries = split_long_research_query(query)
