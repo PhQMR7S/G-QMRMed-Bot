@@ -38,6 +38,10 @@ def test_unknown_alt_defaults_to_brand() -> None:
 
 
 def test_render_uses_telegram_custom_emoji_markup() -> None:
-    assert _render({"id": "123", "alt": "🩺"}) == '<tg-emoji emoji-id="123">🩺</tg-emoji>'
-    assert _render({"id": "456", "alt": "🔬"}) == '<tg-emoji emoji-id="456">🔬</tg-emoji>'
+    assert _render({"id": "123", "alt": "🩺"}) == (
+        '<tg-emoji emoji-id="123">🩺</tg-emoji>'
+    )
+    assert _render({"id": "456", "alt": "🔬"}) == (
+        '<tg-emoji emoji-id="456">🔬</tg-emoji>'
+    )
     assert _render({"id": "789", "alt": ""}) == ""
