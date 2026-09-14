@@ -63,7 +63,7 @@ async def emoji_settings(session: AsyncSession) -> dict[str, str]:
     for item in bank:
         emoji_id = str(item.get("id") or "")
         alt = str(item.get("alt") or "")
-        if emoji_id:
+        if emoji_id and emoji_id not in ids:
             ids.append(emoji_id)
         if emoji_id and alt:
             settings[f"{PREFIX}alt:{emoji_id}"] = alt
@@ -73,9 +73,9 @@ async def emoji_settings(session: AsyncSession) -> dict[str, str]:
 
     settings[f"{PREFIX}count"] = str(len(ids))
     settings[f"{PREFIX}ids"] = json.dumps(ids, ensure_ascii=False, separators=(",", ":"))
-    _refresh_button_pool(ids, settings)
     _BUTTON_SETTINGS.clear()
     _BUTTON_SETTINGS.update(settings)
+    _refresh_button_pool(ids, _BUTTON_SETTINGS)
     return settings
 
 
@@ -84,6 +84,8 @@ def _bank_ids(settings: Mapping[str, str]) -> list[str]:
     try:
         ids = json.loads(raw)
     except json.JSONDecodeError:
+        ids = []
+    if not isinstance(ids, list):
         return []
     return [str(value) for value in ids if value]
 
@@ -98,10 +100,27 @@ def _refresh_button_pool(ids: list[str], settings: Mapping[str, str]) -> None:
     ]
 
 
+def _effective_button_ids(settings: Mapping[str, str]) -> list[str]:
+    """Return the full valid captured palette, repairing an unprimed runtime if needed."""
+    if _BUTTON_EMOJI_IDS:
+        return list(_BUTTON_EMOJI_IDS)
+    ids = _bank_ids(settings)
+    if ids:
+        _refresh_button_pool(ids, settings)
+        return list(_BUTTON_EMOJI_IDS)
+    derived = sorted(
+        key.split(":", 2)[2]
+        for key, value in settings.items()
+        if key.startswith(f"{PREFIX}alt:") and value
+    )
+    _refresh_button_pool(derived, settings)
+    return list(_BUTTON_EMOJI_IDS)
+
+
 def _button_slot(text: str | None, callback_data: str | None) -> str:
     """Resolve a stable semantic slot from a button's action, never randomly."""
     action = (callback_data or "").lower()
-    text_value = (text or "").lower()
+    text_value = text or ""
     exact = {
         "pro:generate": "create",
         "pro:plans": "plans",
@@ -177,20 +196,21 @@ def _stable_button_emoji_id(
     callback_data: str | None,
 ) -> str | None:
     """Select one fixed icon for a button from its semantic emoji family."""
-    if not _BUTTON_EMOJI_IDS:
+    palette = _effective_button_ids(settings)
+    if not palette:
         return None
     slot = _button_slot(text, callback_data)
     candidates = [
         emoji_id
-        for emoji_id in _BUTTON_EMOJI_IDS
+        for emoji_id in palette
         if settings.get(f"{PREFIX}slot:{emoji_id}") == slot
     ]
     if not candidates:
         bound = settings.get(f"{PREFIX}{slot}")
-        if bound in _BUTTON_EMOJI_IDS:
+        if bound in palette:
             candidates = [bound]
     if not candidates:
-        candidates = list(_BUTTON_EMOJI_IDS)
+        candidates = palette
 
     identity = f"{slot}|{callback_data or ''}|{text or ''}".encode("utf-8")
     digest = hashlib.sha256(identity).digest()
