@@ -181,6 +181,59 @@ async def emoji_catalog(message: Message, session: AsyncSession) -> None:
         await message.answer(chunk, parse_mode="HTML")
 
 
+@router.message(Command("emoji_status"))
+async def emoji_status(message: Message, session: AsyncSession) -> None:
+    """Show an owner-only integrity report for the Premium Emoji registry."""
+    if not _is_owner(message):
+        return
+
+    bank = await _load_bank(session)
+    ids = [str(item.get("id")) for item in bank if item.get("id")]
+    unique_ids = set(ids)
+    valid_rows = [item for item in bank if item.get("id")]
+    slot_counts = {slot: 0 for slot in SLOTS}
+    for item in valid_rows:
+        slot = str(item.get("slot") or "brand")
+        if slot not in slot_counts:
+            slot = "brand"
+        slot_counts[slot] += 1
+
+    bound: dict[str, str] = {}
+    for slot in SLOTS:
+        setting = await _setting(session, f"{PREFIX}{slot}")
+        if setting is not None and setting.value:
+            bound[slot] = str(setting.value)
+
+    missing_slots = [slot for slot in SLOTS if slot not in bound]
+    duplicate_count = len(ids) - len(unique_ids)
+    missing_metadata = sum(
+        1
+        for item in valid_rows
+        if not item.get("alt") and not item.get("set_name")
+    )
+
+    lines = [
+        "<b>Premium Emoji Registry — Status</b>",
+        "",
+        f"الإجمالي: <b>{len(bank)}</b>",
+        f"IDs فريدة: <b>{len(unique_ids)}</b>",
+        f"تكرارات: <b>{duplicate_count}</b>",
+        f"سجلات بدون Telegram metadata: <b>{missing_metadata}</b>",
+        f"المساحات المرتبطة: <b>{len(bound)}/{len(SLOTS)}</b>",
+        "",
+        "<b>التصنيف</b>",
+    ]
+    for slot in SLOTS:
+        lines.append(f"{slot}: {slot_counts[slot]}")
+
+    if missing_slots:
+        lines.extend(["", "<b>مساحات غير مرتبطة</b>", ", ".join(missing_slots)])
+    else:
+        lines.extend(["", "<b>الحالة: مكتملة</b> ✅"])
+
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
 @router.message(Command("emoji_autobind"))
 async def emoji_autobind(message: Message, session: AsyncSession) -> None:
     if not _is_owner(message):
