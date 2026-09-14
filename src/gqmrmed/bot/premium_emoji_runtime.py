@@ -1,4 +1,3 @@
-# ruff: noqa
 """Runtime Premium Emoji resolver shared by all Telegram UI surfaces."""
 
 from __future__ import annotations
@@ -247,7 +246,7 @@ def patch_modules() -> None:
     from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
 
     for module in (admin_ui, payments, professional_ui, router):
-        setattr(module, "InlineKeyboardButton", _button_factory)
+        setattr(module, "InlineKeyboardButton", _button_factory)  # noqa: B010
     admin_ui._emoji_settings = emoji_settings
     admin_ui._emoji = render
     professional_ui._emoji_settings = emoji_settings
