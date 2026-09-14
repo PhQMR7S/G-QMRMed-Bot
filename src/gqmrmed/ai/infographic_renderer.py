@@ -10,6 +10,7 @@ import base64
 import html
 import re
 from dataclasses import dataclass
+from typing import cast
 
 import cairosvg
 
@@ -156,11 +157,12 @@ def render_infographic_page(
     svg.append(_signature(cfg, safe_bottom))
     svg.append("</svg>")
 
-    return cairosvg.svg2png(
+    rendered = cairosvg.svg2png(
         bytestring="".join(svg).encode("utf-8"),
         output_width=cfg.width,
         output_height=cfg.height,
     )
+    return cast(bytes, rendered)
 
 
 def _render_cards(
