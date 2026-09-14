@@ -17,7 +17,7 @@ class Reservation:
     user_id: UUID
     job_id: UUID
     usage_date: date
-    source: str
+    source: str = UsageReservationSource.DAILY.value
 
 
 class QuotaExceededError(Exception):
