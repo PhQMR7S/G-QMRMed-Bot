@@ -1,5 +1,4 @@
-"""Deterministic QMRMed single-image infographic design system."""
-
+"""QMRMed single-image editorial design contract."""
 from __future__ import annotations
 
 from enum import StrEnum
@@ -22,20 +21,18 @@ class TemplateFamily(StrEnum):
 
 
 class TextBlock(BaseModel):
-    """Exact text that may appear in the final image."""
+    """Exact text permitted in the final image."""
 
     model_config = ConfigDict(extra="forbid")
-
     text: str = Field(min_length=1, max_length=2_000)
     role: str = Field(min_length=1, max_length=32)
     importance: int = Field(default=1, ge=1, le=5)
 
 
 class InfographicPage(BaseModel):
-    """The single final page returned to the user."""
+    """The single final image page."""
 
     model_config = ConfigDict(extra="forbid")
-
     page_number: int = Field(default=1, ge=1, le=1)
     title: str = Field(min_length=1, max_length=160)
     sections: list[str] = Field(min_length=1, max_length=8)
@@ -43,10 +40,9 @@ class InfographicPage(BaseModel):
 
 
 class BrandingSpec(BaseModel):
-    """Branding is composited after AI generation."""
+    """Deterministic brand overlay."""
 
     model_config = ConfigDict(extra="forbid")
-
     telegram_handle: str = "QMR7S"
     position: str = "bottom_safe_zone"
     style: str = "frosted_glass"
@@ -54,10 +50,9 @@ class BrandingSpec(BaseModel):
 
 
 class InfographicDesignSpec(BaseModel):
-    """Complete deterministic rendering contract for exactly one image."""
+    """Complete one-image rendering contract."""
 
     model_config = ConfigDict(extra="forbid")
-
     topic: str = Field(min_length=1, max_length=20_000)
     language: str = Field(default="ar", min_length=2, max_length=8)
     aspect_ratio: str = "4:5"
@@ -68,55 +63,48 @@ class InfographicDesignSpec(BaseModel):
 
 
 MASTER_VISUAL_LANGUAGE = """
-QMRMed master visual language: premium medical editorial infographic.
-Use the agreed QMRMed identity: deep navy #0B1F3A, turquoise #14B8A6,
-white #FFFFFF, and restrained gold #D4AF37. Build a polished 4:5 composition
-with one dominant rounded white card, compact badge, strong title hierarchy,
-a dedicated medical illustration panel, concise information cards, generous
-spacing, subtle depth, precise alignment, and a restrained frosted-glass QMR7S
-watermark in the safe zone. Use modern Arabic typography with correct RTL.
-Turquoise is the primary information accent; gold is the premium secondary
-accent; red is reserved for danger and warnings. Never add unrelated decoration.
+QMRMed editorial medical infographic. Match the supplied professional reference
+family: publication-grade hierarchy, clean white paper, restrained pastel section
+panels, strong title typography, dominant clinically relevant illustration,
+precise alignment, generous whitespace, rounded panels, small editorial labels,
+and a subtle QMR7S signature. The final composition is 1080x1350 (4:5).
+Use deep navy #0B1F3A, turquoise #14B8A6, white #FFFFFF and restrained gold #D4AF37,
+with soft rose, mint, cyan and lavender secondary panels. Never use random colors.
+Arabic text must be rendered with correct RTL shaping; English must remain LTR;
+mixed input may remain mixed. Never transliterate Arabic into broken Latin glyphs.
+Never put provider errors, fallback status, tracebacks, source URLs, citations,
+file paths, internal metadata, or system messages into visible artwork.
 The illustration is artwork only: no readable text, labels, numbers, logos,
-signatures, watermarks, UI, or disclaimers. Never expose provider errors,
-fallback status, tracebacks, or internal system messages as medical content.
+watermarks or UI inside the generated illustration.
 """.strip()
 
 
 TEMPLATE_HINTS: dict[TemplateFamily, str] = {
-    TemplateFamily.CLINICAL: (
-        "Strong title, dominant clinical illustration, then balanced high-yield cards."
-    ),
-    TemplateFamily.MECHANISM: (
-        "Causal visual pathway with clear directional flow and concise mechanism cards."
-    ),
-    TemplateFamily.COMPARISON: (
-        "Symmetrical comparison structure with shared attributes and discriminators."
-    ),
-    TemplateFamily.DRUG: (
-        "Dominant medication illustration with indication, mechanism, and caution cards."
-    ),
-    TemplateFamily.DIAGNOSIS: (
-        "Diagnostic visual flow with tests, findings, interpretation, and red flags."
-    ),
-    TemplateFamily.TREATMENT: (
-        "Stepwise treatment pathway with priority, monitoring, and escalation cards."
-    ),
-    TemplateFamily.SYMPTOMS: (
-        "Grouped symptom clusters with clear hierarchy and supported warnings."
-    ),
-    TemplateFamily.ANATOMY: (
-        "Central anatomical illustration with concise relationship callouts."
-    ),
-    TemplateFamily.EDUCATIONAL: (
-        "Flexible teaching composition with definition and high-yield takeaways."
-    ),
+    TemplateFamily.CLINICAL: "Title + definition/clinical overview + dominant illustration + high-yield clinical panels.",
+    TemplateFamily.MECHANISM: "Title + causal pathway + dominant mechanism illustration + ordered mechanism/result panels.",
+    TemplateFamily.COMPARISON: "Title + comparison matrix with strong column hierarchy and a concise takeaway.",
+    TemplateFamily.DRUG: "Title + drug illustration + indication/mechanism/safety/monitoring panels.",
+    TemplateFamily.DIAGNOSIS: "Title + diagnostic visual + signs/tests/interpretation/red flags panels.",
+    TemplateFamily.TREATMENT: "Title + treatment pathway + first-line/monitoring/escalation panels.",
+    TemplateFamily.SYMPTOMS: "Title + symptom illustration + grouped symptoms, evaluation and red flags.",
+    TemplateFamily.ANATOMY: "Title + anatomical illustration + labeled relationship panels outside the artwork.",
+    TemplateFamily.EDUCATIONAL: "Title + teaching illustration + definition, key concepts and takeaways.",
 }
 
 
+def detect_language_mode(text: str) -> str:
+    """Detect Arabic, English, or genuinely mixed user input."""
+    has_ar = any("\u0600" <= char <= "\u06ff" for char in text)
+    has_lat = any("a" <= char.lower() <= "z" for char in text)
+    if has_ar and has_lat:
+        return "mixed"
+    if has_ar:
+        return "ar"
+    return "en"
+
+
 def choose_template(topic: str, visual_plan: VisualPlan) -> TemplateFamily:
-    """Map the medical architecture to the QMRMed visual family."""
-    value = visual_plan.architecture.value
+    value = visual_plan.architecture.value.lower()
     if "mechanism" in value or "pathophysiology" in value or "concept_map" in value:
         return TemplateFamily.MECHANISM
     if "comparison" in value:
@@ -129,11 +117,10 @@ def choose_template(topic: str, visual_plan: VisualPlan) -> TemplateFamily:
         return TemplateFamily.DIAGNOSIS
     if "anatomy" in value:
         return TemplateFamily.ANATOMY
-    if "step_by_step" in value:
-        return TemplateFamily.CLINICAL
     if "revision" in value or "disease" in value:
         return TemplateFamily.EDUCATIONAL
-    if any(word in topic.lower() for word in ("symptom", "signs", "أعراض", "علامات")):
+    lowered = topic.lower()
+    if any(word in lowered for word in ("symptom", "signs", "أعراض", "علامات")):
         return TemplateFamily.SYMPTOMS
     return TemplateFamily.CLINICAL
 
@@ -153,48 +140,37 @@ def _is_internal_artifact(text: str) -> bool:
         "fallback provider",
         "internal error",
         "traceback",
+        "stack trace",
     )
     return any(marker in value for marker in markers)
 
 
 def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
-    """Select balanced evidence-locked content for one readable image."""
+    """Select concise evidence-locked facts; subtitle is header text, not a card."""
     blocks: list[TextBlock] = []
-    if content.subtitle and not _is_internal_artifact(content.subtitle):
-        blocks.append(
-            TextBlock(
-                text=_compact(content.subtitle, 180),
-                role="subtitle",
-                importance=4,
-            )
-        )
+    for point in content.key_points:
+        if not _is_internal_artifact(point):
+            blocks.append(TextBlock(text=_compact(point, 260), role="point", importance=3))
+        if len(blocks) >= 3:
+            break
 
-    points = [
-        point for point in content.key_points if not _is_internal_artifact(point)
-    ]
-    for point in points[:3]:
-        blocks.append(TextBlock(text=_compact(point, 220), role="point", importance=3))
-
-    claims = [
-        claim for claim in content.claims if not _is_internal_artifact(claim.text)
-    ]
+    claims = [claim for claim in content.claims if not _is_internal_artifact(claim.text)]
     claims.sort(key=lambda claim: (claim.critical, claim.confidence), reverse=True)
-    for claim in claims[:2]:
+    for claim in claims:
         blocks.append(
             TextBlock(
-                text=_compact(claim.text, 300),
+                text=_compact(claim.text, 320),
                 role="danger" if claim.critical else "claim",
-                importance=5 if claim.critical else 3,
+                importance=5 if claim.critical else 4,
             )
         )
+        if len(blocks) >= 5:
+            break
 
-    cautions = [
-        caution for caution in content.cautions if not _is_internal_artifact(caution)
-    ]
-    if cautions:
-        blocks.append(
-            TextBlock(text=_compact(cautions[0], 220), role="caution", importance=5)
-        )
+    for caution in content.cautions:
+        if not _is_internal_artifact(caution):
+            blocks.append(TextBlock(text=_compact(caution, 260), role="caution", importance=5))
+            break
     return blocks[:6]
 
 
@@ -203,51 +179,49 @@ def build_design_spec(
     topic: str,
     content: SynthesizedContent,
     visual_plan: VisualPlan,
-    language: str = "ar",
+    language: str | None = None,
     max_blocks_per_page: int = 9,
 ) -> InfographicDesignSpec:
-    """Build exactly one readable image from evidence-locked content."""
+    """Build one image while preserving the input language contract."""
     if max_blocks_per_page < 4 or max_blocks_per_page > 9:
         raise ValueError("single_image_capacity_must_be_between_4_and_9")
+    mode = language or detect_language_mode(topic)
+    if mode not in {"ar", "en", "mixed"}:
+        raise ValueError("unsupported_infographic_language")
 
     template = choose_template(topic, visual_plan)
     selected = _select_single_image_blocks(content)[:max_blocks_per_page]
     if not selected:
         raise ValueError("single_image_content_required")
 
-    page_title = TextBlock(
-        text=_compact(content.title, 120),
-        role="title",
-        importance=5,
-    )
-    sections = [
-        section
-        for section in dict.fromkeys(visual_plan.sections[:8])
-        if not _is_internal_artifact(section)
-    ] or ["key points"]
+    title = _compact(content.title, 160)
+    if _is_internal_artifact(title):
+        title = _compact(topic, 160)
+    sections = [section for section in dict.fromkeys(visual_plan.sections[:8]) if not _is_internal_artifact(section)] or ["key points"]
     page = InfographicPage(
         page_number=1,
-        title=_compact(content.title, 160),
+        title=title,
         sections=sections,
-        blocks=[page_title, *selected],
+        blocks=[TextBlock(text=title, role="title", importance=5), *selected],
     )
 
     prompt = (
         MASTER_VISUAL_LANGUAGE
         + "\n\n"
         + TEMPLATE_HINTS[template]
+        + "\nLanguage mode: "
+        + mode
         + "\nTopic: "
         + _compact(topic, 500)
         + "\nArchitecture: "
         + visual_plan.architecture.value
         + "\nIllustration brief: "
         + visual_plan.illustration_prompt
-        + "\nIMPORTANT: artwork only; no readable text, labels, numbers, logos, "
-        + "watermark, UI, or disclaimers."
+        + "\nIMPORTANT: artwork only; no readable text, labels, numbers, logos, watermark, UI, or disclaimers."
     )
     return InfographicDesignSpec(
         topic=topic,
-        language=language,
+        language=mode,
         aspect_ratio="4:5",
         template=template,
         pages=[page],
@@ -265,4 +239,5 @@ __all__ = [
     "TextBlock",
     "build_design_spec",
     "choose_template",
+    "detect_language_mode",
 ]
