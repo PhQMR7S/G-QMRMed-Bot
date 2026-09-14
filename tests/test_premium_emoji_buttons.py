@@ -1,34 +1,44 @@
 from gqmrmed.bot import premium_emoji_runtime as runtime
 
 
-def test_button_factory_attaches_captured_custom_emoji() -> None:
-    settings = {
-        "telegram_emoji.alt:100": "🩺",
-        "telegram_emoji.alt:200": "🔬",
-        "telegram_emoji.alt:300": "🎨",
-    }
+def _prime(settings: dict[str, str]) -> None:
+    runtime._BUTTON_SETTINGS.clear()
+    runtime._BUTTON_SETTINGS.update(settings)
     runtime._refresh_button_pool(["100", "200", "300"], settings)
 
-    first = runtime._button_factory(text="إنشاء تصميم", callback_data="pro:generate")
-    second = runtime._button_factory(text="الخطط", callback_data="pro:plans")
+
+def test_button_factory_attaches_stable_semantic_custom_emoji() -> None:
+    settings = {
+        "telegram_emoji.alt:100": "🩺",
+        "telegram_emoji.slot:100": "medical",
+        "telegram_emoji.alt:200": "🔬",
+        "telegram_emoji.slot:200": "research",
+        "telegram_emoji.alt:300": "🎨",
+        "telegram_emoji.slot:300": "design",
+    }
+    _prime(settings)
+
+    first = runtime._button_factory(text="المستخدمون", callback_data="adm:users")
+    second = runtime._button_factory(text="بحث", callback_data="adm:overview")
+    first_again = runtime._button_factory(text="المستخدمون", callback_data="adm:users")
 
     assert first.icon_custom_emoji_id == "100"
     assert second.icon_custom_emoji_id == "200"
+    assert first_again.icon_custom_emoji_id == first.icon_custom_emoji_id
 
 
-def test_button_factory_uses_every_captured_icon_before_repeating() -> None:
+def test_button_factory_uses_all_captured_icons_as_deterministic_fallbacks() -> None:
     settings = {
         "telegram_emoji.alt:1": "🩺",
         "telegram_emoji.alt:2": "🔬",
         "telegram_emoji.alt:3": "🎨",
     }
-    runtime._refresh_button_pool(["1", "2", "3"], settings)
+    _prime(settings)
 
-    ids = [
-        runtime._button_factory(text=str(index), callback_data=str(index)).icon_custom_emoji_id
-        for index in range(3)
-    ]
+    first = runtime._button_factory(text="A", callback_data="fallback:a")
+    second = runtime._button_factory(text="B", callback_data="fallback:b")
+    first_again = runtime._button_factory(text="A", callback_data="fallback:a")
 
-    assert ids == ["1", "2", "3"]
-    repeated = runtime._button_factory(text="again", callback_data="again")
-    assert repeated.icon_custom_emoji_id == "1"
+    assert first.icon_custom_emoji_id in {"1", "2", "3"}
+    assert second.icon_custom_emoji_id in {"1", "2", "3"}
+    assert first_again.icon_custom_emoji_id == first.icon_custom_emoji_id
