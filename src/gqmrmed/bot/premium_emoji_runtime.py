@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -32,7 +33,6 @@ SLOTS = (
 
 _ORIGINAL_INLINE_BUTTON = InlineKeyboardButton
 _BUTTON_EMOJI_IDS: list[str] = []
-_BUTTON_CURSOR = 0
 
 
 def _classify(alt: str | None) -> str:
@@ -41,7 +41,7 @@ def _classify(alt: str | None) -> str:
         "medical": {"⚕️", "🩺", "💊", "🧬", "🧪", "🔬", "🫀", "🫁", "🧠", "🏥"},
         "research": {"🔎", "🔍", "📚", "📖", "📊", "📈", "📋", "📝", "ℹ️"},
         "design": {"🎨", "🖌️", "🖊️", "✏️", "🖼️", "📐", "🧩"},
-        "ai": {"🤖", "💡", "✨", "⚙️"},
+        "ai": {"🤖", "🧠", "💡", "✨", "⚙️"},
         "success": {"✅", "✔️", "☑️", "👍", "🎉"},
         "warning": {"⚠️", "❗", "❌", "⛔", "🚫"},
         "support": {"❓", "💬", "📞", "🆘", "🙋"},
@@ -100,62 +100,169 @@ def _bank_ids(settings: Mapping[str, str]) -> list[str]:
 
 
 def _refresh_button_pool(ids: list[str], settings: Mapping[str, str]) -> None:
-    """Refresh the fixed button palette while preserving bank order and uniqueness."""
-    global _BUTTON_EMOJI_IDS, _BUTTON_CURSOR
-    valid = [emoji_id for emoji_id in ids if settings.get(f"{PREFIX}alt:{emoji_id}")]
-    if valid != _BUTTON_EMOJI_IDS:
-        _BUTTON_EMOJI_IDS = valid
-        _BUTTON_CURSOR = 0
+    """Refresh the captured button palette while preserving bank order and uniqueness."""
+    global _BUTTON_EMOJI_IDS
+    _BUTTON_EMOJI_IDS = [
+        emoji_id
+        for emoji_id in ids
+        if settings.get(f"{PREFIX}alt:{emoji_id}")
+    ]
 
 
-def _next_button_emoji_id() -> str | None:
-    """Return the next captured button icon from the fixed palette."""
-    global _BUTTON_CURSOR
+def _button_slot(text: str | None, callback_data: str | None) -> str:
+    """Resolve a stable semantic slot from a button's action, never randomly."""
+    callback = callback_data or ""
+    action = callback.lower()
+    text_value = (text or "").lower()
+
+    exact = {
+        "pro:generate": "create",
+        "pro:plans": "plans",
+        "pro:credits": "design",
+        "pro:account": "brand",
+        "pro:help": "research",
+        "pro:payment": "plans",
+        "pro:terms": "warning",
+        "pro:support": "support",
+        "pro:home": "brand",
+        "adm:users": "medical",
+        "adm:overview": "research",
+        "adm:plans": "plans",
+        "adm:codes": "success",
+        "adm:credits": "design",
+        "adm:payments": "plans",
+        "adm:jobs": "ai",
+        "adm:broadcast": "support",
+        "adm:message": "support",
+        "adm:emoji": "design",
+        "adm:home": "brand",
+        "menu:generate": "create",
+        "menu:plans": "plans",
+        "menu:help": "research",
+        "menu:terms": "warning",
+        "menu:home": "brand",
+        "credits:terms": "warning",
+        "credits:menu": "design",
+    }
+    if action in exact:
+        return exact[action]
+
+    if action.startswith(("adm:user_toggle:", "adm:user_unban:")):
+        return "success"
+    if action.startswith("adm:user_ban:"):
+        return "warning"
+    if action.startswith(("adm:user_credit:", "credits:")):
+        return "design"
+    if action.startswith(("adm:user_message:", "adm:message:")):
+        return "support"
+    if action.startswith("stars:"):
+        return "plans"
+
+    keyword_slots = (
+        ("إنشاء", "create"),
+        ("شراء", "plans"),
+        ("خطة", "plans"),
+        ("اشتراك", "plans"),
+        ("دعم", "support"),
+        ("مساعدة", "support"),
+        ("بحث", "research"),
+        ("تحقق", "research"),
+        ("إدارة", "medical"),
+        ("مستخدم", "medical"),
+        ("دفع", "plans"),
+        ("رصيد", "design"),
+        ("حصة", "design"),
+        ("حظر", "warning"),
+        ("إيقاف", "warning"),
+        ("تفعيل", "success"),
+        ("عودة", "brand"),
+        ("الرئيسية", "brand"),
+    )
+    for keyword, slot in keyword_slots:
+        if keyword in text_value:
+            return slot
+    return "brand"
+
+
+def _stable_button_emoji_id(
+    settings: Mapping[str, str],
+    *,
+    text: str | None,
+    callback_data: str | None,
+) -> str | None:
+    """Select one fixed icon for a button from its semantic emoji family."""
     if not _BUTTON_EMOJI_IDS:
         return None
-    emoji_id = _BUTTON_EMOJI_IDS[_BUTTON_CURSOR % len(_BUTTON_EMOJI_IDS)]
-    _BUTTON_CURSOR = (_BUTTON_CURSOR + 1) % len(_BUTTON_EMOJI_IDS)
-    return emoji_id
+
+    slot = _button_slot(text, callback_data)
+    candidates = [
+        emoji_id
+        for emoji_id in _BUTTON_EMOJI_IDS
+        if settings.get(f"{PREFIX}slot:{emoji_id}") == slot
+    ]
+    if not candidates:
+        bound = settings.get(f"{PREFIX}{slot}")
+        if bound in _BUTTON_EMOJI_IDS:
+            candidates = [bound]
+    if not candidates:
+        candidates = list(_BUTTON_EMOJI_IDS)
+
+    identity = f"{slot}|{callback_data or ''}|{text or ''}".encode("utf-8")
+    digest = hashlib.sha256(identity).digest()
+    return candidates[int.from_bytes(digest[:8], "big") % len(candidates)]
 
 
 def _button_factory(*args: Any, **kwargs: Any) -> InlineKeyboardButton:
-    """Construct every inline button with a real Telegram custom-emoji icon."""
+    """Construct every inline button with a stable Telegram custom-emoji icon."""
     kwargs = dict(kwargs)
-    kwargs.setdefault("icon_custom_emoji_id", _next_button_emoji_id())
+    if kwargs.get("icon_custom_emoji_id") is None:
+        text = kwargs.get("text")
+        callback_data = kwargs.get("callback_data")
+        settings = _BUTTON_SETTINGS
+        kwargs["icon_custom_emoji_id"] = _stable_button_emoji_id(
+            settings,
+            text=text if isinstance(text, str) else None,
+            callback_data=callback_data if isinstance(callback_data, str) else None,
+        )
     return _ORIGINAL_INLINE_BUTTON(*args, **kwargs)
 
 
+_BUTTON_SETTINGS: dict[str, str] = {}
+
+
 def render(settings: dict[str, str], slot: str) -> str:
-    """Render a valid custom-emoji entity, selecting a contextual bank entry."""
+    """Render a valid custom-emoji entity using a deterministic contextual choice."""
     ids = _bank_ids(settings)
-    bound = settings.get(f"{PREFIX}{slot}")
     candidates = [
         emoji_id
         for emoji_id in ids
         if settings.get(f"{PREFIX}slot:{emoji_id}") == slot
         and settings.get(f"{PREFIX}alt:{emoji_id}")
     ]
-    if bound and settings.get(f"{PREFIX}alt:{bound}"):
-        emoji_id = bound
-    elif candidates:
-        index = sum(ord(char) for char in slot) % len(candidates)
-        emoji_id = candidates[index]
-    else:
-        valid_ids = [
+    if not candidates:
+        bound = settings.get(f"{PREFIX}{slot}")
+        if bound and settings.get(f"{PREFIX}alt:{bound}"):
+            candidates = [bound]
+    if not candidates:
+        candidates = [
             emoji_id
             for emoji_id in ids
             if settings.get(f"{PREFIX}alt:{emoji_id}")
         ]
-        if not valid_ids:
-            return ""
-        index = sum(ord(char) for char in slot) % len(valid_ids)
-        emoji_id = valid_ids[index]
+    if not candidates:
+        return ""
+
+    index = int.from_bytes(
+        hashlib.sha256(slot.encode("utf-8")).digest()[:8],
+        "big",
+    ) % len(candidates)
+    emoji_id = candidates[index]
     alt = settings.get(f"{PREFIX}alt:{emoji_id}")
     return f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>' if alt else ""
 
 
 def patch_modules() -> None:
-    """Install the shared message renderer and Premium Emoji button factory."""
+    """Install the shared message renderer and deterministic button factory."""
     from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
 
     for module in (admin_ui, payments, professional_ui, router):
@@ -165,6 +272,19 @@ def patch_modules() -> None:
     professional_ui._emoji_settings = emoji_settings
     professional_ui._emoji = render
     progress._emoji = render
+
+    # The first settings load populates the shared button palette. Until then,
+    # buttons safely fall back to their normal Telegram representation.
+    original_emoji_settings = emoji_settings
+
+    async def _load_button_settings(session: AsyncSession) -> dict[str, str]:
+        settings = await original_emoji_settings(session)
+        _BUTTON_SETTINGS.clear()
+        _BUTTON_SETTINGS.update(settings)
+        return settings
+
+    admin_ui._emoji_settings = _load_button_settings
+    professional_ui._emoji_settings = _load_button_settings
 
 
 __all__ = ["emoji_settings", "render", "patch_modules"]
