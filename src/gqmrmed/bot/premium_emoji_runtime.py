@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Mapping
 from typing import Any
 
-from aiogram import BaseMiddleware
-from aiogram.types import InlineKeyboardButton, TelegramObject
+from aiogram.types import InlineKeyboardButton
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -242,21 +241,6 @@ def render(settings: dict[str, str], slot: str) -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>' if alt else ""
 
 
-class PremiumEmojiMiddleware(BaseMiddleware):
-    """Load the shared emoji palette before every handler that can build a UI."""
-
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: dict[str, Any],
-    ) -> Any:
-        session = data.get("session")
-        if isinstance(session, AsyncSession):
-            await emoji_settings(session)
-        return await handler(event, data)
-
-
 def patch_modules() -> None:
     """Install the shared renderer and deterministic button factory."""
     from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
@@ -270,9 +254,4 @@ def patch_modules() -> None:
     progress._emoji = render
 
 
-__all__ = [
-    "PremiumEmojiMiddleware",
-    "emoji_settings",
-    "patch_modules",
-    "render",
-]
+__all__ = ["emoji_settings", "patch_modules", "render"]
