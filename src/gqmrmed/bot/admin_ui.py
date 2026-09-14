@@ -319,7 +319,6 @@ async def admin_plan_toggle(callback: CallbackQuery, session: AsyncSession) -> N
         return
     plan.is_active = not plan.is_active
     await session.commit()
-    await callback.answer("تم تحديث الخطة.")
     await admin_plans(callback, session)
 
 
@@ -352,7 +351,7 @@ async def admin_create_code(callback: CallbackQuery, session: AsyncSession) -> N
     if plan is None:
         await callback.answer("الخطة غير موجودة.", show_alert=True)
         return
-    _, plaintext = await create_activation_code(session, plan=plan, duration_days=int(days_raw), created_by=None)
+    _, plaintext = await create_activation_code(session, plan=plan, duration_days=int(days_raw))
     await session.commit()
     e = await _emoji_settings(session)
     if isinstance(callback.message, Message):
