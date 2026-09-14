@@ -176,7 +176,7 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     input_mime_type: Mapped[str | None] = mapped_column(String(128))
     input_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16), default=JobStatus.QUEUED, nullable=False)
-    stage: Mapped[str | None] = mapped_column(String(64))
+    stage: Mapped[str | None] = mapped_column("current_stage", String(64))
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
