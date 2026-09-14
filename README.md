@@ -7,7 +7,7 @@ GQMRMed is an independent Telegram medical infographic generation system.
 - Fully independent from QMRMed and QMRMed-Bot.
 - No Telegram Mini App.
 - Separate backend, database, queue, AI/image pipeline, storage, subscriptions, payments, and admin panel.
-- The Telegram bot accepts medical topics, text, images, and supported files and produces original 9:16 medical infographics.
+- The Telegram bot accepts medical topics, text, images, and supported files and produces original **1080×1350 (4:5)** medical infographics.
 
 ## Core architecture
 
@@ -61,7 +61,7 @@ Telegram User
 - AI synthesis is provider-neutral, with local Ollama first and configured free external providers next. Paid providers remain disabled unless explicitly enabled.
 - Visual architecture is selected deterministically from the medical topic and synthesized content.
 - Illustration generation and exact text rendering are explicitly separated: the image model receives an illustration-only prompt while exact labels/text remain a renderer responsibility.
-- Final artwork is rasterized to a deterministic 1080×1920 PNG for Telegram delivery.
+- Final artwork is rasterized to a deterministic **1080×1350 PNG (4:5)** for Telegram delivery.
 
 ## Media ingestion
 
@@ -110,12 +110,12 @@ Activation codes are intended for operator-controlled grants and other approved 
 - Queue: Redis
 - Medical research: NCBI PubMed E-utilities
 - Medical synthesis: provider abstraction + Ollama/OpenAI-compatible/OpenAI adapters
-- AI/image pipeline: ComfyUI API adapter, ready for a configured FLUX.2 Klein workflow
+- AI/image pipeline: ComfyUI API adapter plus deterministic procedural fallback
 - Exact layout: SVG renderer + CairoSVG rasterization
 - Storage: filesystem result adapter for local/dev operation; S3-compatible object storage adapter for durable production results
 - Media: Telegram download + local document extraction + optional AI OCR/transcription + FFmpeg
 - Deployment: Docker + managed application hosting
-- Quality: Ruff, MyPy, Pytest, migration validation, production container build validation
+- Quality: Ruff, MyPy, Pytest, migration validation, production Compose validation, production container build validation
 
 ## Build stages
 
@@ -123,17 +123,17 @@ Activation codes are intended for operator-controlled grants and other approved 
 2. Core system foundation — complete
 3. Telegram bot + user onboarding + usage enforcement — implemented
 4. Research, verification, synthesis, and visual architecture — implemented
-5. Image generation + exact-text renderer — wired
+5. Image generation + exact-text renderer — implemented
 6. Queue, live progress, heartbeat recovery, media ingestion, and durable Telegram delivery — implemented
 7. Subscriptions, activation, Telegram Stars payments, immutable billing audit, and private admin panel — implemented
-8. End-to-end testing, deployment, hardening, monitoring, and release — in progress
+8. End-to-end testing, deployment, hardening, monitoring, and release — CI validation in progress
 
-## Current status
+## Current release boundary
 
-The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, a ComfyUI illustration is generated, exact SVG text is composed, the final artwork is rasterized to PNG, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
+The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, an illustration is generated, exact SVG text is composed, the final artwork is rasterized to a **1080×1350 PNG**, quality-checked, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-Subscription entitlements, activation codes, Telegram Stars checkout, payment replay protection, idempotent usage reservations, immutable billing audit, and the private admin API/panel are implemented. The launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days.
+Subscription entitlements, activation codes, Telegram Stars checkout, payment replay protection, idempotent usage reservations, immutable billing audit, and the private admin API/panel are implemented. Launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days.
 
-The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete FLUX.2 Klein API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
+The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
 
-CI is the source of truth for static typing, linting, migrations, package resolution, automated tests, and production container buildability after each push. Passing CI does not replace an end-to-end staging smoke test against the real external services.
+CI is the source of truth for static typing, linting, migrations, package resolution, automated tests, production Compose validation, and production container buildability after each push. Passing CI does not replace an end-to-end staging smoke test against real external services.
