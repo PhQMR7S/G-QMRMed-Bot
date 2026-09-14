@@ -1,5 +1,6 @@
 """Telegram Stars checkout handlers for subscriptions and design-credit packs."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -41,7 +42,7 @@ def _terms_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def _credit_keyboard(packs: list[CreditPack]) -> InlineKeyboardMarkup:
+def _credit_keyboard(packs: Sequence[CreditPack]) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(text=f"{pack.credits} تصاميم · {pack.stars_price} ⭐", callback_data=f"credits:{pack.code}")]
         for pack in packs
