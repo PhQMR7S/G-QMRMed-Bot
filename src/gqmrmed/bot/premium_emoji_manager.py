@@ -1,4 +1,5 @@
 """Owner-only visual manager for the captured Telegram Premium Emoji library."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
