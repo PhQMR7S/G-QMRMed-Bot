@@ -19,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="GQMRMed Telegram Bot Service")
 _bot_task: asyncio.Task[None] | None = None
-_lock_heartbeat_task: asyncio.Task[None] | None = None
-_polling_lock: Redis | None = None
-_lock_token: str | None = None
 
 POLLING_LOCK_KEY = "gqmrmed:telegram:polling-lock"
 POLLING_LOCK_TTL_SECONDS = 120
@@ -47,26 +44,30 @@ async def _release_lock(redis: Redis, token: str) -> None:
     )
 
 
-async def _heartbeat(redis: Redis, token: str) -> None:
-    try:
-        while True:
-            await asyncio.sleep(POLLING_LOCK_HEARTBEAT_SECONDS)
-            refreshed = await redis.eval(
-                """
-                if redis.call('get', KEYS[1]) == ARGV[1] then
-                    return redis.call('expire', KEYS[1], ARGV[2])
-                end
-                return 0
-                """,
-                1,
-                POLLING_LOCK_KEY,
-                token,
-                str(POLLING_LOCK_TTL_SECONDS),
+async def _heartbeat(redis: Redis, token: str, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(
+                stop_event.wait(), timeout=POLLING_LOCK_HEARTBEAT_SECONDS
             )
-            if not refreshed:
-                raise RuntimeError("Telegram polling lock was lost")
-    except asyncio.CancelledError:
-        raise
+            return
+        except TimeoutError:
+            pass
+
+        refreshed = await redis.eval(
+            """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('expire', KEYS[1], ARGV[2])
+            end
+            return 0
+            """,
+            1,
+            POLLING_LOCK_KEY,
+            token,
+            str(POLLING_LOCK_TTL_SECONDS),
+        )
+        if not refreshed:
+            raise RuntimeError("Telegram polling lock was lost")
 
 
 async def _acquire_polling_lock(redis: Redis, token: str) -> None:
@@ -84,7 +85,6 @@ async def _acquire_polling_lock(redis: Redis, token: str) -> None:
 
 
 async def _run_bot_with_lock() -> None:
-    global _lock_heartbeat_task, _polling_lock, _lock_token
     settings = get_settings()
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required to run the Telegram bot")
@@ -93,16 +93,18 @@ async def _run_bot_with_lock() -> None:
 
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     token = uuid.uuid4().hex
-    _polling_lock = redis
-    _lock_token = token
+    lock_stop = asyncio.Event()
+    heartbeat_task: asyncio.Task[None] | None = None
+    bot_task: asyncio.Task[None] | None = None
 
     try:
         await _acquire_polling_lock(redis, token)
         logger.info("telegram_polling_lock_acquired")
-        _lock_heartbeat_task = asyncio.create_task(_heartbeat(redis, token))
+        heartbeat_task = asyncio.create_task(_heartbeat(redis, token, lock_stop))
         bot_task = asyncio.create_task(run_bot())
+
         done, _ = await asyncio.wait(
-            {bot_task, _lock_heartbeat_task},
+            {bot_task, heartbeat_task},
             return_when=asyncio.FIRST_EXCEPTION,
         )
         for task in done:
@@ -111,10 +113,17 @@ async def _run_bot_with_lock() -> None:
                 raise exception
         await bot_task
     finally:
-        if _lock_heartbeat_task is not None and not _lock_heartbeat_task.done():
-            _lock_heartbeat_task.cancel()
+        lock_stop.set()
+        if heartbeat_task is not None and not heartbeat_task.done():
+            heartbeat_task.cancel()
             try:
-                await _lock_heartbeat_task
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        if bot_task is not None and not bot_task.done():
+            bot_task.cancel()
+            try:
+                await bot_task
             except asyncio.CancelledError:
                 pass
         try:
@@ -122,9 +131,6 @@ async def _run_bot_with_lock() -> None:
         finally:
             logger.info("telegram_polling_lock_released")
             await redis.aclose()
-            _lock_heartbeat_task = None
-            _polling_lock = None
-            _lock_token = None
 
 
 @app.on_event("startup")
