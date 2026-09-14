@@ -69,7 +69,8 @@ def render_infographic_page(
     card_w = cfg.width - outer * 2
     card_h = cfg.height - card_y - 44
     title = _compact(page.title, 80)
-    body = _usable_blocks(page.blocks[1:])
+    source_body = page.blocks[1:]
+    body = _usable_blocks(source_body)
     if not body:
         raise ValueError("infographic_body_required")
 
@@ -101,38 +102,43 @@ def render_infographic_page(
         )
     )
     title_lines = _wrap(title, 24 if rtl else 30)
-    svg.append(
-        _text(
-            title,
-            cfg.width - outer - 30 if rtl else outer + 30,
-            card_y + 125,
-            anchor=anchor,
-            direction=direction,
-            size=52 if len(title_lines) == 1 else 44,
-            weight=800,
-            fill=cfg.ink,
+    title_size = 52 if len(title_lines) == 1 else 44
+    for index, line in enumerate(title_lines[:2]):
+        svg.append(
+            _text(
+                line,
+                cfg.width - outer - 30 if rtl else outer + 30,
+                card_y + 125 + index * (title_size + 4),
+                anchor=anchor,
+                direction=direction,
+                size=title_size,
+                weight=800,
+                fill=cfg.ink,
+            )
         )
+
+    subtitle = (
+        "تثقيف طبي موثوق • مبني على الأدلة"
+        if rtl
+        else "Evidence-led medical education"
     )
-    subtitle = _first_non_internal(page.sections)
-    if not subtitle:
-        subtitle = "تثقيف طبي موثوق" if rtl else "Evidence-led medical education"
     svg.append(
         _text(
-            _compact(subtitle, 62),
+            subtitle,
             cfg.width - outer - 30 if rtl else outer + 30,
-            card_y + 168,
+            card_y + 182,
             anchor=anchor,
             direction=direction,
-            size=20,
+            size=19,
             weight=500,
             fill=cfg.muted,
         )
     )
 
     image_x = card_x + 28
-    image_y = card_y + 196
+    image_y = card_y + 214
     image_w = card_w - 56
-    image_h = 370
+    image_h = 348
     svg.append(
         _image_frame(
             image_x,
@@ -145,8 +151,10 @@ def render_infographic_page(
     )
     svg.append(_image_badge(image_x + 20, image_y + 20, cfg))
 
-    body_y = image_y + image_h + 28
-    body_h = card_y + card_h - body_y - 82
+    body_y = image_y + image_h + 24
+    disclaimer = _disclaimer(source_body)
+    footer_space = 54 if disclaimer else 26
+    body_h = card_y + card_h - body_y - footer_space
     _render_content_grid(
         svg,
         body,
@@ -159,21 +167,20 @@ def render_infographic_page(
         template=spec.template,
     )
 
-    disclaimer = _disclaimer(body, rtl)
     if disclaimer:
         svg.append(
             _text(
                 _compact(disclaimer, 96),
                 cfg.width / 2,
-                card_y + card_h - 28,
+                card_y + card_h - 30,
                 anchor="middle",
                 direction=direction,
-                size=15,
+                size=14,
                 weight=500,
                 fill=cfg.muted,
             )
         )
-    svg.append(_watermark(cfg, card_x, card_y, card_w, card_h, rtl))
+    svg.append(_watermark(cfg, card_x, card_y, card_w, card_h))
     svg.append("</svg>")
     rendered = cairosvg.svg2png(
         bytestring="".join(svg).encode("utf-8"),
@@ -285,7 +292,16 @@ def _image_frame(
 
 
 def _image_badge(x: float, y: float, cfg: RenderConfig) -> str:
-    return _pill(x, y, 142, 38, "#FFFFFF", "VISUAL", cfg.navy, opacity=0.88)
+    return _pill(
+        x,
+        y,
+        142,
+        38,
+        cfg.white,
+        "VISUAL",
+        cfg.navy,
+        opacity=0.88,
+    )
 
 
 def _watermark(
@@ -294,9 +310,7 @@ def _watermark(
     y: float,
     width: float,
     height: float,
-    rtl: bool,
 ) -> str:
-    del rtl
     wx = x + width - 190
     wy = y + height - 54
     return (
@@ -461,7 +475,12 @@ def _fit_lines(text: str, max_chars: int, *, max_lines: int) -> list[str]:
 
 
 def _usable_blocks(blocks: list[TextBlock]) -> list[TextBlock]:
-    return [block for block in blocks if not _is_internal_artifact(block.text)][:6]
+    return [
+        block
+        for block in blocks
+        if not _is_internal_artifact(block.text)
+        and not _is_disclaimer(block.text)
+    ][:6]
 
 
 def _is_internal_artifact(text: str) -> bool:
@@ -479,6 +498,11 @@ def _is_internal_artifact(text: str) -> bool:
     return any(marker in value for marker in markers)
 
 
+def _is_disclaimer(text: str) -> bool:
+    value = text.lower()
+    return "ليست تشخيص" in text or "ليست تشخيصاً" in text or "not a diagnosis" in value
+
+
 def _first_non_internal(values: list[str]) -> str:
     for value in values:
         if value and not _is_internal_artifact(value):
@@ -486,13 +510,9 @@ def _first_non_internal(values: list[str]) -> str:
     return ""
 
 
-def _disclaimer(blocks: list[TextBlock], rtl: bool) -> str:
-    del rtl
+def _disclaimer(blocks: list[TextBlock]) -> str:
     for block in blocks:
-        value = block.text.lower()
-        if "ليست تشخيص" in block.text or "ليست تشخيصاً" in block.text:
-            return block.text
-        if "not a diagnosis" in value:
+        if _is_disclaimer(block.text):
             return block.text
     return ""
 
