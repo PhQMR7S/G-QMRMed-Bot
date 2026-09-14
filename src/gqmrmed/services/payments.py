@@ -63,6 +63,7 @@ async def create_payment(
     if plan is not None and _plan_code(plan) == PlanCode.FREE.value:
         raise ValueError("invalid_payment_amount")
     if provider == "telegram_stars":
+        expected: int | None
         if plan is None:
             assert credit_pack is not None
             expected = credit_pack.stars_price
