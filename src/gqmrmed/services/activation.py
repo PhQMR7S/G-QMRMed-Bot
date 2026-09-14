@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from secrets import choice
-from uuid import UUID
 
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
