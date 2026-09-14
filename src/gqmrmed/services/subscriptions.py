@@ -197,7 +197,7 @@ async def activate_code(
         duration_days=duration,
     )
     code.status = ActivationCodeStatus.ACTIVATED.value
-    code.activated_by = user_id
+    code.activated_by_user_id = user_id
     code.activated_at = now
     await session.flush()
     return subscription
