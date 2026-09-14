@@ -20,6 +20,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "structlog>=25,<26",
   "cairosvg>=2.7,<3",
+  "Pillow>=12,<13",
   "pypdf>=6,<7",
   "boto3>=1.35,<2",
   "huggingface_hub>=0.35,<1",
