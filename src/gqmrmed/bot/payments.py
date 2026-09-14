@@ -6,18 +6,30 @@ from uuid import uuid4
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message, PreCheckoutQuery
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LabeledPrice,
+    Message,
+    PreCheckoutQuery,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import provision_user
 from gqmrmed.db.models import CreditPack, PaymentStatus, Plan, PlanCode, User
-from gqmrmed.services.payments import create_stars_credit_payment, create_stars_payment, finalize_stars_payment, get_payment_by_invoice_payload
+from gqmrmed.services.payments import (
+    create_stars_credit_payment,
+    create_stars_payment,
+    finalize_stars_payment,
+    get_payment_by_invoice_payload,
+)
 
 router = Router(name="gqmrmed-payments")
 
 TERMS_TEXT = (
-    "شروط شراء GQMRMed 🩺\n\n"
+    "شروط شراء GQMRMed\n\n"
     "1) الخدمة رقمية، وجميع المشتريات داخل Telegram تتم حصراً عبر Telegram Stars (XTR).\n"
     "2) الاشتراك أو حصة التصاميم لا تُمنح إلا بعد استلام successful_payment والتحقق منه على الخادم.\n"
     "3) FREE = 3 تصاميم يومياً، PLUS = 8، PRO = 15.\n"
@@ -44,10 +56,15 @@ def _terms_keyboard() -> InlineKeyboardMarkup:
 
 def _credit_keyboard(packs: Sequence[CreditPack]) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text=f"{pack.credits} تصاميم · {pack.stars_price} ⭐", callback_data=f"credits:{pack.code}")]
+        [
+            InlineKeyboardButton(
+                text=f"{pack.credits} تصاميم · {pack.stars_price} Stars",
+                callback_data=f"credits:{pack.code}",
+            )
+        ]
         for pack in packs
     ]
-    rows.append([InlineKeyboardButton(text="‹ الشروط", callback_data="credits:terms")])
+    rows.append([InlineKeyboardButton(text="الشروط", callback_data="credits:terms")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -63,14 +80,17 @@ async def credits_handler(message: Message, session: AsyncSession) -> None:
     )
     packs = result.scalars().all()
     lines = [
-        "✦ <b>حصص التصميم</b>",
+        "حصص التصميم",
         "\nاشترِ رصيد تصاميم إضافياً بدون اشتراك.",
         "الرصيد لا يستبدل الخطة؛ ويُستخدم بعد استنفاد الحصة اليومية المتاحة.",
         "",
     ]
     for pack in packs:
         per_design = pack.stars_price / pack.credits
-        lines.append(f"<b>{pack.name}</b> · {pack.credits} تصاميم · {pack.stars_price} ⭐ · {per_design:.2f} ⭐/تصميم")
+        lines.append(
+            f"<b>{pack.name}</b> · {pack.credits} تصاميم · "
+            f"{pack.stars_price} Stars · {per_design:.2f} Stars/تصميم"
+        )
     lines.append("\nاستخدم /terms للموافقة ثم اختر الحصة.")
     await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=_credit_keyboard(packs))
 
@@ -93,7 +113,7 @@ async def credit_menu_callback(callback: CallbackQuery, session: AsyncSession) -
     )
     packs = result.scalars().all()
     await callback.message.edit_text(
-        "✦ <b>حصص التصميم الإضافية</b>\n\nاختر الحصة التي تريد شراءها:",
+        "<b>حصص التصميم الإضافية</b>\n\nاختر الحصة التي تريد شراءها:",
         parse_mode="HTML",
         reply_markup=_credit_keyboard(packs),
     )
@@ -234,13 +254,13 @@ async def successful_payment_handler(message: Message, session: AsyncSession) ->
 
     if payment.credit_pack_id is not None:
         await message.answer(
-            "تم شراء حصة التصاميم بنجاح ✅\n"
+            "تم شراء حصة التصاميم بنجاح.\n"
             f"تمت إضافة الرصيد إلى حسابك. رقم العملية: {payment.transaction_id}\n"
             "سيُستخدم الرصيد تلقائياً بعد استنفاد الحصة اليومية المتاحة."
         )
     else:
         await message.answer(
-            "تم استلام الدفع وتفعيل الاشتراك بنجاح ✅\n"
+            "تم استلام الدفع وتفعيل الاشتراك بنجاح.\n"
             f"رقم العملية: {payment.transaction_id}\n"
             "يمكنك الآن البدء بإرسال طلبات التصميم."
         )
