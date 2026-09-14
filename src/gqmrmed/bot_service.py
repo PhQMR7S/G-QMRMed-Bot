@@ -34,7 +34,7 @@ async def startup() -> None:
             return
         exc = task.exception()
         if exc is not None:
-            logger.exception("telegram_bot_service_failed", exc_info=exc)
+            logger.error("telegram_bot_service_failed: %s", exc)
 
     _bot_task.add_done_callback(report_failure)
     logger.info("telegram_bot_service_started")
@@ -45,7 +45,9 @@ async def shutdown() -> None:
     global _bot_task
     if _bot_task is not None and not _bot_task.done():
         _bot_task.cancel()
-        with asyncio.CancelledError:
+        try:
+            await _bot_task
+        except asyncio.CancelledError:
             pass
     _bot_task = None
 
