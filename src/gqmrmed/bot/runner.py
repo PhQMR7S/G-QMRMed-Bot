@@ -12,6 +12,7 @@ from gqmrmed.bot.middleware import DbSessionMiddleware
 from gqmrmed.bot.payments import router as payments_router
 from gqmrmed.bot.premium_emoji_registry import router as premium_emoji_router
 from gqmrmed.bot.premium_emoji_runtime import (
+    PremiumEmojiMiddleware,
     patch_modules as patch_premium_emoji_modules,
 )
 from gqmrmed.bot.professional_ui import router as professional_ui_router
@@ -31,17 +32,34 @@ async def run_bot() -> None:
     bot = Bot(token=settings.telegram_bot_token)
     dispatcher = Dispatcher()
     session_middleware = DbSessionMiddleware()
+    emoji_middleware = PremiumEmojiMiddleware()
     admin_router.message.middleware(session_middleware)
     admin_router.callback_query.middleware(session_middleware)
-    professional_ui_router.message.middleware(session_middleware)
-    professional_ui_router.callback_query.middleware(session_middleware)
     premium_emoji_router.message.middleware(session_middleware)
     premium_emoji_router.callback_query.middleware(session_middleware)
+    professional_ui_router.message.middleware(session_middleware)
+    professional_ui_router.callback_query.middleware(session_middleware)
     router.message.middleware(session_middleware)
     router.callback_query.middleware(session_middleware)
     payments_router.message.middleware(session_middleware)
     payments_router.callback_query.middleware(session_middleware)
     payments_router.pre_checkout_query.middleware(session_middleware)
+
+    for event_observer in (
+        admin_router.message,
+        admin_router.callback_query,
+        premium_emoji_router.message,
+        premium_emoji_router.callback_query,
+        professional_ui_router.message,
+        professional_ui_router.callback_query,
+        router.message,
+        router.callback_query,
+        payments_router.message,
+        payments_router.callback_query,
+        payments_router.pre_checkout_query,
+    ):
+        event_observer.middleware(emoji_middleware)
+
     dispatcher.include_router(admin_router)
     dispatcher.include_router(premium_emoji_router)
     dispatcher.include_router(professional_ui_router)
