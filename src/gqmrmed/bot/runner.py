@@ -11,6 +11,9 @@ from gqmrmed.bot.dispatcher import GenerationDispatcher
 from gqmrmed.bot.middleware import DbSessionMiddleware
 from gqmrmed.bot.payments import router as payments_router
 from gqmrmed.bot.premium_emoji_registry import router as premium_emoji_router
+from gqmrmed.bot.premium_emoji_runtime import (
+    patch_modules as patch_premium_emoji_modules,
+)
 from gqmrmed.bot.professional_ui import router as professional_ui_router
 from gqmrmed.bot.router import router
 from gqmrmed.config import get_settings
@@ -24,6 +27,7 @@ async def run_bot() -> None:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required to run the Telegram bot")
 
+    patch_premium_emoji_modules()
     bot = Bot(token=settings.telegram_bot_token)
     dispatcher = Dispatcher()
     session_middleware = DbSessionMiddleware()
