@@ -44,7 +44,7 @@ async def test_s3_result_store_round_trip(monkeypatch: pytest.MonkeyPatch) -> No
         region="auto",
     )
     job_id = uuid4()
-    image = GeneratedIllustration(image_bytes=b"png-data", width=1080, height=1920)
+    image = GeneratedIllustration(image_bytes=b"png-data", width=1080, height=1350)
 
     stored = await store.put(job_id=job_id, image=image)
     loaded = await store.load(stored.storage_key)
