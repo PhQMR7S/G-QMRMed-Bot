@@ -171,7 +171,13 @@ def build_design_spec(
         blocks.append(TextBlock(text=_compact(point, 240), role="point", importance=3))
     for claim in content.claims:
         importance = 4 if claim.critical else 3
-        blocks.append(TextBlock(text=_compact(claim.text, 360), role="claim", importance=importance))
+        blocks.append(
+            TextBlock(
+                text=_compact(claim.text, 360),
+                role="claim",
+                importance=importance,
+            )
+        )
     for caution in content.cautions:
         blocks.append(TextBlock(text=_compact(caution, 240), role="caution", importance=5))
 
