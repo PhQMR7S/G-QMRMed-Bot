@@ -4,8 +4,10 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 
+from gqmrmed.bot.activation_ui import router as activation_router
 from gqmrmed.bot.admin_ui import router as admin_router
 from gqmrmed.bot.dispatcher import GenerationDispatcher
 from gqmrmed.bot.middleware import DbSessionMiddleware
@@ -30,8 +32,11 @@ async def run_bot() -> None:
 
     patch_premium_emoji_modules()
     bot = Bot(token=settings.telegram_bot_token)
-    dispatcher = Dispatcher()
+    storage = RedisStorage.from_url(settings.redis_url)
+    dispatcher = Dispatcher(storage=storage)
     session_middleware = DbSessionMiddleware()
+    activation_router.message.middleware(session_middleware)
+    activation_router.callback_query.middleware(session_middleware)
     admin_router.message.middleware(session_middleware)
     admin_router.callback_query.middleware(session_middleware)
     premium_emoji_manager_router.message.middleware(session_middleware)
@@ -50,6 +55,7 @@ async def run_bot() -> None:
     dispatcher.include_router(premium_emoji_manager_router)
     dispatcher.include_router(admin_router)
     dispatcher.include_router(premium_emoji_router)
+    dispatcher.include_router(activation_router)
     dispatcher.include_router(professional_ui_router)
     dispatcher.include_router(payments_router)
     dispatcher.include_router(router)
@@ -65,6 +71,7 @@ async def run_bot() -> None:
     finally:
         stop_event.set()
         await dispatch_task
+        await storage.close()
         await redis.aclose()
         await bot.session.close()
 
