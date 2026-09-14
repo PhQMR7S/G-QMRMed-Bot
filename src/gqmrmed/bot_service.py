@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="GQMRMed Telegram Bot Service")
 _bot_task: asyncio.Task[None] | None = None
 
-POLLING_LOCK_KEY = "gqmrmed:telegram:polling-lock"
-POLLING_LOCK_TTL_SECONDS = 120
-POLLING_LOCK_HEARTBEAT_SECONDS = 30
+POLLING_LOCK_KEY = "gqmrmed:telegram:polling-lock:v2"
+POLLING_LOCK_TTL_SECONDS = 60
+POLLING_LOCK_HEARTBEAT_SECONDS = 15
 
 
 @app.get("/health")
@@ -89,7 +89,7 @@ async def _acquire_polling_lock(redis: Redis, token: str) -> None:
         if acquired:
             return
         logger.warning("telegram_polling_lock_busy; waiting for active instance")
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
 
 
 async def _run_bot_with_lock() -> None:
