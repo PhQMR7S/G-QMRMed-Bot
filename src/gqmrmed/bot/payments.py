@@ -17,6 +17,7 @@ from aiogram.types import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from gqmrmed.bot.premium_emoji_runtime import emoji_settings
 from gqmrmed.bot.service import provision_user
 from gqmrmed.db.models import CreditPack, PaymentStatus, Plan, PlanCode, User
 from gqmrmed.services.payments import (
@@ -69,12 +70,14 @@ def _credit_keyboard(packs: Sequence[CreditPack]) -> InlineKeyboardMarkup:
 
 
 @router.message(Command("terms"))
-async def terms_handler(message: Message) -> None:
+async def terms_handler(message: Message, session: AsyncSession) -> None:
+    await emoji_settings(session)
     await message.answer(TERMS_TEXT, reply_markup=_terms_keyboard())
 
 
 @router.message(Command("credits"))
 async def credits_handler(message: Message, session: AsyncSession) -> None:
+    await emoji_settings(session)
     result = await session.execute(
         select(CreditPack).where(CreditPack.is_active.is_(True)).order_by(CreditPack.stars_price.asc())
     )
@@ -105,6 +108,7 @@ async def payment_support_handler(message: Message) -> None:
 
 @router.callback_query(F.data == "credits:menu")
 async def credit_menu_callback(callback: CallbackQuery, session: AsyncSession) -> None:
+    await emoji_settings(session)
     if not isinstance(callback.message, Message):
         await callback.answer("تعذر عرض الحصص.", show_alert=True)
         return
@@ -121,7 +125,8 @@ async def credit_menu_callback(callback: CallbackQuery, session: AsyncSession) -
 
 
 @router.callback_query(F.data == "credits:terms")
-async def credit_terms_callback(callback: CallbackQuery) -> None:
+async def credit_terms_callback(callback: CallbackQuery, session: AsyncSession) -> None:
+    await emoji_settings(session)
     if isinstance(callback.message, Message):
         await callback.message.edit_text(TERMS_TEXT, reply_markup=_terms_keyboard())
     await callback.answer()
