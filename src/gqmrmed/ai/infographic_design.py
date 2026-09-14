@@ -107,7 +107,8 @@ TEMPLATE_HINTS: dict[TemplateFamily, str] = {
         "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks."
     ),
     TemplateFamily.SYMPTOMS: (
-        "Use grouped symptom clusters with a clear hierarchy and warning strip only when evidence supports it."
+        "Use grouped symptom clusters with a clear hierarchy and warning strip only when "
+        "evidence supports it."
     ),
     TemplateFamily.ANATOMY: (
         "Use a central anatomical illustration with concise callout cards."
