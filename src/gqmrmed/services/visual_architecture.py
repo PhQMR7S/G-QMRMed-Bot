@@ -63,6 +63,27 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
 )
 
+_REFERENCE_LANGUAGE = """
+QMRMed reference-driven visual language: premium editorial medical infographic.
+Match the supplied reference images as closely as possible at the level of visual
+system, not their protected or topic-specific content: clean 4:5 composition,
+strong title area, rounded modular cards, soft clinical pastel accents, subtle
+blue/teal/lavender gradients, precise grid alignment, generous whitespace,
+clear information hierarchy, restrained shadows, topic-specific clinical
+illustration, concise labels, comparison panels when appropriate, and clean
+educational diagrams. The layout must adapt to the topic instead of forcing one
+rigid template. Use red only for clinically meaningful warnings, green for
+favorable/treatment states, blue/teal for information and mechanisms, purple for
+secondary grouping, and amber for caution. Never add decorative medical objects
+that are unrelated to the requested topic.
+
+Artwork is illustration-only. Never render readable text, labels, numbers,
+doses, drug names, logos, watermarks, signatures, citations, or invented facts
+inside the artwork. Leave intentional clean regions for deterministic text
+composition. The final image must contain only evidence-locked content supplied
+by the renderer.
+""".strip()
+
 
 def select_visual_architecture(
     *,
@@ -95,14 +116,18 @@ def select_visual_architecture(
         sections = ["central concept", "mechanisms", "clinical manifestations", "key takeaways"]
 
     prompt = (
-        "Medical infographic illustration only: "
-        f"{content.title}. Architecture={architecture.value}. "
-        "Create clean medically accurate vector-style anatomy or symbolic diagrams, "
-        "anonymous figures only, no readable text, no labels, no invented measurements. "
-        "Leave clear areas for exact text overlays."
+        _REFERENCE_LANGUAGE
+        + "\n\nMedical topic: "
+        + content.title
+        + f"\nArchitecture: {architecture.value}."
+        + "\nCreate medically appropriate vector-style anatomy or symbolic diagrams, "
+        "anonymous figures only, with no readable text or labels. Preserve clear "
+        "negative space for exact text overlays and do not place the main artwork "
+        "over the footer branding safe zone."
     )
     return VisualPlan(
         architecture=architecture,
+        aspect_ratio="4:5",
         sections=sections,
         emphasis=emphasis,
         illustration_prompt=prompt,

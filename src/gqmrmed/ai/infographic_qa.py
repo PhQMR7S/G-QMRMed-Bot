@@ -22,12 +22,16 @@ class InfographicQAError(ValueError):
 
 
 def validate_design_spec(spec: InfographicDesignSpec) -> None:
-    """Reject visible content that leaks metadata or breaks composition rules."""
-    if not spec.pages:
-        raise InfographicQAError("infographic_has_no_pages")
+    """Reject metadata leaks, multi-page output, and composition violations."""
+    if len(spec.pages) != 1:
+        raise InfographicQAError("single_image_requires_exactly_one_page")
+    if spec.aspect_ratio != "4:5":
+        raise InfographicQAError("single_image_requires_4_5_ratio")
     if spec.branding.telegram_handle != "QMR7S":
         raise InfographicQAError("unexpected_branding_handle")
     for page in spec.pages:
+        if page.page_number != 1:
+            raise InfographicQAError("single_image_page_number_invalid")
         if not page.blocks:
             raise InfographicQAError("infographic_page_has_no_content")
         for block in page.blocks:
