@@ -57,6 +57,7 @@ order-by-type = false
 "src/gqmrmed/services/payments.py" = ["E501", "I001"]
 "src/gqmrmed/services/credits.py" = ["E501", "I001"]
 "src/gqmrmed/services/runtime.py" = ["E501", "I001"]
+"src/gqmrmed/generation/providers.py" = ["E501"]
 "src/gqmrmed/ai/evidence_fallback.py" = ["E501"]
 "src/gqmrmed/bot/router.py" = ["E501"]
 "src/gqmrmed/bot/payments.py" = ["E501", "I001"]
