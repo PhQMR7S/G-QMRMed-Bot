@@ -69,17 +69,18 @@ def _main_keyboard(owner: bool) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="الخطط والاشتراكات", callback_data="pro:plans"),
         ],
         [
-            InlineKeyboardButton(text="حصص التصميم", callback_data="pro:credits"),
+            InlineKeyboardButton(text="🔑 تفعيل كود", callback_data="pro:activate"),
             InlineKeyboardButton(text="حسابي ورصيدي", callback_data="pro:account"),
         ],
         [
+            InlineKeyboardButton(text="حصص التصميم", callback_data="pro:credits"),
             InlineKeyboardButton(text="طريقة الاستخدام", callback_data="pro:help"),
-            InlineKeyboardButton(text="الدفع والفوترة", callback_data="pro:payment"),
         ],
         [
+            InlineKeyboardButton(text="الدفع والفوترة", callback_data="pro:payment"),
             InlineKeyboardButton(text="الشروط والأحكام", callback_data="pro:terms"),
-            InlineKeyboardButton(text="الدعم", callback_data="pro:support"),
         ],
+        [InlineKeyboardButton(text="الدعم", callback_data="pro:support")],
     ]
     if owner:
         rows.append([InlineKeyboardButton(text="لوحة الإدارة", callback_data="adm:home")])
@@ -108,14 +109,9 @@ async def _user_from_message(session: AsyncSession, message: Message) -> User:
 async def _home_text(session: AsyncSession) -> str:
     e = await _emoji_settings(session)
     return (
-        f"{_emoji(e, 'brand')} <b>GQMRMed</b>\n"
-        "<i>Medical Design Intelligence</i>\n\n"
-        f"{_emoji(e, 'medical')} منصة متخصصة لتحويل المحتوى الطبي إلى تصميم بصري منظم، "
-        "مع البحث والتحقق وبناء المحتوى قبل الإخراج النهائي.\n\n"
-        f"{_emoji(e, 'free')} <b>FREE</b> · 3 تصاميم يومياً\n"
-        f"{_emoji(e, 'plus')} <b>PLUS</b> · مزايا وحيز استخدام أعلى\n"
-        f"{_emoji(e, 'pro')} <b>PRO</b> · أعلى مستوى من الاستخدام\n\n"
-        f"{_emoji(e, 'design')} اختر من القائمة لإنشاء تصميم، إدارة الرصيد، أو مراجعة حسابك."
+        f"{_emoji(e, 'brand')} <b>GQMRMed</b>\n\n"
+        f"{_emoji(e, 'medical')} إنشاء تصاميم طبية تعليمية باعتماد مسار البحث والتحقق.\n\n"
+        f"{_emoji(e, 'create')} اختر الخدمة من القائمة أدناه."
     )
 
 
@@ -285,6 +281,7 @@ async def pro_plans(callback: CallbackQuery, session: AsyncSession) -> None:
                         InlineKeyboardButton(text="شراء PRO", callback_data="stars:PRO"),
                     ],
                     [InlineKeyboardButton(text="شراء حصص التصميم", callback_data="credits:menu")],
+                    [InlineKeyboardButton(text="🔑 إدخال كود التفعيل", callback_data="pro:activate")],
                     [InlineKeyboardButton(text="الشروط والأحكام", callback_data="pro:terms")],
                     [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")],
                 ]
@@ -301,31 +298,57 @@ async def pro_credits(callback: CallbackQuery, session: AsyncSession) -> None:
             select(CreditPack).where(CreditPack.is_active.is_(True)).order_by(CreditPack.stars_price.asc())
         )
     ).scalars().all()
-    lines = [f"{_emoji(e, 'design')} <b>حصص التصميم</b>", "", f"{_emoji(e, 'plus')} شراء رصيد إضافي بدون اشتراك:", ""]
+    lines = [
+        f"{_emoji(e, 'design')} <b>حصص التصميم</b>",
+        "",
+        f"{_emoji(e, 'plus')} شراء رصيد إضافي بدون اشتراك:",
+        "",
+    ]
     rows: list[list[InlineKeyboardButton]] = []
     for pack in packs:
         per = pack.stars_price / pack.credits
-        lines.append(f"<b>{pack.name}</b> · {pack.credits} تصاميم · {pack.stars_price} Telegram Stars · {per:.2f} Stars/تصميم")
-        rows.append([InlineKeyboardButton(text=f"شراء {pack.credits} تصاميم · {pack.stars_price} Stars", callback_data=f"credits:{pack.code}")])
-    rows.extend([
-        [InlineKeyboardButton(text="الشروط والأحكام", callback_data="pro:terms")],
-        [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")],
-    ])
+        lines.append(
+            f"<b>{pack.name}</b> · {pack.credits} تصاميم · "
+            f"{pack.stars_price} Telegram Stars · {per:.2f} Stars/تصميم"
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"شراء {pack.credits} تصاميم · {pack.stars_price} Stars",
+                    callback_data=f"credits:{pack.code}",
+                )
+            ]
+        )
+    rows.extend(
+        [
+            [InlineKeyboardButton(text="الشروط والأحكام", callback_data="pro:terms")],
+            [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")],
+        ]
+    )
     if callback.message is not None:
-        await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        await callback.message.edit_text(
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        )
     await callback.answer()
 
 
 @router.callback_query(F.data == "pro:account")
 async def pro_account(callback: CallbackQuery, session: AsyncSession) -> None:
-    user = (await session.execute(select(User).where(User.telegram_id == callback.from_user.id))).scalar_one_or_none()
+    user = (
+        await session.execute(select(User).where(User.telegram_id == callback.from_user.id))
+    ).scalar_one_or_none()
     if user is None:
         await callback.answer("لم يتم إنشاء الحساب بعد.", show_alert=True)
         return
     entitlement = await resolve_entitlement(session, user_id=user.id)
     usage = (
         await session.execute(
-            select(DailyUsage).where(DailyUsage.user_id == user.id, DailyUsage.usage_date == date.today())
+            select(DailyUsage).where(
+                DailyUsage.user_id == user.id,
+                DailyUsage.usage_date == date.today(),
+            )
         )
     ).scalar_one_or_none()
     used = usage.committed if usage else 0
@@ -350,6 +373,23 @@ async def pro_account(callback: CallbackQuery, session: AsyncSession) -> None:
     if callback.message is not None:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=_back_keyboard())
     await callback.answer()
+
+
+@router.message(Command("activate"))
+async def professional_activate_command(message: Message, session: AsyncSession) -> None:
+    """Provide a command entry point for users who prefer Telegram commands."""
+    del session
+    await message.answer(
+        "🔑 <b>تفعيل الاشتراك بكود</b>\n\n"
+        "اضغط الزر أدناه ثم أرسل كود التفعيل.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="إدخال كود التفعيل", callback_data="pro:activate")],
+                [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")],
+            ]
+        ),
+    )
 
 
 @router.message(Command("help"))
@@ -410,7 +450,9 @@ async def emoji_bind(message: Message, session: AsyncSession) -> None:
         return
     key = f"{EMOJI_PREFIX}{slot}"
     async with session.begin():
-        setting = (await session.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+        setting = (
+            await session.execute(select(SystemSetting).where(SystemSetting.key == key))
+        ).scalar_one_or_none()
         if setting is None:
             session.add(SystemSetting(key=key, value=emoji_id))
         else:
