@@ -4,7 +4,12 @@ from gqmrmed.bot import premium_emoji_runtime as runtime
 def _prime(settings: dict[str, str]) -> None:
     runtime._BUTTON_SETTINGS.clear()
     runtime._BUTTON_SETTINGS.update(settings)
-    runtime._refresh_button_pool(["100", "200", "300"], settings)
+    ids = [
+        key.split(":", 2)[2]
+        for key, value in settings.items()
+        if key.startswith("telegram_emoji.alt:") and value
+    ]
+    runtime._refresh_button_pool(ids, settings)
 
 
 def test_button_factory_attaches_stable_semantic_custom_emoji() -> None:
@@ -42,3 +47,4 @@ def test_button_factory_uses_all_captured_icons_as_deterministic_fallbacks() -> 
     assert first.icon_custom_emoji_id in {"1", "2", "3"}
     assert second.icon_custom_emoji_id in {"1", "2", "3"}
     assert first_again.icon_custom_emoji_id == first.icon_custom_emoji_id
+    assert set(runtime._BUTTON_EMOJI_IDS) == {"1", "2", "3"}
