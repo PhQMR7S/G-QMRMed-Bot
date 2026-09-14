@@ -80,6 +80,8 @@ class ProductionGenerationPipeline:
             claim_evidence_ids=[claim.evidence_ids for claim in content.claims],
             evidence=research,
         )
+        language = detect_language_mode(user_input)
+        _validate_content_language(content, language)
 
         await progress(GenerationStage.ARCHITECTURE, 50)
         visual_plan = select_visual_architecture(topic=user_input, content=content)
@@ -87,7 +89,7 @@ class ProductionGenerationPipeline:
             topic=user_input,
             content=content,
             visual_plan=visual_plan,
-            language=detect_language_mode(user_input),
+            language=language,
         )
         validate_design_spec(design)
         page = design.pages[0]
@@ -119,6 +121,27 @@ class ProductionGenerationPipeline:
             height=self._config.height,
             mime_type="image/png",
         )
+
+
+def _validate_content_language(content: SynthesizedContent, language: str) -> None:
+    """Reject provider output that would visibly violate the requested language."""
+    text = " ".join(
+        [
+            content.title,
+            content.subtitle,
+            *content.key_points,
+            *(claim.text for claim in content.claims),
+            *content.cautions,
+        ]
+    )
+    has_ar = any("\u0600" <= char <= "\u06ff" for char in text)
+    has_lat = any("a" <= char.lower() <= "z" for char in text)
+    if language == "ar" and not has_ar:
+        raise ValueError("synthesis_language_mismatch_ar")
+    if language == "en" and has_ar:
+        raise ValueError("synthesis_language_mismatch_en")
+    if language == "mixed" and not (has_ar and has_lat):
+        raise ValueError("synthesis_language_mismatch_mixed")
 
 
 __all__ = ["ProductionGenerationPipeline", "ProductionPipelineConfig"]
