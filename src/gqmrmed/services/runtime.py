@@ -102,11 +102,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         elif name == "gemini_free" and settings.gemini_api_key:
             providers.append(
                 (
-                    ProviderDescriptor(
-                        name="gemini_free",
-                        model=settings.gemini_text_model,
-                        cost_tier="free",
-                    ),
+                    ProviderDescriptor(name="gemini_free", model=settings.gemini_text_model, cost_tier="free"),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.gemini_api_key,
@@ -150,11 +146,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         elif name == "huggingface_free" and settings.huggingface_token:
             providers.append(
                 (
-                    ProviderDescriptor(
-                        name="huggingface_free",
-                        model=settings.huggingface_text_model,
-                        cost_tier="free",
-                    ),
+                    ProviderDescriptor(name="huggingface_free", model=settings.huggingface_text_model, cost_tier="free"),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.huggingface_token,
@@ -173,11 +165,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         ):
             providers.append(
                 (
-                    ProviderDescriptor(
-                        name="openai_compatible",
-                        model=settings.ai_compatible_model,
-                        cost_tier="paid",
-                    ),
+                    ProviderDescriptor(name="openai_compatible", model=settings.ai_compatible_model, cost_tier="paid"),
                     OpenAICompatibleChatSynthesizer(
                         OpenAICompatibleConfig(
                             api_key=settings.ai_compatible_api_key,
@@ -273,13 +261,15 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     else:
         result_store = FilesystemResultStore(Path(settings.result_storage_dir))
 
+    delivery = TelegramResultDelivery(bot)
     return GenerationWorker(
         queue=queue,
         session_factory=SessionFactory,
         pipeline=pipeline,
         result_store=result_store,
         progress_sink=TelegramProgressSink(bot),
-        delivery_sink=TelegramResultDelivery(bot),
+        delivery_sink=delivery,
+        failure_sink=delivery.notify_failure,
         media_ingestor=media_ingestor,
         media_temp_dir=settings.media_temp_dir,
     )
