@@ -29,13 +29,15 @@ def _content() -> SynthesizedContent:
     )
 
 
-def test_renderer_is_9_16_and_keeps_exact_text_outside_image_model() -> None:
+def test_renderer_is_4_5_and_keeps_exact_text_outside_image_model() -> None:
     plan = VisualPlan(
         architecture=ArchitectureType.CLINICAL_EMERGENCY_ALGORITHM,
         sections=["danger"],
         illustration_prompt="illustration only",
     )
     svg = render_infographic_svg(content=_content(), plan=plan)
+    assert WIDTH == 1080
+    assert HEIGHT == 1350
     assert f'width="{WIDTH}"' in svg
     assert f'height="{HEIGHT}"' in svg
     assert "Metabolic emergency" in svg
