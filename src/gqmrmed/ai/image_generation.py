@@ -18,7 +18,7 @@ class ImageGenerationRequest:
 
     prompt: str
     width: int = 1080
-    height: int = 1920
+    height: int = 1350
     seed: int | None = None
 
     def __post_init__(self) -> None:
@@ -26,8 +26,8 @@ class ImageGenerationRequest:
             raise ValueError("image_prompt_required")
         if not 256 <= self.width <= 4096 or not 256 <= self.height <= 4096:
             raise ValueError("invalid_image_dimensions")
-        if self.width * 16 != self.height * 9:
-            raise ValueError("image_dimensions_must_be_9_16")
+        if self.width * 5 != self.height * 4:
+            raise ValueError("image_dimensions_must_be_4_5")
         if self.seed is not None and self.seed < 0:
             raise ValueError("image_seed_invalid")
 
@@ -35,9 +35,9 @@ class ImageGenerationRequest:
 def build_illustration_request(
     visual_plan: VisualPlan, *, seed: int | None = None
 ) -> ImageGenerationRequest:
-    """Convert the visual plan into a safe 9:16 illustration request."""
-    if visual_plan.aspect_ratio != "9:16":
-        raise ValueError("visual_plan_must_be_9_16")
+    """Convert the visual plan into the single-image 4:5 illustration request."""
+    if visual_plan.aspect_ratio != "4:5":
+        raise ValueError("visual_plan_must_be_4_5")
     return ImageGenerationRequest(prompt=visual_plan.illustration_prompt, seed=seed)
 
 

@@ -1,8 +1,4 @@
-"""Deterministic QMRMed compositor.
-
-The model-generated artwork is treated as a visual asset. All visible text,
-cards, hierarchy, and the QMR7S signature are rendered here for exactness.
-"""
+"""Deterministic QMRMed compositor for one reference-style infographic image."""
 
 from __future__ import annotations
 
@@ -45,12 +41,16 @@ def render_infographic_page(
     *,
     config: RenderConfig | None = None,
 ) -> bytes:
-    """Render one final PNG page with exact text and a protected signature zone."""
+    """Render exactly one final PNG with deterministic text and branding."""
     cfg = config or RenderConfig()
     if cfg.width < 800 or cfg.height < 1000:
         raise ValueError("render_resolution_too_small")
+    if cfg.width * 5 != cfg.height * 4:
+        raise ValueError("render_canvas_must_be_4_5")
     if not illustration.image_bytes:
         raise ValueError("illustration_bytes_required")
+    if page.page_number != 1 or len(spec.pages) != 1:
+        raise ValueError("single_image_contract_violated")
 
     artwork_uri = _data_uri(illustration.image_bytes, illustration.mime_type)
     rtl = spec.language.lower().startswith(("ar", "fa", "ur"))
@@ -61,8 +61,11 @@ def render_infographic_page(
     blocks = page.blocks
     title_block = blocks[0]
     body_blocks = blocks[1:]
-    columns = 2 if len(body_blocks) > 4 else 1
-    gap = 22
+    if not body_blocks:
+        raise ValueError("infographic_body_required")
+
+    columns = 3 if len(body_blocks) >= 7 else 2 if len(body_blocks) >= 4 else 1
+    gap = 20
     outer = 52
 
     svg: list[str] = [
@@ -87,7 +90,7 @@ def render_infographic_page(
                 "#FFFFFF",
             )
         )
-        image_height = min(390, card_height * 0.38)
+        image_height = min(330, card_height * 0.34)
         svg.append(
             _image(
                 artwork_uri,
@@ -97,7 +100,7 @@ def render_infographic_page(
                 image_height,
             )
         )
-        body_y = card_top + image_height + 48
+        body_y = card_top + image_height + 42
         _render_cards(
             svg,
             body_blocks,
@@ -129,27 +132,30 @@ def render_infographic_page(
     title_x = cfg.width - outer if rtl else outer
     anchor = "end" if rtl else "start"
     direction = "rtl" if rtl else "ltr"
-    svg.append(
-        _text(
-            title_block.text,
-            title_x,
-            82,
-            anchor=anchor,
-            direction=direction,
-            size=48,
-            weight=800,
-            fill="#FFFFFF",
+    title_lines = _wrap(title_block.text, max_chars=34 if rtl else 42)
+    title_size = 43 if len(title_lines) > 1 else 48
+    for index, line in enumerate(title_lines[:2]):
+        svg.append(
+            _text(
+                line,
+                title_x,
+                68 + index * 48,
+                anchor=anchor,
+                direction=direction,
+                size=title_size,
+                weight=800,
+                fill="#FFFFFF",
+            )
         )
-    )
     section = page.sections[0] if page.sections else "Medical education"
     svg.append(
         _text(
-            section,
+            _compact(section, 52),
             title_x,
-            124,
+            150,
             anchor=anchor,
             direction=direction,
-            size=22,
+            size=20,
             weight=500,
             fill="#EAF4FB",
         )
@@ -190,7 +196,7 @@ def _render_cards(
         card_x = x + col * (card_width + gap)
         card_y = y + row * (card_height + gap)
         accent = _accent(block.role, cfg)
-        svg.append(_rounded_rect(card_x, card_y, card_width, card_height, 26, "#FFFFFF"))
+        svg.append(_rounded_rect(card_x, card_y, card_width, card_height, 24, "#FFFFFF"))
         svg.append(_accent_bar(card_x, card_y, card_height, accent))
         text_x = card_x + card_width - 28 if rtl else card_x + 30
         anchor = "end" if rtl else "start"
@@ -200,20 +206,41 @@ def _render_cards(
             _text(
                 role,
                 text_x,
-                card_y + 38,
+                card_y + 34,
                 anchor=anchor,
                 direction=direction,
-                size=18,
+                size=17,
                 weight=700,
                 fill=accent,
             )
         )
-        font_size = 24 if block.importance >= 4 else 21
-        max_chars = 31 if columns == 2 else 54
+        if columns >= 3:
+            font_size = 18 if block.importance < 4 else 19
+            max_chars = 25 if rtl else 29
+        elif columns == 2:
+            font_size = 20 if block.importance < 4 else 21
+            max_chars = 36 if rtl else 42
+        else:
+            font_size = 23 if block.importance < 4 else 25
+            max_chars = 60 if rtl else 70
         lines = _wrap(block.text, max_chars=max_chars)
-        max_lines = max(3, int((card_height - 70) // (font_size + 9)))
-        for line_index, line in enumerate(lines[:max_lines]):
-            baseline = card_y + 76 + line_index * (font_size + 9)
+        line_step = font_size + 7
+        max_lines = max(2, int((card_height - 62) // line_step))
+        if len(lines) > max_lines:
+            # Reduce font before rejecting content; never silently clip medical text.
+            fitted = False
+            while font_size > 15:
+                font_size -= 1
+                line_step = font_size + 7
+                max_lines = max(2, int((card_height - 62) // line_step))
+                if len(_wrap(block.text, max_chars=max_chars + 3)) <= max_lines:
+                    lines = _wrap(block.text, max_chars=max_chars + 3)
+                    fitted = True
+                    break
+            if not fitted:
+                raise ValueError("medical_text_does_not_fit_single_image")
+        for line_index, line in enumerate(lines):
+            baseline = card_y + 70 + line_index * line_step
             svg.append(
                 _text(
                     line,
@@ -325,6 +352,11 @@ def _data_uri(data: bytes, mime: str) -> str:
 
 def _escape(value: str) -> str:
     return html.escape(value, quote=True)
+
+
+def _compact(text: str, limit: int) -> str:
+    cleaned = " ".join(text.split())
+    return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
 def _wrap(text: str, max_chars: int) -> list[str]:

@@ -1,28 +1,22 @@
-"""End-to-end text generation pipeline used by the durable worker."""
+"""End-to-end single-image medical infographic production pipeline."""
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from gqmrmed.ai.image_generation import build_illustration_request
+from gqmrmed.ai.infographic_design import build_design_spec
+from gqmrmed.ai.infographic_qa import validate_design_spec
+from gqmrmed.ai.infographic_renderer import render_infographic_page
 from gqmrmed.contracts.generation import GenerationStage
-from gqmrmed.contracts.research import (
-    ResearchBundle,
-    ResearchRequest,
-    SynthesizedContent,
-    VisualPlan,
-)
+from gqmrmed.contracts.research import ResearchBundle, ResearchRequest, SynthesizedContent
 from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationProvider
-from gqmrmed.rendering.raster import render_png
-from gqmrmed.rendering.svg import render_svg
-from gqmrmed.services.quality import validate_png_contract, validate_svg_contract
+from gqmrmed.services.quality import validate_png_contract
 from gqmrmed.services.research import (
-    research_medical_topic,
     ResearchProvider,
+    research_medical_topic,
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
@@ -36,12 +30,18 @@ class SynthesisService(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ProductionPipelineConfig:
+    """Fixed single-image canvas matching the supplied reference proportions."""
+
     width: int = 1080
-    height: int = 1920
+    height: int = 1350
+
+    def __post_init__(self) -> None:
+        if self.width * 5 != self.height * 4:
+            raise ValueError("production_canvas_must_be_4_5")
 
 
 class ProductionGenerationPipeline:
-    """Run research, synthesis, architecture, illustration and exact rendering."""
+    """Research, evidence-lock, plan, illustrate, and render exactly one image."""
 
     def __init__(
         self,
@@ -83,22 +83,29 @@ class ProductionGenerationPipeline:
 
         await progress(GenerationStage.ARCHITECTURE, 50)
         visual_plan = select_visual_architecture(topic=user_input, content=content)
-        illustration = await self._generate_illustration(visual_plan, progress)
-
-        await progress(GenerationStage.RENDERING, 85)
-        svg = render_svg(
+        design = build_design_spec(
+            topic=user_input,
             content=content,
             visual_plan=visual_plan,
-            illustration_href=_data_uri(illustration),
         )
-        validate_svg_contract(
-            svg,
-            title=content.title,
-            watermark=visual_plan.watermark,
+        validate_design_spec(design)
+        page = design.pages[0]
+
+        await progress(GenerationStage.GENERATING, 60)
+        illustration = await self._image_provider.generate(
+            prompt=design.illustration_prompt,
             width=self._config.width,
             height=self._config.height,
         )
-        png = render_png(svg, width=self._config.width, height=self._config.height)
+        if (
+            illustration.width != self._config.width
+            or illustration.height != self._config.height
+        ):
+            raise ValueError("illustration_dimensions_mismatch")
+
+        await progress(GenerationStage.RENDERING, 85)
+        png = render_infographic_page(design, page, illustration)
+
         await progress(GenerationStage.QUALITY_CONTROL, 98)
         validate_png_contract(
             png,
@@ -111,24 +118,6 @@ class ProductionGenerationPipeline:
             height=self._config.height,
             mime_type="image/png",
         )
-
-    async def _generate_illustration(
-        self,
-        visual_plan: VisualPlan,
-        progress: Callable[[GenerationStage, int], Awaitable[None]],
-    ) -> GeneratedIllustration:
-        request = build_illustration_request(visual_plan)
-        await progress(GenerationStage.GENERATING, 60)
-        return await self._image_provider.generate(
-            prompt=request.prompt,
-            width=self._config.width,
-            height=self._config.height,
-        )
-
-
-def _data_uri(image: GeneratedIllustration) -> str:
-    encoded = base64.b64encode(image.image_bytes).decode("ascii")
-    return f"data:{image.mime_type};base64,{encoded}"
 
 
 __all__ = ["ProductionGenerationPipeline", "ProductionPipelineConfig"]
