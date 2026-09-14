@@ -84,7 +84,7 @@ async def payment_support_handler(message: Message) -> None:
 
 @router.callback_query(F.data == "credits:menu")
 async def credit_menu_callback(callback: CallbackQuery, session: AsyncSession) -> None:
-    if callback.message is None:
+    if not isinstance(callback.message, Message):
         await callback.answer("تعذر عرض الحصص.", show_alert=True)
         return
     result = await session.execute(
@@ -101,14 +101,14 @@ async def credit_menu_callback(callback: CallbackQuery, session: AsyncSession) -
 
 @router.callback_query(F.data == "credits:terms")
 async def credit_terms_callback(callback: CallbackQuery) -> None:
-    if callback.message is not None:
+    if isinstance(callback.message, Message):
         await callback.message.edit_text(TERMS_TEXT, reply_markup=_terms_keyboard())
     await callback.answer()
 
 
 @router.callback_query(F.data.regexp(r"^credits:(DESIGN_5|DESIGN_12|DESIGN_20)$"))
 async def credit_pack_callback(callback: CallbackQuery, session: AsyncSession) -> None:
-    if callback.data is None or callback.message is None:
+    if callback.data is None or not isinstance(callback.message, Message):
         await callback.answer("تعذر إنشاء الفاتورة.", show_alert=True)
         return
     pack_code = callback.data.split(":", 1)[1]
@@ -149,7 +149,7 @@ async def credit_pack_callback(callback: CallbackQuery, session: AsyncSession) -
 
 @router.callback_query(F.data.regexp(r"^stars:(PLUS|PRO)$"))
 async def stars_plan_callback(callback: CallbackQuery, session: AsyncSession) -> None:
-    if callback.data is None or callback.message is None:
+    if callback.data is None or not isinstance(callback.message, Message):
         await callback.answer("تعذر إنشاء الفاتورة.", show_alert=True)
         return
     plan_code = callback.data.split(":", 1)[1]
