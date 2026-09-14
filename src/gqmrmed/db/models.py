@@ -232,7 +232,7 @@ class SystemSetting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "system_settings"
 
     key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    value: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
