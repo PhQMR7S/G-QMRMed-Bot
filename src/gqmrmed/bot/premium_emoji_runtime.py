@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from aiogram.types import InlineKeyboardButton
+from aiogram import BaseMiddleware
+from aiogram.types import InlineKeyboardButton, TelegramObject
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,24 +16,10 @@ from gqmrmed.db.models import SystemSetting
 
 PREFIX = "telegram_emoji."
 BANK_KEY = f"{PREFIX}bank"
-SLOTS = (
-    "brand",
-    "medical",
-    "create",
-    "plans",
-    "research",
-    "ai",
-    "design",
-    "success",
-    "warning",
-    "support",
-    "free",
-    "plus",
-    "pro",
-)
 
 _ORIGINAL_INLINE_BUTTON = InlineKeyboardButton
 _BUTTON_EMOJI_IDS: list[str] = []
+_BUTTON_SETTINGS: dict[str, str] = {}
 
 
 def _classify(alt: str | None) -> str:
@@ -55,7 +42,7 @@ def _classify(alt: str | None) -> str:
 
 
 async def emoji_settings(session: AsyncSession) -> dict[str, str]:
-    """Load bindings plus the complete captured bank and exact Telegram alts."""
+    """Load the complete captured bank and exact Telegram-provided alts."""
     rows = (
         await session.execute(
             select(SystemSetting).where(SystemSetting.key.like(f"{PREFIX}%"))
@@ -87,6 +74,8 @@ async def emoji_settings(session: AsyncSession) -> dict[str, str]:
     settings[f"{PREFIX}count"] = str(len(ids))
     settings[f"{PREFIX}ids"] = json.dumps(ids, ensure_ascii=False, separators=(",", ":"))
     _refresh_button_pool(ids, settings)
+    _BUTTON_SETTINGS.clear()
+    _BUTTON_SETTINGS.update(settings)
     return settings
 
 
@@ -111,10 +100,8 @@ def _refresh_button_pool(ids: list[str], settings: Mapping[str, str]) -> None:
 
 def _button_slot(text: str | None, callback_data: str | None) -> str:
     """Resolve a stable semantic slot from a button's action, never randomly."""
-    callback = callback_data or ""
-    action = callback.lower()
+    action = (callback_data or "").lower()
     text_value = (text or "").lower()
-
     exact = {
         "pro:generate": "create",
         "pro:plans": "plans",
@@ -146,7 +133,6 @@ def _button_slot(text: str | None, callback_data: str | None) -> str:
     }
     if action in exact:
         return exact[action]
-
     if action.startswith(("adm:user_toggle:", "adm:user_unban:")):
         return "success"
     if action.startswith("adm:user_ban:"):
@@ -193,7 +179,6 @@ def _stable_button_emoji_id(
     """Select one fixed icon for a button from its semantic emoji family."""
     if not _BUTTON_EMOJI_IDS:
         return None
-
     slot = _button_slot(text, callback_data)
     candidates = [
         emoji_id
@@ -218,16 +203,12 @@ def _button_factory(*args: Any, **kwargs: Any) -> InlineKeyboardButton:
     if kwargs.get("icon_custom_emoji_id") is None:
         text = kwargs.get("text")
         callback_data = kwargs.get("callback_data")
-        settings = _BUTTON_SETTINGS
         kwargs["icon_custom_emoji_id"] = _stable_button_emoji_id(
-            settings,
+            _BUTTON_SETTINGS,
             text=text if isinstance(text, str) else None,
             callback_data=callback_data if isinstance(callback_data, str) else None,
         )
     return _ORIGINAL_INLINE_BUTTON(*args, **kwargs)
-
-
-_BUTTON_SETTINGS: dict[str, str] = {}
 
 
 def render(settings: dict[str, str], slot: str) -> str:
@@ -261,8 +242,23 @@ def render(settings: dict[str, str], slot: str) -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>' if alt else ""
 
 
+class PremiumEmojiMiddleware(BaseMiddleware):
+    """Load the shared emoji palette before every handler that can build a UI."""
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        session = data.get("session")
+        if isinstance(session, AsyncSession):
+            await emoji_settings(session)
+        return await handler(event, data)
+
+
 def patch_modules() -> None:
-    """Install the shared message renderer and deterministic button factory."""
+    """Install the shared renderer and deterministic button factory."""
     from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
 
     for module in (admin_ui, payments, professional_ui, router):
@@ -273,18 +269,10 @@ def patch_modules() -> None:
     professional_ui._emoji = render
     progress._emoji = render
 
-    # The first settings load populates the shared button palette. Until then,
-    # buttons safely fall back to their normal Telegram representation.
-    original_emoji_settings = emoji_settings
 
-    async def _load_button_settings(session: AsyncSession) -> dict[str, str]:
-        settings = await original_emoji_settings(session)
-        _BUTTON_SETTINGS.clear()
-        _BUTTON_SETTINGS.update(settings)
-        return settings
-
-    admin_ui._emoji_settings = _load_button_settings
-    professional_ui._emoji_settings = _load_button_settings
-
-
-__all__ = ["emoji_settings", "render", "patch_modules"]
+__all__ = [
+    "PremiumEmojiMiddleware",
+    "emoji_settings",
+    "patch_modules",
+    "render",
+]
