@@ -1,8 +1,4 @@
-"""Deterministic QMRMed single-image infographic design system.
-
-The image model supplies artwork only. This module owns the editorial layout,
-content capacity, reference-driven visual language, exact-text policy, and branding rules.
-"""
+"""Deterministic QMRMed single-image infographic design system."""
 
 from __future__ import annotations
 
@@ -47,7 +43,7 @@ class InfographicPage(BaseModel):
 
 
 class BrandingSpec(BaseModel):
-    """Branding is composited after AI generation and never hallucinated by it."""
+    """Branding is composited after AI generation."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -72,55 +68,37 @@ class InfographicDesignSpec(BaseModel):
 
 
 MASTER_VISUAL_LANGUAGE = """
-QMRMed master visual language: premium editorial medical infographic.
-Use the supplied reference designs as visual-language references only, never copy
-specific content. Preserve their shared characteristics: clean 4:5 grid, rounded
-cards, soft clinical pastel palette, strong title hierarchy, generous whitespace,
-compact information cards, topic-specific medical illustrations, clear arrows and
-pathways, subtle gradients, restrained shadows, balanced density, precise alignment,
-modern Arabic typography with correct RTL, and a polished clinical-publication feel.
-Use red only for danger/warnings, green for favorable or treatment states, blue/teal
-for information and mechanism, purple as a secondary accent, and amber for caution.
-Adapt the composition to the topic: comparison topics use comparison panels, drug
-topics use medication-focused cards, mechanisms use causal diagrams, anatomy uses
-central anatomy with callouts, and symptom/clinical topics use grouped cards.
-Never add decorative medical objects unrelated to the topic. Never place a logo,
-watermark, signature, or readable text in the illustration itself.
+QMRMed master visual language: premium medical editorial infographic.
+Use the agreed QMRMed identity: deep navy #0B1F3A, turquoise #14B8A6, white #FFFFFF,
+and restrained gold #D4AF37. Build a polished 4:5 composition with one dominant
+rounded white card, a compact badge, strong title hierarchy, a dedicated medical
+illustration panel, concise information cards, generous spacing, subtle depth,
+precise alignment, and a restrained frosted-glass QMR7S watermark in the safe zone.
+Use modern Arabic typography with correct RTL. Turquoise is the primary information
+accent; gold is a premium secondary accent; red is reserved for danger/warnings.
+Do not use unrelated decorative objects. The illustration is artwork only: never put
+readable text, labels, numbers, logos, signatures, watermarks, UI, or disclaimers
+inside the generated artwork. Keep the final composition publication-grade and
+readable on a phone. Never expose provider errors, fallback status, tracebacks, or
+internal system messages as medical content.
 """.strip()
 
 
 TEMPLATE_HINTS: dict[TemplateFamily, str] = {
-    TemplateFamily.CLINICAL: (
-        "Use a strong title, central clinical illustration, and balanced information cards."
-    ),
-    TemplateFamily.MECHANISM: "Use a causal pathway with arrows and mechanism nodes.",
-    TemplateFamily.COMPARISON: (
-        "Use a symmetrical comparison matrix with shared attributes and key discriminators."
-    ),
-    TemplateFamily.DRUG: (
-        "Use medication-focused cards, mechanism/uses/cautions sections, and a dominant drug asset."
-    ),
-    TemplateFamily.DIAGNOSIS: (
-        "Use a decision-oriented diagnostic flow with tests, findings, and interpretation."
-    ),
-    TemplateFamily.TREATMENT: (
-        "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks."
-    ),
-    TemplateFamily.SYMPTOMS: (
-        "Use grouped symptom clusters with a clear hierarchy and warning strip only when "
-        "evidence supports it."
-    ),
-    TemplateFamily.ANATOMY: (
-        "Use a central anatomical illustration with concise callout cards."
-    ),
-    TemplateFamily.EDUCATIONAL: (
-        "Use a flexible teaching-card layout with definition and high-yield takeaways."
-    ),
+    TemplateFamily.CLINICAL: "Strong title, dominant clinical illustration, then balanced high-yield cards.",
+    TemplateFamily.MECHANISM: "Use a causal visual pathway with clear directional flow and concise mechanism cards.",
+    TemplateFamily.COMPARISON: "Use a symmetrical comparison structure with shared attributes and discriminators.",
+    TemplateFamily.DRUG: "Use a dominant medication illustration with indication, mechanism, and caution cards.",
+    TemplateFamily.DIAGNOSIS: "Use a diagnostic visual flow with tests, findings, interpretation, and red flags.",
+    TemplateFamily.TREATMENT: "Use a stepwise treatment pathway with priority, monitoring, and escalation cards.",
+    TemplateFamily.SYMPTOMS: "Use grouped symptom clusters with clear hierarchy and warning treatment only when supported.",
+    TemplateFamily.ANATOMY: "Use a central anatomical illustration with concise relationship callouts.",
+    TemplateFamily.EDUCATIONAL: "Use a flexible teaching composition with definition and high-yield takeaways.",
 }
 
 
 def choose_template(topic: str, visual_plan: VisualPlan) -> TemplateFamily:
-    """Map the medical architecture to the QMRMed reference visual family."""
+    """Map the medical architecture to the QMRMed visual family."""
     value = visual_plan.architecture.value
     if "mechanism" in value or "pathophysiology" in value or "concept_map" in value:
         return TemplateFamily.MECHANISM
@@ -148,27 +126,33 @@ def _compact(text: str, limit: int) -> str:
     return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
-def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
-    """Select high-value evidence-locked facts that fit one readable image."""
-    blocks: list[TextBlock] = []
-    if content.subtitle:
-        blocks.append(
-            TextBlock(
-                text=_compact(content.subtitle, 180),
-                role="subtitle",
-                importance=4,
-            )
-        )
+def _is_internal_artifact(text: str) -> bool:
+    value = " ".join(text.lower().split())
+    markers = (
+        "automatic synthesis provider was unavailable",
+        "synthesis provider was unavailable",
+        "provider was unavailable",
+        "provider unavailable",
+        "fallback provider",
+        "internal error",
+        "traceback",
+    )
+    return any(marker in value for marker in markers)
 
-    for point in content.key_points:
+
+def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
+    """Select balanced evidence-locked content for one readable image."""
+    blocks: list[TextBlock] = []
+    if content.subtitle and not _is_internal_artifact(content.subtitle):
+        blocks.append(TextBlock(text=_compact(content.subtitle, 180), role="subtitle", importance=4))
+
+    points = [point for point in content.key_points if not _is_internal_artifact(point)]
+    for point in points[:3]:
         blocks.append(TextBlock(text=_compact(point, 220), role="point", importance=3))
 
-    claims = sorted(
-        content.claims,
-        key=lambda claim: (claim.critical, claim.confidence),
-        reverse=True,
-    )
-    for claim in claims:
+    claims = [claim for claim in content.claims if not _is_internal_artifact(claim.text)]
+    claims.sort(key=lambda claim: (claim.critical, claim.confidence), reverse=True)
+    for claim in claims[:2]:
         blocks.append(
             TextBlock(
                 text=_compact(claim.text, 300),
@@ -177,17 +161,11 @@ def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
             )
         )
 
-    for caution in content.cautions:
-        blocks.append(
-            TextBlock(text=_compact(caution, 220), role="caution", importance=5)
-        )
+    cautions = [caution for caution in content.cautions if not _is_internal_artifact(caution)]
+    if cautions:
+        blocks.append(TextBlock(text=_compact(cautions[0], 220), role="caution", importance=5))
 
-    ranked = sorted(
-        enumerate(blocks),
-        key=lambda item: (item[1].importance, -item[0]),
-        reverse=True,
-    )
-    return [block for _, block in ranked[:9]]
+    return blocks[:6]
 
 
 def build_design_spec(
@@ -208,7 +186,10 @@ def build_design_spec(
         raise ValueError("single_image_content_required")
 
     page_title = TextBlock(text=_compact(content.title, 120), role="title", importance=5)
-    sections = list(dict.fromkeys(visual_plan.sections[:8])) or ["key points"]
+    sections = [
+        section for section in dict.fromkeys(visual_plan.sections[:8])
+        if not _is_internal_artifact(section)
+    ] or ["key points"]
     page = InfographicPage(
         page_number=1,
         title=_compact(content.title, 160),
@@ -226,7 +207,7 @@ def build_design_spec(
         + visual_plan.architecture.value
         + "\nIllustration brief: "
         + visual_plan.illustration_prompt
-        + "\nIMPORTANT: artwork only; no readable text, labels, numbers, logos, or watermark."
+        + "\nIMPORTANT: artwork only; no readable text, labels, numbers, logos, watermark, UI, or disclaimers."
     )
     return InfographicDesignSpec(
         topic=topic,
