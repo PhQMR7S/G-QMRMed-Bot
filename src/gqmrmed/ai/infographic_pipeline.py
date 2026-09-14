@@ -17,6 +17,7 @@ from gqmrmed.ai.image_providers import (
     QwenImageProvider,
 )
 from gqmrmed.ai.infographic_design import InfographicDesignSpec, build_design_spec
+from gqmrmed.ai.infographic_qa import validate_design_spec
 from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_page
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
@@ -27,7 +28,11 @@ from gqmrmed.generation.providers import (
     ImageGenerationError,
     ImageGenerationProvider,
 )
-from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
+from gqmrmed.services.medical_pipeline import (
+    MedicalPlan,
+    SynthesisProvider,
+    build_medical_plan,
+)
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
@@ -74,7 +79,11 @@ class InfographicPipeline:
                         )
                     )
                 )
-            elif name == "qwen" and settings.dashscope_api_key and settings.dashscope_base_url:
+            elif (
+                name == "qwen"
+                and settings.dashscope_api_key
+                and settings.dashscope_base_url
+            ):
                 providers.append(
                     QwenImageProvider(
                         QwenImageConfig(
@@ -107,6 +116,7 @@ class InfographicPipeline:
             visual_plan=plan.visual_plan,
             language="ar",
         )
+        validate_design_spec(design)
         images: list[bytes] = []
         for page in design.pages:
             illustration = await self._generate_illustration(design.illustration_prompt)
@@ -131,7 +141,9 @@ class InfographicPipeline:
                 return await provider.generate(prompt=prompt, width=1024, height=1280)
             except (ImageGenerationError, RuntimeError) as exc:
                 errors.append(type(exc).__name__)
-        raise ImageGenerationError("all_infographic_image_providers_failed:" + ",".join(errors))
+        raise ImageGenerationError(
+            "all_infographic_image_providers_failed:" + ",".join(errors)
+        )
 
 
 async def build_infographic_medical_plan(
@@ -181,7 +193,9 @@ def _csv(value: str) -> tuple[str, ...]:
 class _BlankIllustrationProvider:
     """Zero-network fallback with no readable text or branding."""
 
-    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
+    async def generate(
+        self, *, prompt: str, width: int, height: int
+    ) -> GeneratedIllustration:
         del prompt
         svg = f"""
         <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">
