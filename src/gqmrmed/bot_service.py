@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import uuid
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import asynccontextmanager
 from typing import Any, cast
 
 import uvicorn
@@ -15,16 +17,44 @@ from redis.asyncio import Redis
 
 from gqmrmed.bot.runner import run_bot
 from gqmrmed.config import get_settings
+from gqmrmed.db.migrations import upgrade_head
 
 logging.basicConfig(level=get_settings().log_level)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="GQMRMed Telegram Bot Service")
-_bot_task: asyncio.Task[None] | None = None
-
 POLLING_LOCK_KEY = "gqmrmed:telegram:polling-lock:v2"
 POLLING_LOCK_TTL_SECONDS = 60
 POLLING_LOCK_HEARTBEAT_SECONDS = 15
+_bot_task: asyncio.Task[None] | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Migrate the database, then own Telegram polling for the service lifespan."""
+    global _bot_task
+    await upgrade_head()
+    _bot_task = asyncio.create_task(_run_bot_with_lock())
+
+    def report_failure(task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("telegram_bot_service_failed: %s", exc)
+
+    _bot_task.add_done_callback(report_failure)
+    logger.info("telegram_bot_service_started")
+    try:
+        yield
+    finally:
+        if _bot_task is not None and not _bot_task.done():
+            _bot_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await _bot_task
+        _bot_task = None
+
+
+app = FastAPI(title="GQMRMed Telegram Bot Service", lifespan=lifespan)
 
 
 @app.get("/health")
@@ -124,49 +154,17 @@ async def _run_bot_with_lock() -> None:
         lock_stop.set()
         if heartbeat_task is not None and not heartbeat_task.done():
             heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
-            except asyncio.CancelledError:
-                pass
         if bot_task is not None and not bot_task.done():
             bot_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await bot_task
-            except asyncio.CancelledError:
-                pass
         try:
             await _release_lock(redis, token)
         finally:
             logger.info("telegram_polling_lock_released")
             await redis.aclose()
-
-
-@app.on_event("startup")
-async def startup() -> None:
-    global _bot_task
-    _bot_task = asyncio.create_task(_run_bot_with_lock())
-
-    def report_failure(task: asyncio.Task[None]) -> None:
-        if task.cancelled():
-            return
-        exc = task.exception()
-        if exc is not None:
-            logger.error("telegram_bot_service_failed: %s", exc)
-
-    _bot_task.add_done_callback(report_failure)
-    logger.info("telegram_bot_service_started")
-
-
-@app.on_event("shutdown")
-async def shutdown() -> None:
-    global _bot_task
-    if _bot_task is not None and not _bot_task.done():
-        _bot_task.cancel()
-        try:
-            await _bot_task
-        except asyncio.CancelledError:
-            pass
-    _bot_task = None
 
 
 if __name__ == "__main__":
