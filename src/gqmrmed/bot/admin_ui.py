@@ -1,7 +1,7 @@
 """Owner-only in-bot administration panel for GQMRMed."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from aiogram import F, Router
@@ -10,7 +10,6 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.bot.service import provision_user
 from gqmrmed.db.models import (
     ActivationCode,
     ActivationCodeStatus,
@@ -22,11 +21,9 @@ from gqmrmed.db.models import (
     PaymentStatus,
     Plan,
     Subscription,
-    SubscriptionStatus,
     User,
 )
 from gqmrmed.services.activation import create_activation_code
-from gqmrmed.services.payments import set_payment_status
 
 router = Router(name="gqmrmed-admin-ui")
 OWNER_TELEGRAM_ID = 6246913670
@@ -283,39 +280,34 @@ async def admin_codes(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    plans = (await session.execute(select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.code))).scalars().all()
-    rows = [[InlineKeyboardButton(text=f"إنشاء {p.code} · 30 يوم", callback_data=f"adm:code:{p.id}:30")] for p in plans]
-    rows += [[InlineKeyboardButton(text=f"إنشاء {p.code} · 150 يوم", callback_data=f"adm:code:{p.id}:150")] for p in plans]
-    rows += [[InlineKeyboardButton(text=f"إنشاء {p.code} · 365 يوم", callback_data=f"adm:code:{p.id}:365")] for p in plans]
-    rows.append([InlineKeyboardButton(text="عرض الأكواد غير المستخدمة", callback_data="adm:code_list")])
+    codes = (await session.execute(select(ActivationCode).order_by(ActivationCode.created_at.desc()).limit(10))).scalars().all()
+    lines = ["<b>أكواد الاشتراك</b>", ""]
+    rows: list[list[InlineKeyboardButton]] = []
+    for code in codes:
+        lines.append(f"{code.code_hash[:12]}… · {code.status} · {code.duration_days} يوم")
+    for plan_code, days in (("PLUS", 30), ("PLUS", 150), ("PLUS", 365), ("PRO", 30), ("PRO", 150), ("PRO", 365)):
+        rows.append([InlineKeyboardButton(text=f"إنشاء {plan_code} — {days} يوم", callback_data=f"adm:create_code:{plan_code}:{days}")])
     rows.append([InlineKeyboardButton(text="لوحة الإدارة", callback_data="adm:home")])
-    await _send_panel(callback, "<b>إدارة أكواد الاشتراك</b>\n\nاختر الخطة والمدة لإنشاء كود جديد. الأكواد تُحفظ كـhash ولا يمكن استعادتها من قاعدة البيانات.", _kb(rows))
+    await _send_panel(callback, "\n".join(lines), _kb(rows))
 
 
-@router.callback_query(F.data.regexp(r"^adm:code:[0-9a-f-]{36}:(30|150|365)$"))
+@router.callback_query(F.data.regexp(r"^adm:create_code:(PLUS|PRO):(30|150|365)$"))
 async def admin_create_code(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
     if not callback.data:
         return
-    _, _, raw_plan, raw_days = callback.data.split(":")
-    plan = await session.get(Plan, UUID(raw_plan))
-    if plan is None or not plan.is_active:
-        await callback.answer("الخطة غير متاحة.", show_alert=True)
+    _, _, plan_code, days_raw = callback.data.split(":")
+    plan = (await session.execute(select(Plan).where(Plan.code == plan_code))).scalar_one_or_none()
+    if plan is None:
+        await callback.answer("الخطة غير موجودة.", show_alert=True)
         return
-    async with session.begin():
-        _, plaintext = await create_activation_code(session, plan=plan, duration_days=int(raw_days), created_by=None)
-    await _send_panel(callback, f"<b>تم إنشاء كود اشتراك</b>\n\nالخطة: {plan.code}\nالمدة: {raw_days} يوم\n\nالكود:\n<code>{plaintext}</code>\n\nأرسله للمستخدم المستحق فقط.", _back())
-
-
-@router.callback_query(F.data == "adm:code_list")
-async def admin_code_list(callback: CallbackQuery, session: AsyncSession) -> None:
-    if not _owner(callback):
-        await callback.answer("غير مصرح.", show_alert=True)
-        return
-    codes = (await session.execute(select(ActivationCode).where(ActivationCode.status == ActivationCodeStatus.UNUSED.value).order_by(ActivationCode.created_at.desc()).limit(30))).scalars().all()
-    await _send_panel(callback, f"<b>الأكواد غير المستخدمة</b>\n\nعددها المعروض: {len(codes)}\n\nالأكواد لا يمكن عرض نصها الأصلي بعد الإنشاء لأنها مخزنة بشكل آمن كـhash.", _back())
+    code = await create_activation_code(session, plan_id=plan.id, duration_days=int(days_raw))
+    await session.commit()
+    if isinstance(callback.message, Message):
+        await callback.message.answer(f"تم إنشاء كود اشتراك\n\nالخطة: {plan_code}\nالمدة: {days_raw} يوم\n\nالكود:\n<code>{code}</code>\n\nأرسل الكود للمستخدم المستحق فقط.", parse_mode="HTML")
+    await callback.answer("تم إنشاء الكود.")
 
 
 @router.callback_query(F.data == "adm:credits")
@@ -323,11 +315,11 @@ async def admin_credits(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    packs = (await session.execute(select(CreditPack).order_by(CreditPack.stars_price))).scalars().all()
+    packs = (await session.execute(select(CreditPack).order_by(CreditPack.stars_price.asc()))).scalars().all()
     lines = ["<b>حصص التصميم</b>", ""]
-    for p in packs:
-        lines.append(f"{p.code} · {p.credits} تصميم · {p.stars_price} Stars · {'مفعلة' if p.is_active else 'موقوفة'}")
-    lines.append("\nتغيير الأسعار أو عدد التصاميم يتم عبر إعدادات قاعدة البيانات/إدارة الخطط الموثقة؛ لا توجد أسعار مخفية داخل البوت.")
+    for pack in packs:
+        state = "مفعلة" if pack.is_active else "موقوفة"
+        lines.append(f"{pack.code} · {pack.credits} تصميم · {pack.stars_price} Stars · {state}")
     await _send_panel(callback, "\n".join(lines), _back())
 
 
@@ -336,11 +328,10 @@ async def admin_payments(callback: CallbackQuery, session: AsyncSession) -> None
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    payments = (await session.execute(select(Payment).order_by(Payment.created_at.desc()).limit(20))).scalars().all()
+    payments = (await session.execute(select(Payment).order_by(Payment.created_at.desc()).limit(12))).scalars().all()
     lines = ["<b>المدفوعات</b>", ""]
-    for p in payments:
-        lines.append(f"{str(p.id)[:8]} · {p.status} · {p.provider} · {p.stars_amount or p.amount} · {p.currency}")
-    lines.append("\nالدفع عبر Telegram Stars يُعتمد آلياً بعد successful_payment؛ لا يمكن اعتماد فاتورة Stars يدوياً.")
+    for payment in payments:
+        lines.append(f"{payment.provider} · {payment.stars_amount or '-'} Stars · {payment.status} · {payment.created_at:%Y-%m-%d %H:%M}")
     await _send_panel(callback, "\n".join(lines), _back())
 
 
@@ -349,95 +340,66 @@ async def admin_jobs(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    jobs = (await session.execute(select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(15))).scalars().all()
-    lines = ["<b>مراقبة وظائف التوليد</b>", ""]
+    jobs = (await session.execute(select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(12))).scalars().all()
+    lines = ["<b>وظائف التوليد</b>", ""]
     for job in jobs:
-        stage = job.stage or "-"
-        lines.append(f"{str(job.id)[:8]} · {job.status} · {job.progress}% · {stage}")
+        lines.append(f"{job.id} · {job.status} · {job.progress}% · {job.stage or '-'}")
     await _send_panel(callback, "\n".join(lines), _back())
 
 
-@router.callback_query(F.data == "adm:broadcast")
-async def admin_broadcast_help(callback: CallbackQuery) -> None:
+@router.callback_query(F.data == "adm:emoji")
+async def admin_emoji(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    await _send_panel(callback, "<b>الإرسال الجماعي</b>\n\nأرسل:\n<code>/broadcast نص الإعلان</code>\n\nسيتم إرسال الرسالة إلى المستخدمين النشطين فقط، مع تجاهل الحسابات التي تمنع البوت وتسجيل نتيجة الإرسال.", _back())
+    await _send_panel(callback, "<b>إدارة Premium Emoji</b>\n\nلربط أي أيقونة أرسل:\n/emoji_bind SLOT ثم أرسل الـPremium Emoji في نفس الرسالة.\n\nالحالة يمكن عرضها من /emoji_status.", _back())
 
 
-@router.message(Command("broadcast"))
-async def admin_broadcast(message: Message, session: AsyncSession) -> None:
-    if not _owner(message):
-        await message.answer("غير مصرح.")
+@router.callback_query(F.data == "adm:broadcast")
+async def admin_broadcast(callback: CallbackQuery) -> None:
+    if not _owner(callback):
+        await callback.answer("غير مصرح.", show_alert=True)
         return
-    text = (message.text or "").partition(" ")[2].strip()
-    if not text:
-        await message.answer("الاستخدام: /broadcast نص الإعلان")
-        return
-    user_ids = (await session.execute(select(User.telegram_id).where(User.is_active.is_(True)))).scalars().all()
-    await message.answer(f"تم بدء الإرسال إلى {len(user_ids)} مستخدم نشط.\n\nالنص: {text[:500]}")
-    asyncio.create_task(_broadcast(message, list(user_ids), text))
-
-
-async def _broadcast(message: Message, user_ids: list[int], text: str) -> None:
-    bot = message.bot
-    sent = failed = 0
-    for telegram_id in user_ids:
-        try:
-            await bot.send_message(telegram_id, text)
-            sent += 1
-        except Exception:
-            failed += 1
-        await asyncio.sleep(0.06)
-    try:
-        await bot.send_message(OWNER_TELEGRAM_ID, f"انتهى الإرسال الجماعي.\nنجح: {sent}\nفشل: {failed}")
-    except Exception:
-        pass
+    await _send_panel(callback, "<b>الإرسال الجماعي</b>\n\nاستخدم /broadcast ثم أرسل الرسالة التالية. سيتم الإرسال للمستخدمين النشطين مع تقرير بالنجاح والفشل.", _back())
 
 
 @router.callback_query(F.data == "adm:message")
-async def admin_message_help(callback: CallbackQuery) -> None:
+async def admin_message(callback: CallbackQuery) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    await _send_panel(callback, "<b>مراسلة مستخدم</b>\n\nاستخدم:\n<code>/admin_message TELEGRAM_ID نص الرسالة</code>", _back())
+    await _send_panel(callback, "<b>مراسلة مستخدم</b>\n\nاستخدم:\n/admin_message TELEGRAM_ID\nثم أرسل الرسالة التي تريد إرسالها.", _back())
 
 
-@router.callback_query(F.data.regexp(r"^adm:user_message:-?[0-9]+$"))
+@router.callback_query(F.data.regexp(r"^adm:user_credit:[0-9a-f-]{36}$"))
+async def admin_user_credit_help(callback: CallbackQuery) -> None:
+    if not _owner(callback):
+        await callback.answer("غير مصرح.", show_alert=True)
+        return
+    await callback.answer("استخدم /admin_credit TELEGRAM_ID AMOUNT", show_alert=True)
+
+
+@router.callback_query(F.data.regexp(r"^adm:user_message:[0-9]+$"))
 async def admin_user_message_help(callback: CallbackQuery) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
         return
-    telegram_id = callback.data.rsplit(":", 1)[1] if callback.data else ""
-    await _send_panel(callback, f"<b>مراسلة المستخدم</b>\n\nاستخدم:\n<code>/admin_message {telegram_id} نص الرسالة</code>", _back())
+    await callback.answer("استخدم /admin_message TELEGRAM_ID ثم أرسل الرسالة.", show_alert=True)
 
 
-@router.message(Command("admin_message"))
-async def admin_message(message: Message) -> None:
+@router.message(Command("admin_credit"))
+async def admin_credit_command(message: Message, session: AsyncSession) -> None:
     if not _owner(message):
         await message.answer("غير مصرح.")
         return
-    parts = (message.text or "").split(maxsplit=2)
-    if len(parts) < 3 or not parts[1].lstrip("-").isdigit():
-        await message.answer("الاستخدام: /admin_message TELEGRAM_ID نص الرسالة")
+    parts = (message.text or "").split()
+    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit() or int(parts[2]) <= 0:
+        await message.answer("الاستخدام: /admin_credit TELEGRAM_ID AMOUNT")
         return
-    try:
-        await message.bot.send_message(int(parts[1]), parts[2])
-    except Exception as exc:
-        await message.answer(f"فشل الإرسال: {type(exc).__name__}")
+    user = (await session.execute(select(User).where(User.telegram_id == int(parts[1])))).scalar_one_or_none()
+    if user is None:
+        await message.answer("المستخدم غير موجود.")
         return
-    await message.answer("تم إرسال الرسالة.")
-
-
-@router.callback_query(F.data == "adm:emoji")
-async def admin_emoji(callback: CallbackQuery) -> None:
-    if not _owner(callback):
-        await callback.answer("غير مصرح.", show_alert=True)
-        return
-    await _send_panel(callback, "<b>Premium Emoji</b>\n\nإدارة الربط من داخل البوت:\n<code>/emoji_status</code>\n\nلربط رمز بمساحة:\n<code>/emoji_bind SLOT PremiumEmoji</code>\n\nالمساحات تشمل الهوية، الطب، الإنشاء، الخطط، البحث، الذكاء الاصطناعي، التصميم، النجاح، التحذير، الدعم وFREE/PLUS/PRO.", _back())
-
-
-@router.callback_query(F.data == "adm:home")
-async def admin_home_duplicate(callback: CallbackQuery, session: AsyncSession) -> None:
-    # Kept unreachable intentionally? This handler name conflicts with admin_home above.
-    return
+    user.design_credits += int(parts[2])
+    await session.commit()
+    await message.answer(f"تمت إضافة {parts[2]} رصيد تصميم للمستخدم {parts[1]}.")
