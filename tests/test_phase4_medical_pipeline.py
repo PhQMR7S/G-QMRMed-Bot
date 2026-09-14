@@ -69,7 +69,7 @@ def test_visual_architecture_selects_emergency_algorithm() -> None:
     )
     plan = select_visual_architecture(topic="DKA emergency", content=content)
     assert plan.architecture is ArchitectureType.CLINICAL_EMERGENCY_ALGORITHM
-    assert plan.aspect_ratio == "9:16"
+    assert plan.aspect_ratio == "4:5"
     assert plan.render_exact_text is True
     assert plan.watermark == "GQMRMed"
 
