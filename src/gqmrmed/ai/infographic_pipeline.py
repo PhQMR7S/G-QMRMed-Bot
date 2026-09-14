@@ -1,4 +1,4 @@
-"""End-to-end QMRMed infographic generation orchestration."""
+"""End-to-end QMRMed single-image infographic generation orchestration."""
 
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ from gqmrmed.ai.image_providers import (
     QwenImageConfig,
     QwenImageProvider,
 )
-from gqmrmed.ai.infographic_design import build_design_spec, InfographicDesignSpec
+from gqmrmed.ai.infographic_design import InfographicDesignSpec, build_design_spec
 from gqmrmed.ai.infographic_qa import validate_design_spec
-from gqmrmed.ai.infographic_renderer import render_infographic_page, RenderConfig
+from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_page
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
 from gqmrmed.config import Settings
@@ -28,26 +28,26 @@ from gqmrmed.generation.providers import (
     ImageGenerationError,
     ImageGenerationProvider,
 )
-from gqmrmed.services.medical_pipeline import (
-    build_medical_plan,
-    MedicalPlan,
-    SynthesisProvider,
-)
+from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
 
 @dataclass(frozen=True, slots=True)
 class InfographicGenerationResult:
-    """Final image pages plus provenance metadata kept outside visible artwork."""
+    """One final image plus provenance metadata kept outside visible artwork."""
 
     images: tuple[bytes, ...]
     design: InfographicDesignSpec
     source_urls: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        if len(self.images) != 1:
+            raise ValueError("infographic_result_must_contain_exactly_one_image")
+
 
 class InfographicPipeline:
-    """Generate evidence-locked, multi-page QMRMed infographics."""
+    """Generate one evidence-locked, reference-style QMRMed infographic."""
 
     def __init__(
         self,
@@ -117,19 +117,16 @@ class InfographicPipeline:
             language="ar",
         )
         validate_design_spec(design)
-        images: list[bytes] = []
-        for page in design.pages:
-            illustration = await self._generate_illustration(design.illustration_prompt)
-            images.append(
-                render_infographic_page(
-                    design,
-                    page,
-                    illustration,
-                    config=self.renderer_config,
-                )
-            )
+        page = design.pages[0]
+        illustration = await self._generate_illustration(design.illustration_prompt)
+        image = render_infographic_page(
+            design,
+            page,
+            illustration,
+            config=self.renderer_config,
+        )
         return InfographicGenerationResult(
-            images=tuple(images),
+            images=(image,),
             design=design,
             source_urls=tuple(source.url for source in plan.research.sources),
         )
