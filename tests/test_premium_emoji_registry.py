@@ -1,4 +1,4 @@
-from gqmrmed.bot.premium_emoji_registry import SLOTS, _classify, _render
+from gqmrmed.bot.premium_emoji_registry import _classify, _render, SLOTS
 
 
 def test_premium_emoji_slots_are_stable() -> None:
@@ -39,4 +39,8 @@ def test_unknown_alt_defaults_to_brand() -> None:
 
 def test_render_uses_telegram_custom_emoji_markup() -> None:
     rendered = _render(["123", "456"])
-    assert rendered == '<tg-emoji emoji-id="123"> </tg-emoji> <tg-emoji emoji-id="456"> </tg-emoji> '
+    expected = (
+        '<tg-emoji emoji-id="123"> </tg-emoji> '
+        '<tg-emoji emoji-id="456"> </tg-emoji> '
+    )
+    assert rendered == expected
