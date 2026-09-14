@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from gqmrmed.ai.infographic_design import build_design_spec
+from gqmrmed.ai.infographic_renderer import render_infographic_page
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.contracts.research import ResearchBundle, ResearchRequest, SynthesizedContent
 from gqmrmed.db.models import GenerationJob
@@ -17,8 +19,6 @@ from gqmrmed.services.research import (
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
-from gqmrmed.ai.infographic_design import build_design_spec
-from gqmrmed.ai.infographic_renderer import render_infographic_page
 
 
 class SynthesisService(Protocol):
@@ -95,15 +95,14 @@ class ProductionGenerationPipeline:
             width=self._config.width,
             height=self._config.height,
         )
-        if illustration.width != self._config.width or illustration.height != self._config.height:
+        if (
+            illustration.width != self._config.width
+            or illustration.height != self._config.height
+        ):
             raise ValueError("illustration_dimensions_mismatch")
 
         await progress(GenerationStage.RENDERING, 85)
-        png = render_infographic_page(
-            design,
-            page,
-            illustration,
-        )
+        png = render_infographic_page(design, page, illustration)
 
         await progress(GenerationStage.QUALITY_CONTROL, 98)
         validate_png_contract(
