@@ -116,7 +116,10 @@ async def _home(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
         f"المكتبة: <b>{len(bank)}</b> Emoji",
         f"المربوط يدوياً: <b>{len(bound)}/{len(SLOTS)}</b>",
         "",
-        "اختر أي قسم ثم اختر الـPremium Emoji الذي تريده. الاختيار يُحفظ ويُستخدم بثبات في واجهات وأزرار البوت.",
+        (
+            "اختر أي قسم ثم اختر الـPremium Emoji الذي تريده. "
+            "الاختيار يُحفظ ويُستخدم بثبات في واجهات وأزرار البوت."
+        ),
         "",
     ]
     rows: list[list[InlineKeyboardButton]] = []
