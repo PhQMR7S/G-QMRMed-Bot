@@ -1,6 +1,7 @@
 from gqmrmed.ai.infographic_design import build_design_spec
 from gqmrmed.ai.infographic_qa import InfographicQAError, validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page
+from gqmrmed.ai.research_router import split_long_research_query
 from gqmrmed.contracts.research import (
     ArchitectureType,
     MedicalClaim,
@@ -47,6 +48,13 @@ def test_design_splits_long_content_into_coherent_pages() -> None:
     assert len(spec.pages) >= 4
     assert all(page.blocks[0].role == "title" for page in spec.pages)
     assert all(page.title for page in spec.pages)
+
+
+def test_research_splits_long_input_into_bounded_queries() -> None:
+    query = " ".join(["DKA treatment and diagnosis."] * 80)
+    queries = split_long_research_query(query)
+    assert 1 < len(queries) <= 6
+    assert all(len(item) <= 700 for item in queries)
 
 
 def test_design_qa_rejects_visible_source_urls() -> None:
