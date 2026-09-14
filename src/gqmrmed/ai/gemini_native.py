@@ -8,10 +8,10 @@ from typing import Any
 import httpx
 
 from gqmrmed.ai.providers import (
+    _build_prompt,
+    _SYSTEM_INSTRUCTIONS,
     ProviderRoutingError,
     TextSynthesisProvider,
-    _SYSTEM_INSTRUCTIONS,
-    _build_prompt,
 )
 from gqmrmed.contracts.research import ResearchBundle, SynthesizedContent
 
