@@ -6,7 +6,8 @@ import asyncio
 import logging
 import os
 import uuid
-from typing import Any, Awaitable, cast
+from collections.abc import Awaitable
+from typing import Any, cast
 
 import uvicorn
 from fastapi import FastAPI
