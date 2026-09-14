@@ -172,9 +172,13 @@ async def emoji_catalog(message: Message, session: AsyncSession) -> None:
     chunks: list[str] = []
     for start in range(0, len(bank), 40):
         items = bank[start : start + 40]
+        indexed_ids = " ".join(
+            f"<code>{start + index + 1}</code> {item['id']}"
+            for index, item in enumerate(items)
+        )
         chunks.append(
             "<b>مكتبة Premium Emoji</b>\n"
-            + " ".join(f"<code>{start + index + 1}</code> {item['id']}" for index, item in enumerate(items))
+            + indexed_ids
             + "\n\n"
             + _render([str(item["id"]) for item in items])
         )
