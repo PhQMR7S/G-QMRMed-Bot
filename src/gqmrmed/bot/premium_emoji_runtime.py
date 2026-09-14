@@ -108,7 +108,11 @@ def render(settings: dict[str, str], slot: str) -> str:
         index = sum(ord(char) for char in slot) % len(candidates)
         emoji_id = candidates[index]
     else:
-        valid_ids = [emoji_id for emoji_id in ids if settings.get(f"{PREFIX}alt:{emoji_id}")]
+        valid_ids = [
+            emoji_id
+            for emoji_id in ids
+            if settings.get(f"{PREFIX}alt:{emoji_id}")
+        ]
         if not valid_ids:
             return ""
         index = sum(ord(char) for char in slot) % len(valid_ids)
