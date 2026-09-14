@@ -6,6 +6,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from redis.asyncio import Redis
 
+from gqmrmed.bot.admin_ui import router as admin_router
 from gqmrmed.bot.dispatcher import GenerationDispatcher
 from gqmrmed.bot.middleware import DbSessionMiddleware
 from gqmrmed.bot.payments import router as payments_router
@@ -25,6 +26,8 @@ async def run_bot() -> None:
     bot = Bot(token=settings.telegram_bot_token)
     dispatcher = Dispatcher()
     session_middleware = DbSessionMiddleware()
+    admin_router.message.middleware(session_middleware)
+    admin_router.callback_query.middleware(session_middleware)
     professional_ui_router.message.middleware(session_middleware)
     professional_ui_router.callback_query.middleware(session_middleware)
     router.message.middleware(session_middleware)
@@ -32,6 +35,7 @@ async def run_bot() -> None:
     payments_router.message.middleware(session_middleware)
     payments_router.callback_query.middleware(session_middleware)
     payments_router.pre_checkout_query.middleware(session_middleware)
+    dispatcher.include_router(admin_router)
     dispatcher.include_router(professional_ui_router)
     dispatcher.include_router(payments_router)
     dispatcher.include_router(router)
