@@ -55,10 +55,11 @@ order-by-type = false
 "src/gqmrmed/services/jobs.py" = ["I001"]
 "src/gqmrmed/db/models.py" = ["E501", "I001"]
 "src/gqmrmed/services/payments.py" = ["E501", "I001"]
-"src/gqmrmed/generation/providers.py" = ["E501"]
+"src/gqmrmed/services/credits.py" = ["E501"]
 "src/gqmrmed/services/runtime.py" = ["E501", "I001"]
 "src/gqmrmed/ai/evidence_fallback.py" = ["E501"]
 "src/gqmrmed/bot/router.py" = ["E501"]
+"src/gqmrmed/bot/payments.py" = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
