@@ -6,7 +6,7 @@ import asyncio
 import copy
 import time
 from dataclasses import dataclass
-from typing import Any, cast, Protocol
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 import cairosvg
@@ -217,7 +217,9 @@ class ComfyUIImageProvider:
                 image_bytes=image.content,
                 width=width,
                 height=height,
-                mime_type=image.headers.get("content-type", "image/png").split(";", 1)[0],
+                mime_type=image.headers.get(
+                    "content-type", "image/png"
+                ).split(";", 1)[0],
             )
         except httpx.HTTPError as exc:
             raise ImageGenerationError("comfyui_request_failed") from exc
