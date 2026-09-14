@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "status": "awaiting_telegram_custom_emoji_ids",
+  "usage": "Fill custom_emoji_id values only after Telegram provides the real IDs.",
+  "slots": {
+    "brand": {"custom_emoji_id": null, "description": "GQMRMed identity"},
+    "medical": {"custom_emoji_id": null, "description": "Medical/clinical"},
+    "create": {"custom_emoji_id": null, "description": "Create a design"},
+    "plans": {"custom_emoji_id": null, "description": "Plans/subscriptions"},
+    "research": {"custom_emoji_id": null, "description": "Research/verification"},
+    "ai": {"custom_emoji_id": null, "description": "AI/content synthesis"},
+    "design": {"custom_emoji_id": null, "description": "Visual design/rendering"},
+    "success": {"custom_emoji_id": null, "description": "Successful completion"},
+    "warning": {"custom_emoji_id": null, "description": "Warning/caution"},
+    "support": {"custom_emoji_id": null, "description": "Support"},
+    "free": {"custom_emoji_id": null, "description": "FREE plan"},
+    "plus": {"custom_emoji_id": null, "description": "PLUS plan"},
+    "pro": {"custom_emoji_id": null, "description": "PRO plan"}
+  }
+}
