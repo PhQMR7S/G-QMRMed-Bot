@@ -5,7 +5,7 @@ def _prime(settings: dict[str, str]) -> None:
     runtime._BUTTON_SETTINGS.clear()
     runtime._BUTTON_SETTINGS.update(settings)
     ids = [
-        key.split(":", 2)[2]
+        key.split(":", 1)[1]
         for key, value in settings.items()
         if key.startswith("telegram_emoji.alt:") and value
     ]
