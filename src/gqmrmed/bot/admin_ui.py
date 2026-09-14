@@ -387,7 +387,7 @@ async def admin_payments(callback: CallbackQuery, session: AsyncSession) -> None
     payments = (await session.execute(select(Payment).order_by(Payment.created_at.desc()).limit(12))).scalars().all()
     lines = [f"{_emoji(e, 'plans')} <b>المدفوعات</b>", ""]
     for payment in payments:
-        lines.append(f"{_emoji(e, 'success' if payment.status == PaymentStatus.SUCCEEDED.value else 'warning')} {payment.provider} · {payment.stars_amount or '-'} Stars · {payment.status} · {payment.created_at:%Y-%m-%d %H:%M}")
+        lines.append(f"{_emoji(e, 'success' if payment.status == PaymentStatus.APPROVED.value else 'warning')} {payment.provider} · {payment.stars_amount or '-'} Stars · {payment.status} · {payment.created_at:%Y-%m-%d %H:%M}")
     await _send_panel(callback, "\n".join(lines), _back())
 
 
@@ -400,7 +400,7 @@ async def admin_jobs(callback: CallbackQuery, session: AsyncSession) -> None:
     jobs = (await session.execute(select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(12))).scalars().all()
     lines = [f"{_emoji(e, 'ai')} <b>وظائف التوليد</b>", ""]
     for job in jobs:
-        slot = "success" if job.status == JobStatus.COMPLETED.value else "warning" if job.status == JobStatus.FAILED.value else "ai"
+        slot = "success" if job.status == JobStatus.SUCCEEDED.value else "warning" if job.status == JobStatus.FAILED.value else "ai"
         lines.append(f"{_emoji(e, slot)} {job.id} · {job.status} · {job.progress}% · {job.stage or '-'}")
     await _send_panel(callback, "\n".join(lines), _back())
 
