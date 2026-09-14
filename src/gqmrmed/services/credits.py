@@ -9,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gqmrmed.db.models import BillingLedger, CreditPack, User
 
 
+CREDIT_PACK_CATALOG: tuple[tuple[str, int, int], ...] = (
+    ("DESIGN_5", 5, 50),
+    ("DESIGN_12", 12, 100),
+    ("DESIGN_20", 20, 150),
+)
+
+
 async def get_credit_pack(session: AsyncSession, *, code: str) -> CreditPack | None:
     result = await session.execute(
         select(CreditPack).where(CreditPack.code == code, CreditPack.is_active.is_(True))
