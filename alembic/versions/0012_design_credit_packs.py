@@ -33,6 +33,7 @@ def upgrade() -> None:
         sa.CheckConstraint("credits > 0", name="ck_credit_packs_credits_positive"),
         sa.UniqueConstraint("code", name="uq_credit_packs_code"),
     )
+    op.execute("ALTER TABLE credit_packs ENABLE ROW LEVEL SECURITY")
 
     op.add_column("payments", sa.Column("credit_pack_id", sa.Uuid(), nullable=True))
     op.alter_column("payments", "plan_id", nullable=True)
