@@ -165,11 +165,13 @@ def _extract_sources(payload: dict[str, Any], limit: int) -> list[EvidenceSource
 def _candidate_text(candidate: dict[str, Any]) -> str:
     content = candidate.get("content")
     parts = content.get("parts", []) if isinstance(content, dict) else []
-    text_parts = [
-        part.get("text")
-        for part in parts
-        if isinstance(part, dict) and isinstance(part.get("text"), str)
-    ]
+    text_parts: list[str] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        value = part.get("text")
+        if isinstance(value, str):
+            text_parts.append(value)
     return " ".join(text_parts).strip()
 
 
