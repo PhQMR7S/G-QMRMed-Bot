@@ -47,8 +47,8 @@ VISUAL_ARCHITECTURES = (
 
 PLANS = {
     "FREE": {"daily_limit": 3, "price": 0, "currency": "USD"},
-    "PLUS": {"daily_limit": None, "price": 5, "currency": "USD", "duration_days": 30},
-    "PRO": {"daily_limit": None, "price": 20, "currency": "USD", "duration_days": 365},
+    "PLUS": {"daily_limit": 8, "price": 5, "currency": "USD", "duration_days": 30},
+    "PRO": {"daily_limit": 15, "price": 20, "currency": "USD", "duration_days": 90},
 }
 
 GENERATION_STAGES = (
@@ -61,4 +61,6 @@ GENERATION_STAGES = (
 )
 
 WATERMARK = "GQMRMed"
+CANVAS_WIDTH = 1080
+CANVAS_HEIGHT = 1350
 CANVAS_ASPECT_RATIO = "4:5"
