@@ -91,7 +91,11 @@ class Settings(BaseSettings):
         default=120.0, gt=0, le=600, alias="COMFYUI_TIMEOUT_SECONDS"
     )
     comfyui_workflow_json: str | None = Field(default=None, alias="COMFYUI_WORKFLOW_JSON")
-    result_storage_dir: str = Field(default="/data/results", alias="RESULT_STORAGE_DIR")
+    # Render/free containers do not provide a writable /data mount. Keep the
+    # filesystem fallback on /tmp; durable deployments should configure S3.
+    result_storage_dir: str = Field(
+        default="/tmp/gqmrmed-results", alias="RESULT_STORAGE_DIR"
+    )
     media_temp_dir: str = Field(default="/tmp/gqmrmed-media", alias="MEDIA_TEMP_DIR")
     media_max_bytes: int = Field(
         default=25 * 1024 * 1024,
