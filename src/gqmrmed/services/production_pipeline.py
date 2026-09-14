@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from gqmrmed.ai.infographic_design import build_design_spec
+from gqmrmed.ai.infographic_qa import validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page
 from gqmrmed.contracts.generation import GenerationStage
 from gqmrmed.contracts.research import ResearchBundle, ResearchRequest, SynthesizedContent
@@ -87,6 +88,7 @@ class ProductionGenerationPipeline:
             content=content,
             visual_plan=visual_plan,
         )
+        validate_design_spec(design)
         page = design.pages[0]
 
         await progress(GenerationStage.GENERATING, 60)
