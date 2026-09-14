@@ -109,7 +109,7 @@ def _refresh_button_pool(ids: list[str], settings: Mapping[str, str]) -> None:
 
 
 def _next_button_emoji_id() -> str | None:
-    """Return the next captured button icon without repeating within a keyboard build cycle."""
+    """Return the next captured button icon from the fixed palette."""
     global _BUTTON_CURSOR
     if not _BUTTON_EMOJI_IDS:
         return None
@@ -159,7 +159,7 @@ def patch_modules() -> None:
     from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
 
     for module in (admin_ui, payments, professional_ui, router):
-        module.InlineKeyboardButton = _button_factory
+        setattr(module, "InlineKeyboardButton", _button_factory)
     admin_ui._emoji_settings = emoji_settings
     admin_ui._emoji = render
     professional_ui._emoji_settings = emoji_settings
