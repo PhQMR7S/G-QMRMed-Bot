@@ -137,7 +137,7 @@ class Settings(BaseSettings):
         default="gpt-4o-mini-transcribe", alias="MEDIA_TRANSCRIPTION_MODEL"
     )
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
-    image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
+    image_height: int = Field(default=1350, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
     admin_panel_url: str = Field(
         default="https://gqmrmed-bot-api.onrender.com", alias="ADMIN_PANEL_URL"
