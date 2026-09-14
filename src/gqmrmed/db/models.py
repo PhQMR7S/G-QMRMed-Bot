@@ -57,6 +57,9 @@ class UsageReservationSource(StrEnum):
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("design_credits >= 0", name="ck_users_design_credits_nonnegative"),
+    )
 
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
     username: Mapped[str | None] = mapped_column(String(255))
@@ -120,8 +123,7 @@ class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
     duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(16), default=ActivationCodeStatus.UNUSED, nullable=False)
-    created_by: Mapped[UUID | None] = mapped_column(ForeignKey("admin_users.id"))
-    activated_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    activated_by_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -129,60 +131,37 @@ class ActivationCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "payments"
     __table_args__ = (
-        CheckConstraint("amount >= 0", name="ck_payment_amount_nonnegative"),
-        CheckConstraint("stars_amount IS NULL OR stars_amount > 0", name="ck_payment_stars_amount_positive"),
         UniqueConstraint("provider", "transaction_id", name="uq_payments_provider_transaction"),
         UniqueConstraint("invoice_payload", name="uq_payments_invoice_payload"),
     )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id"))
-    credit_pack_id: Mapped[UUID | None] = mapped_column(ForeignKey("credit_packs.id"))
     subscription_id: Mapped[UUID | None] = mapped_column(ForeignKey("subscriptions.id"))
     activation_code_id: Mapped[UUID | None] = mapped_column(ForeignKey("activation_codes.id"))
-    provider: Mapped[str] = mapped_column(String(64), nullable=False)
-    transaction_id: Mapped[str | None] = mapped_column(String(255), index=True)
-    invoice_payload: Mapped[str | None] = mapped_column(String(128), index=True)
+    credit_pack_id: Mapped[UUID | None] = mapped_column(ForeignKey("credit_packs.id"))
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    transaction_id: Mapped[str | None] = mapped_column(String(255))
+    invoice_payload: Mapped[str | None] = mapped_column(String(255))
     stars_amount: Mapped[int | None] = mapped_column(Integer)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
+    currency: Mapped[str] = mapped_column(String(8), nullable=False)
     status: Mapped[str] = mapped_column(String(16), default=PaymentStatus.PENDING, nullable=False)
     approved_by: Mapped[UUID | None] = mapped_column(ForeignKey("admin_users.id"))
 
 
-class BillingLedger(UUIDPrimaryKeyMixin, Base):
-    __tablename__ = "billing_ledger"
-
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
-    payment_id: Mapped[UUID | None] = mapped_column(ForeignKey("payments.id", ondelete="SET NULL"), index=True)
-    subscription_id: Mapped[UUID | None] = mapped_column(ForeignKey("subscriptions.id", ondelete="SET NULL"), index=True)
-    plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id", ondelete="SET NULL"))
-    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    currency: Mapped[str | None] = mapped_column(String(8))
-    stars_amount: Mapped[int | None] = mapped_column(Integer)
-    ledger_metadata: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON)
-
-
-class DailyUsage(UUIDPrimaryKeyMixin, Base):
+class DailyUsage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "daily_usage"
-    __table_args__ = (
-        UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),
-        CheckConstraint("reserved >= 0 AND committed >= 0", name="ck_daily_usage_nonnegative"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),)
 
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False)
     reserved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     committed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_jobs"
-    __table_args__ = (
-        CheckConstraint("progress >= 0 AND progress <= 100", name="ck_generation_progress_range"),
-        CheckConstraint("dispatch_attempts >= 0", name="ck_generation_dispatch_attempts_nonnegative"),
-    )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     input_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -190,64 +169,88 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     input_storage_key: Mapped[str | None] = mapped_column(String(1024))
     input_mime_type: Mapped[str | None] = mapped_column(String(128))
     input_metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
-    status: Mapped[str] = mapped_column(String(16), default=JobStatus.QUEUED, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), default=JobStatus.QUEUED, nullable=False)
+    stage: Mapped[str | None] = mapped_column(String(64))
     progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    current_stage: Mapped[str | None] = mapped_column(String(64))
-    dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_dispatch_error: Mapped[str | None] = mapped_column(Text)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error: Mapped[str | None] = mapped_column(Text)
-
-
-class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "usage_reservations"
-    __table_args__ = (
-        UniqueConstraint("job_id", name="uq_usage_reservations_job_id"),
-        CheckConstraint("status IN ('RESERVED', 'COMMITTED', 'RELEASED')", name="ck_usage_reservation_status"),
-        CheckConstraint("source IN ('DAILY', 'CREDIT')", name="ck_usage_reservation_source"),
-    )
-
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
-    usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(16), default=UsageReservationStatus.RESERVED, nullable=False)
-    source: Mapped[str] = mapped_column(String(16), default=UsageReservationSource.DAILY, nullable=False)
-    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_results"
-    __table_args__ = (CheckConstraint("width > 0 AND height > 0", name="ck_generation_dimensions_positive"),)
 
     job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
     storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(128), default="image/png", nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
+    image_bytes: Mapped[bytes | None] = mapped_column()
 
 
 class AdminUser(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_users"
 
-    username: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), default="admin", nullable=False)
 
 
-class AdminAction(UUIDPrimaryKeyMixin, Base):
+class AdminAction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_actions"
 
-    admin_user_id: Mapped[UUID] = mapped_column(ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    admin_user_id: Mapped[UUID] = mapped_column(ForeignKey("admin_users.id", ondelete="CASCADE"), nullable=False)
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(64))
     target_id: Mapped[UUID | None] = mapped_column(Uuid)
-    details: Mapped[str | None] = mapped_column(Text)
+    metadata: Mapped[dict[str, object] | None] = mapped_column(JSON)
 
 
 class SystemSetting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "system_settings"
 
-    key: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    value: Mapped[str] = mapped_column(Text, nullable=False)
+    key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    value: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+
+
+class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "usage_reservations"
+    __table_args__ = (
+        UniqueConstraint("job_id", name="uq_usage_reservations_job"),
+        CheckConstraint("source IN ('DAILY', 'CREDIT')", name="ck_usage_reservations_source"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False)
+    usage_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default=UsageReservationStatus.RESERVED, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), default=UsageReservationSource.DAILY, nullable=False)
+    reserved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class GenerationDispatchState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "generation_dispatch_state"
+
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
+    dispatch_status: Mapped[str] = mapped_column(String(32), default="QUEUED", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BillingLedger(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "billing_ledger"
+
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    payment_id: Mapped[UUID | None] = mapped_column(ForeignKey("payments.id"))
+    subscription_id: Mapped[UUID | None] = mapped_column(ForeignKey("subscriptions.id"))
+    plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id"))
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str | None] = mapped_column(String(8))
+    stars_amount: Mapped[int | None] = mapped_column(Integer)
+    ledger_metadata: Mapped[dict[str, object] | None] = mapped_column("metadata", JSON)
