@@ -15,7 +15,6 @@ from gqmrmed.contracts.research import (
     SourceType,
 )
 
-
 _TRUSTED_DOMAINS = {
     "who.int",
     "cdc.gov",
