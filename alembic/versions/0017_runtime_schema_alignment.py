@@ -7,7 +7,7 @@ Create Date: 2026-09-14
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 revision: str = "0017_runtime_schema_alignment"
 down_revision: str | Sequence[str] | None = "0016_daily_usage_timestamps"
@@ -15,53 +15,149 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def upgrade() -> None:
-    # Activation service writes ActivationCode.activated_by_user_id.
-    if (
-        op.get_bind()
-        .dialect.has_table(op.get_bind(), "activation_codes")
-    ):
-        columns = {
-            row[0]
-            for row in op.get_bind().exec_driver_sql(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema='public' AND table_name='activation_codes'"
-            ).fetchall()
-        }
-        if "activated_by" in columns and "activated_by_user_id" not in columns:
-            op.alter_column("activation_codes", "activated_by", new_column_name="activated_by_user_id")
-
-    # BillingLedger inherits TimestampMixin and is written during paid credit grants.
-    op.add_column(
-        "billing_ledger",
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-    )
-    op.add_column(
-        "billing_ledger",
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-    )
-
-    # AdminAction also inherits TimestampMixin and its ORM field maps to metadata.
-    op.add_column(
-        "admin_actions",
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-    )
-    columns = {
-        row[0]
-        for row in op.get_bind().exec_driver_sql(
+def _columns(table_name: str) -> set[str]:
+    """Read columns only in online mode; offline mode must emit deterministic SQL."""
+    bind = op.get_bind()
+    return {
+        str(row[0])
+        for row in bind.exec_driver_sql(
             "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema='public' AND table_name='admin_actions'"
+            "WHERE table_schema='public' AND table_name=:table_name",
+            {"table_name": table_name},
         ).fetchall()
     }
+
+
+def upgrade() -> None:
+    if context.is_offline_mode():
+        # Fresh databases reach this revision from 0016 and therefore have the
+        # legacy names/shapes represented below.  No runtime inspection is
+        # possible in --sql mode, so emit the complete deterministic upgrade.
+        op.alter_column("activation_codes", "activated_by", new_column_name="activated_by_user_id")
+        op.add_column(
+            "billing_ledger",
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
+        op.add_column(
+            "billing_ledger",
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
+        op.add_column(
+            "admin_actions",
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
+        op.alter_column("admin_actions", "details", new_column_name="metadata")
+        _create_dispatch_state()
+        return
+
+    columns = _columns("activation_codes")
+    if "activated_by" in columns and "activated_by_user_id" not in columns:
+        op.alter_column("activation_codes", "activated_by", new_column_name="activated_by_user_id")
+
+    columns = _columns("billing_ledger")
+    if "created_at" not in columns:
+        op.add_column(
+            "billing_ledger",
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
+    if "updated_at" not in columns:
+        op.add_column(
+            "billing_ledger",
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
+
+    columns = _columns("admin_actions")
+    if "updated_at" not in columns:
+        op.add_column(
+            "admin_actions",
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+        )
     if "details" in columns and "metadata" not in columns:
         op.alter_column("admin_actions", "details", new_column_name="metadata")
 
-    # Durable dispatch state is part of the current ORM contract.
+    _create_dispatch_state()
+
+
+def _create_dispatch_state() -> None:
+    """Create dispatch state when missing, including fresh and repaired DBs."""
+    if context.is_offline_mode():
+        op.create_table(
+            "generation_dispatch_state",
+            sa.Column("id", sa.Uuid(), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column("job_id", sa.Uuid(), nullable=False),
+            sa.Column("dispatch_status", sa.String(length=32), server_default="QUEUED", nullable=False),
+            sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
+            sa.Column("last_error", sa.Text(), nullable=True),
+            sa.Column("dispatched_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
+            sa.ForeignKeyConstraint(["job_id"], ["generation_jobs.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("job_id", name="uq_generation_dispatch_state_job_id"),
+            sa.CheckConstraint("attempts >= 0", name="ck_generation_dispatch_attempts_nonnegative"),
+        )
+        return
+
+    bind = op.get_bind()
+    if sa.inspect(bind).has_table("generation_dispatch_state", schema="public"):
+        return
+
     op.create_table(
         "generation_dispatch_state",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("job_id", sa.Uuid(), nullable=False),
         sa.Column("dispatch_status", sa.String(length=32), server_default="QUEUED", nullable=False),
         sa.Column("attempts", sa.Integer(), server_default="0", nullable=False),
