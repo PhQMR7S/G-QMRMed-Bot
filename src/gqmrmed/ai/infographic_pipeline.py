@@ -16,9 +16,9 @@ from gqmrmed.ai.image_providers import (
     QwenImageConfig,
     QwenImageProvider,
 )
-from gqmrmed.ai.infographic_design import InfographicDesignSpec, build_design_spec
+from gqmrmed.ai.infographic_design import build_design_spec, InfographicDesignSpec
 from gqmrmed.ai.infographic_qa import validate_design_spec
-from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_page
+from gqmrmed.ai.infographic_renderer import render_infographic_page, RenderConfig
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
 from gqmrmed.config import Settings
@@ -29,9 +29,9 @@ from gqmrmed.generation.providers import (
     ImageGenerationProvider,
 )
 from gqmrmed.services.medical_pipeline import (
+    build_medical_plan,
     MedicalPlan,
     SynthesisProvider,
-    build_medical_plan,
 )
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
@@ -61,7 +61,7 @@ class InfographicPipeline:
         self.renderer_config = renderer_config or RenderConfig()
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "InfographicPipeline":
+    def from_settings(cls, settings: Settings) -> InfographicPipeline:
         providers: list[ImageGenerationProvider] = []
         for name in _csv(settings.image_provider_order):
             if (
@@ -207,8 +207,10 @@ class _BlankIllustrationProvider:
           </defs>
           <rect width="100%" height="100%" fill="url(#g)"/>
           <circle cx="50%" cy="42%" r="28%" fill="#FFFFFF" opacity="0.45"/>
-          <circle cx="50%" cy="42%" r="18%" fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
-          <path d="M25% 42% H38% L44% 32% L50% 53% L57% 36% L63% 42% H75%" fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
+          <circle cx="50%" cy="42%" r="18%" fill="none"
+                  stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
+          <path d="M25% 42% H38% L44% 32% L50% 53% L57% 36% L63% 42% H75%"
+                fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
         </svg>
         """
         image_bytes = await asyncio.to_thread(
