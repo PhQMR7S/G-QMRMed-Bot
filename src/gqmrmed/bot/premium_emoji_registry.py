@@ -128,8 +128,13 @@ async def _enrich(bot: Bot, ids: list[str]) -> list[dict[str, Any]]:
     ]
 
 
-def _render(ids: list[str]) -> str:
-    return "".join(f'<tg-emoji emoji-id="{emoji_id}"> </tg-emoji> ' for emoji_id in ids)
+def _render(item: dict[str, Any]) -> str:
+    """Render one captured Premium Emoji using Telegram's required alt text."""
+    emoji_id = str(item.get("id") or "")
+    alt = str(item.get("alt") or "")
+    if not emoji_id or not alt:
+        return ""
+    return f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>'
 
 
 @router.message(F.from_user.id == OWNER_TELEGRAM_ID, F.entities.func(_has_custom_emoji))
@@ -178,7 +183,7 @@ async def emoji_catalog(message: Message, session: AsyncSession) -> None:
                 f"alt: <code>{alt}</code> · slot: <code>{slot}</code> · "
                 f"set: <code>{set_name}</code>"
             )
-        lines.extend(["", _render([str(item["id"]) for item in items])])
+        lines.extend(["", " ".join(_render(item) for item in items)])
         chunks.append("\n".join(lines))
     for chunk in chunks:
         await message.answer(chunk, parse_mode="HTML")
