@@ -82,9 +82,9 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
     requested = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
     # Render deployments sometimes retain an old AI_PROVIDER_ORDER such as `ollama`.
-    # Keep the explicit order first, but automatically add configured FREE cloud routes
-    # so one stale environment value cannot silently disable every production provider.
-    free_fallbacks = ["openrouter_free", "groq_free", "huggingface_free"]
+    # Keep the explicit order first, but automatically add configured cloud routes
+    # so one stale environment value cannot silently disable production providers.
+    free_fallbacks = ["gemini_free", "openrouter_free", "groq_free", "huggingface_free"]
     order = list(dict.fromkeys([*requested, *free_fallbacks]))
     for name in order:
         if name == "ollama":
@@ -96,6 +96,25 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
                             base_url=settings.ollama_base_url,
                             model=settings.ollama_model,
                             timeout_seconds=settings.ollama_timeout_seconds,
+                        )
+                    ),
+                )
+            )
+        elif name == "gemini_free" and settings.gemini_api_key:
+            providers.append(
+                (
+                    ProviderDescriptor(
+                        name="gemini_free",
+                        model=settings.gemini_text_model,
+                        cost_tier="free",
+                    ),
+                    OpenAICompatibleChatSynthesizer(
+                        OpenAICompatibleConfig(
+                            api_key=settings.gemini_api_key,
+                            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                            model=settings.gemini_text_model,
+                            timeout_seconds=settings.gemini_timeout_seconds,
+                            extra_headers=(("x-goog-api-client", "gqmrmed-bot/1.0"),),
                         )
                     ),
                 )
