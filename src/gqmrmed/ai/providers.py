@@ -38,7 +38,7 @@ class ProviderRouter:
         providers: Sequence[tuple[ProviderDescriptor, TextSynthesisProvider]],
         *,
         allow_paid: bool = False,
-        retry_attempts: int = 2,
+        retry_attempts: int = 4,
         max_concurrency_per_provider: int = 4,
     ) -> None:
         if retry_attempts < 0:
@@ -102,7 +102,8 @@ def _is_transient_provider_error(exc: Exception) -> bool:
 
 
 def _retry_delay(attempt: int) -> float:
-    return float(min(8.0, 0.5 * (2**attempt)) + random.uniform(0.0, 0.25))
+    """Use exponential backoff long enough for transient 5xx recovery."""
+    return float(min(16.0, 1.0 * (2**attempt)) + random.uniform(0.0, 0.5))
 
 
 @dataclass(frozen=True, slots=True)
