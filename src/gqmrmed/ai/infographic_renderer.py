@@ -10,11 +10,15 @@ import base64
 import html
 import re
 from dataclasses import dataclass
-from io import BytesIO
 
 import cairosvg
 
-from gqmrmed.ai.infographic_design import InfographicDesignSpec, InfographicPage, TemplateFamily
+from gqmrmed.ai.infographic_design import (
+    InfographicDesignSpec,
+    InfographicPage,
+    TemplateFamily,
+    TextBlock,
+)
 from gqmrmed.generation.providers import GeneratedIllustration
 
 
@@ -59,28 +63,33 @@ def render_infographic_page(
     columns = 2 if len(body_blocks) > 4 else 1
     gap = 22
     outer = 52
-    card_width = (cfg.width - (2 * outer) - ((columns - 1) * gap)) / columns
-    rows = max(1, (len(body_blocks) + columns - 1) // columns)
-    row_height = (card_height - ((rows - 1) * gap)) / rows
 
     svg: list[str] = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{cfg.width}" height="{cfg.height}" viewBox="0 0 {cfg.width} {cfg.height}">',
+        (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{cfg.width}" '
+            f'height="{cfg.height}" viewBox="0 0 {cfg.width} {cfg.height}">'
+        ),
         _defs(),
         f'<rect width="{cfg.width}" height="{cfg.height}" fill="{cfg.background}"/>',
         f'<rect x="0" y="0" width="{cfg.width}" height="182" fill="url(#topGradient)"/>',
     ]
 
-    # Artwork is intentionally clipped to a central visual zone; no AI text is trusted.
-    if spec.template in {TemplateFamily.ANATOMY, TemplateFamily.MECHANISM, TemplateFamily.DRUG}:
+    if spec.template in {
+        TemplateFamily.ANATOMY,
+        TemplateFamily.MECHANISM,
+        TemplateFamily.DRUG,
+    }:
         svg.append(
-            f'<rect x="{outer}" y="{card_top}" width="{cfg.width - 2 * outer}" height="{card_height}" rx="32" fill="#FFFFFF" stroke="#DCE5ED"/>'
+            f'<rect x="{outer}" y="{card_top}" width="{cfg.width - 2 * outer}" '
+            f'height="{card_height}" rx="32" fill="#FFFFFF" stroke="#DCE5ED"/>'
         )
+        image_height = min(390, card_height * 0.38)
         svg.append(
             f'<image href="{artwork_uri}" x="{outer + 24}" y="{card_top + 24}" '
-            f'width="{cfg.width - 2 * outer - 48}" height="{min(390, card_height * 0.38)}" '
+            f'width="{cfg.width - 2 * outer - 48}" height="{image_height}" '
             'preserveAspectRatio="xMidYMid slice" opacity="0.92"/>'
         )
-        body_y = card_top + min(390, card_height * 0.38) + 48
+        body_y = card_top + image_height + 48
         _render_cards(
             svg,
             body_blocks,
@@ -111,25 +120,31 @@ def render_infographic_page(
 
     title_x = cfg.width - outer if rtl else outer
     anchor = "end" if rtl else "start"
+    direction = "rtl" if rtl else "ltr"
     svg.extend(
         [
-            f'<text x="{title_x}" y="82" text-anchor="{anchor}" direction="{"rtl" if rtl else "ltr"}" '
-            f'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" font-size="48" font-weight="800" fill="#FFFFFF">'
-            f'{_escape(title_block.text)}</text>',
-            f'<text x="{title_x}" y="124" text-anchor="{anchor}" direction="{"rtl" if rtl else "ltr"}" '
-            'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" font-size="22" fill="#EAF4FB">'
+            f'<text x="{title_x}" y="82" text-anchor="{anchor}" direction="{direction}" '
+            'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" '
+            f'font-size="48" font-weight="800" fill="#FFFFFF">{_escape(title_block.text)}</text>',
+            f'<text x="{title_x}" y="124" text-anchor="{anchor}" direction="{direction}" '
+            'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" '
+            'font-size="22" fill="#EAF4FB">'
             f'{_escape(page.sections[0] if page.sections else "Medical education")}</text>',
         ]
     )
     svg.append(_signature(cfg, safe_bottom))
     svg.append("</svg>")
 
-    return cairosvg.svg2png(bytestring="".join(svg).encode("utf-8"), output_width=cfg.width, output_height=cfg.height)
+    return cairosvg.svg2png(
+        bytestring="".join(svg).encode("utf-8"),
+        output_width=cfg.width,
+        output_height=cfg.height,
+    )
 
 
 def _render_cards(
     svg: list[str],
-    blocks: list,
+    blocks: list[TextBlock],
     *,
     x: float,
     y: float,
@@ -153,31 +168,37 @@ def _render_cards(
         card_y = y + row * (card_height + gap)
         accent = _accent(block.role, cfg)
         svg.append(
-            f'<rect x="{card_x:.1f}" y="{card_y:.1f}" width="{card_width:.1f}" height="{card_height:.1f}" '
-            'rx="26" fill="#FFFFFF" stroke="#DCE5ED" stroke-width="2"/>'
+            f'<rect x="{card_x:.1f}" y="{card_y:.1f}" width="{card_width:.1f}" '
+            f'height="{card_height:.1f}" rx="26" fill="#FFFFFF" '
+            'stroke="#DCE5ED" stroke-width="2"/>'
         )
         svg.append(
-            f'<rect x="{card_x:.1f}" y="{card_y:.1f}" width="7" height="{card_height:.1f}" rx="3" fill="{accent}"/>'
+            f'<rect x="{card_x:.1f}" y="{card_y:.1f}" width="7" '
+            f'height="{card_height:.1f}" rx="3" fill="{accent}"/>'
         )
         text_x = card_x + card_width - 28 if rtl else card_x + 30
         anchor = "end" if rtl else "start"
         direction = "rtl" if rtl else "ltr"
         role = _role_label(block.role, template)
         svg.append(
-            f'<text x="{text_x:.1f}" y="{card_y + 38:.1f}" text-anchor="{anchor}" direction="{direction}" '
-            'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" font-size="18" font-weight="700" '
+            f'<text x="{text_x:.1f}" y="{card_y + 38:.1f}" '
+            f'text-anchor="{anchor}" direction="{direction}" '
+            'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" '
+            'font-size="18" font-weight="700" '
             f'fill="{accent}">{_escape(role)}</text>'
         )
         font_size = 24 if block.importance >= 4 else 21
-        lines = _wrap(block.text, max_chars=31 if columns == 2 else 54)
+        max_chars = 31 if columns == 2 else 54
+        lines = _wrap(block.text, max_chars=max_chars)
         max_lines = max(3, int((card_height - 70) // (font_size + 9)))
-        lines = lines[:max_lines]
-        for line_index, line in enumerate(lines):
+        for line_index, line in enumerate(lines[:max_lines]):
             baseline = card_y + 76 + line_index * (font_size + 9)
             svg.append(
-                f'<text x="{text_x:.1f}" y="{baseline:.1f}" text-anchor="{anchor}" direction="{direction}" '
+                f'<text x="{text_x:.1f}" y="{baseline:.1f}" '
+                f'text-anchor="{anchor}" direction="{direction}" '
                 'font-family="Noto Sans Arabic, DejaVu Sans, sans-serif" '
-                f'font-size="{font_size}" font-weight="600" fill="{cfg.ink}">{_escape(line)}</text>'
+                f'font-size="{font_size}" font-weight="600" fill="{cfg.ink}">'
+                f'{_escape(line)}</text>'
             )
 
 
@@ -185,13 +206,16 @@ def _signature(cfg: RenderConfig, safe_bottom: int) -> str:
     y = cfg.height - safe_bottom + 8
     x = cfg.width - 52
     return (
-        f'<g opacity="0.88">'
-        f'<rect x="{x - 190}" y="{y - 38}" width="190" height="52" rx="26" fill="#FFFFFF" fill-opacity="0.60" '
-        'stroke="#FFFFFF" stroke-opacity="0.72" stroke-width="1.5"/>'
-        f'<path d="M{x - 166} {y - 12} L{x - 132} {y - 1} L{x - 160} {y + 11} Z" fill="#229ED9" opacity="0.9"/>'
-        f'<path d="M{x - 166} {y - 12} L{x - 150} {y + 4} L{x - 132} {y - 1} Z" fill="#FFFFFF" opacity="0.82"/>'
-        f'<text x="{x - 108}" y="{y + 5}" font-family="DejaVu Sans, sans-serif" font-size="20" font-weight="800" '
-        f'fill="{cfg.ink}">QMR7S</text>'
+        '<g opacity="0.88">'
+        f'<rect x="{x - 190}" y="{y - 38}" width="190" height="52" rx="26" '
+        'fill="#FFFFFF" fill-opacity="0.60" stroke="#FFFFFF" '
+        'stroke-opacity="0.72" stroke-width="1.5"/>'
+        f'<path d="M{x - 166} {y - 12} L{x - 132} {y - 1} '
+        f'L{x - 160} {y + 11} Z" fill="#229ED9" opacity="0.9"/>'
+        f'<path d="M{x - 166} {y - 12} L{x - 150} {y + 4} '
+        f'L{x - 132} {y - 1} Z" fill="#FFFFFF" opacity="0.82"/>'
+        f'<text x="{x - 108}" y="{y + 5}" font-family="DejaVu Sans, sans-serif" '
+        f'font-size="20" font-weight="800" fill="{cfg.ink}">QMR7S</text>'
         '</g>'
     )
 
@@ -199,13 +223,14 @@ def _signature(cfg: RenderConfig, safe_bottom: int) -> str:
 def _defs() -> str:
     return (
         '<defs><linearGradient id="topGradient" x1="0" y1="0" x2="1" y2="1">'
-        '<stop offset="0" stop-color="#315F87"/><stop offset="1" stop-color="#5AA5A0"/>'
-        '</linearGradient></defs>'
+        '<stop offset="0" stop-color="#315F87"/><stop offset="1" '
+        'stop-color="#5AA5A0"/></linearGradient></defs>'
     )
 
 
 def _data_uri(data: bytes, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
 
 
 def _escape(value: str) -> str:
