@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import uuid
+from typing import Any, Awaitable, cast
 
 import uvicorn
 from fastapi import FastAPI
@@ -31,16 +32,19 @@ async def health() -> dict[str, str]:
 
 
 async def _release_lock(redis: Redis, token: str) -> None:
-    await redis.eval(
-        """
-        if redis.call('get', KEYS[1]) == ARGV[1] then
-            return redis.call('del', KEYS[1])
-        end
-        return 0
-        """,
-        1,
-        POLLING_LOCK_KEY,
-        token,
+    await cast(
+        Awaitable[Any],
+        redis.eval(
+            """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('del', KEYS[1])
+            end
+            return 0
+            """,
+            1,
+            POLLING_LOCK_KEY,
+            token,
+        ),
     )
 
 
@@ -54,17 +58,20 @@ async def _heartbeat(redis: Redis, token: str, stop_event: asyncio.Event) -> Non
         except TimeoutError:
             pass
 
-        refreshed = await redis.eval(
-            """
-            if redis.call('get', KEYS[1]) == ARGV[1] then
-                return redis.call('expire', KEYS[1], ARGV[2])
-            end
-            return 0
-            """,
-            1,
-            POLLING_LOCK_KEY,
-            token,
-            str(POLLING_LOCK_TTL_SECONDS),
+        refreshed = await cast(
+            Awaitable[Any],
+            redis.eval(
+                """
+                if redis.call('get', KEYS[1]) == ARGV[1] then
+                    return redis.call('expire', KEYS[1], ARGV[2])
+                end
+                return 0
+                """,
+                1,
+                POLLING_LOCK_KEY,
+                token,
+                str(POLLING_LOCK_TTL_SECONDS),
+            ),
         )
         if not refreshed:
             raise RuntimeError("Telegram polling lock was lost")
