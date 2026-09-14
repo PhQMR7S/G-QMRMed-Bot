@@ -90,15 +90,31 @@ watermark, signature, or readable text in the illustration itself.
 
 
 TEMPLATE_HINTS: dict[TemplateFamily, str] = {
-    TemplateFamily.CLINICAL: "Use a strong title, central clinical illustration, and balanced information cards.",
+    TemplateFamily.CLINICAL: (
+        "Use a strong title, central clinical illustration, and balanced information cards."
+    ),
     TemplateFamily.MECHANISM: "Use a causal pathway with arrows and mechanism nodes.",
-    TemplateFamily.COMPARISON: "Use a symmetrical comparison matrix with shared attributes and key discriminators.",
-    TemplateFamily.DRUG: "Use medication-focused cards, mechanism/uses/cautions sections, and a dominant drug asset.",
-    TemplateFamily.DIAGNOSIS: "Use a decision-oriented diagnostic flow with tests, findings, and interpretation.",
-    TemplateFamily.TREATMENT: "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks.",
-    TemplateFamily.SYMPTOMS: "Use grouped symptom clusters with a clear hierarchy and warning strip only when evidence supports it.",
-    TemplateFamily.ANATOMY: "Use a central anatomical illustration with concise callout cards.",
-    TemplateFamily.EDUCATIONAL: "Use a flexible teaching-card layout with definition and high-yield takeaways.",
+    TemplateFamily.COMPARISON: (
+        "Use a symmetrical comparison matrix with shared attributes and key discriminators."
+    ),
+    TemplateFamily.DRUG: (
+        "Use medication-focused cards, mechanism/uses/cautions sections, and a dominant drug asset."
+    ),
+    TemplateFamily.DIAGNOSIS: (
+        "Use a decision-oriented diagnostic flow with tests, findings, and interpretation."
+    ),
+    TemplateFamily.TREATMENT: (
+        "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks."
+    ),
+    TemplateFamily.SYMPTOMS: (
+        "Use grouped symptom clusters with a clear hierarchy and warning strip only when evidence supports it."
+    ),
+    TemplateFamily.ANATOMY: (
+        "Use a central anatomical illustration with concise callout cards."
+    ),
+    TemplateFamily.EDUCATIONAL: (
+        "Use a flexible teaching-card layout with definition and high-yield takeaways."
+    ),
 }
 
 
@@ -135,7 +151,13 @@ def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
     """Select high-value evidence-locked facts that fit one readable image."""
     blocks: list[TextBlock] = []
     if content.subtitle:
-        blocks.append(TextBlock(text=_compact(content.subtitle, 180), role="subtitle", importance=4))
+        blocks.append(
+            TextBlock(
+                text=_compact(content.subtitle, 180),
+                role="subtitle",
+                importance=4,
+            )
+        )
 
     for point in content.key_points:
         blocks.append(TextBlock(text=_compact(point, 220), role="point", importance=3))
@@ -155,17 +177,16 @@ def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
         )
 
     for caution in content.cautions:
-        blocks.append(TextBlock(text=_compact(caution, 220), role="caution", importance=5))
+        blocks.append(
+            TextBlock(text=_compact(caution, 220), role="caution", importance=5)
+        )
 
-    # A single 4:5 image has a finite readable capacity. Prefer evidence-rich
-    # content instead of shrinking typography or silently creating another image.
     ranked = sorted(
         enumerate(blocks),
         key=lambda item: (item[1].importance, -item[0]),
         reverse=True,
     )
-    selected = [block for _, block in ranked[:9]]
-    return selected
+    return [block for _, block in ranked[:9]]
 
 
 def build_design_spec(
