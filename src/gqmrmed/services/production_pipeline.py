@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from gqmrmed.ai.infographic_design import build_design_spec
+from gqmrmed.ai.infographic_design import build_design_spec, detect_language_mode
 from gqmrmed.ai.infographic_qa import validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page
 from gqmrmed.contracts.generation import GenerationStage
@@ -15,8 +15,8 @@ from gqmrmed.db.models import GenerationJob
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationProvider
 from gqmrmed.services.quality import validate_png_contract
 from gqmrmed.services.research import (
-    research_medical_topic,
     ResearchProvider,
+    research_medical_topic,
     validate_synthesis_evidence,
 )
 from gqmrmed.services.visual_architecture import select_visual_architecture
@@ -87,6 +87,7 @@ class ProductionGenerationPipeline:
             topic=user_input,
             content=content,
             visual_plan=visual_plan,
+            language=detect_language_mode(user_input),
         )
         validate_design_spec(design)
         page = design.pages[0]
