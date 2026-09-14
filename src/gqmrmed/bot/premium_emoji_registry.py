@@ -165,18 +165,21 @@ async def emoji_catalog(message: Message, session: AsyncSession) -> None:
         await message.answer("مكتبة Premium Emoji فارغة.")
         return
     chunks: list[str] = []
-    for start in range(0, len(bank), 40):
-        items = bank[start : start + 40]
-        indexed_ids = " ".join(
-            f"<code>{start + index + 1}</code> {item['id']}"
-            for index, item in enumerate(items)
-        )
-        chunks.append(
-            "<b>مكتبة Premium Emoji</b>\n"
-            + indexed_ids
-            + "\n\n"
-            + _render([str(item["id"]) for item in items])
-        )
+    for start in range(0, len(bank), 10):
+        items = bank[start : start + 10]
+        lines = ["<b>مكتبة Premium Emoji</b>"]
+        for index, item in enumerate(items, start=start + 1):
+            emoji_id = str(item.get("id", ""))
+            alt = str(item.get("alt") or "—")
+            set_name = str(item.get("set_name") or "—")
+            slot = str(item.get("slot") or "brand")
+            lines.append(
+                f"<b>{index}</b> · <code>{emoji_id}</code> · "
+                f"alt: <code>{alt}</code> · slot: <code>{slot}</code> · "
+                f"set: <code>{set_name}</code>"
+            )
+        lines.extend(["", _render([str(item["id"]) for item in items])])
+        chunks.append("\n".join(lines))
     for chunk in chunks:
         await message.answer(chunk, parse_mode="HTML")
 

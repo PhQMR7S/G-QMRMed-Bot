@@ -1,5 +1,7 @@
 """Professional Telegram UI, owner controls, and Premium Emoji registry."""
 
+import json
+
 from datetime import UTC, date
 
 from aiogram import F, Router
@@ -22,9 +24,14 @@ EMOJI_SLOTS = (
 
 
 def _emoji(settings: dict[str, str], slot: str) -> str:
-    """Render a bound Telegram Premium Emoji; never use a Unicode fallback."""
+    """Render a Telegram Premium Emoji with its exact Telegram-provided alt."""
     emoji_id = settings.get(f"{EMOJI_PREFIX}{slot}")
-    return f'<tg-emoji emoji-id="{emoji_id}"> </tg-emoji>' if emoji_id else ""
+    if not emoji_id:
+        return ""
+    alt = settings.get(f"{EMOJI_PREFIX}alt:{emoji_id}")
+    if not alt:
+        return ""
+    return f'<tg-emoji emoji-id="{emoji_id}">{alt}</tg-emoji>'
 
 
 async def _emoji_settings(session: AsyncSession) -> dict[str, str]:
@@ -33,7 +40,22 @@ async def _emoji_settings(session: AsyncSession) -> dict[str, str]:
             select(SystemSetting).where(SystemSetting.key.like(f"{EMOJI_PREFIX}%"))
         )
     ).scalars().all()
-    return {row.key: row.value for row in rows}
+    settings = {row.key: row.value for row in rows}
+    raw_bank = settings.get(f"{EMOJI_PREFIX}bank")
+    if raw_bank:
+        try:
+            bank = json.loads(raw_bank)
+        except json.JSONDecodeError:
+            bank = []
+        if isinstance(bank, list):
+            for item in bank:
+                if not isinstance(item, dict):
+                    continue
+                emoji_id = str(item.get("id") or "")
+                alt = str(item.get("alt") or "")
+                if emoji_id and alt:
+                    settings[f"{EMOJI_PREFIX}alt:{emoji_id}"] = alt
+    return settings
 
 
 def _is_owner(user_id: int) -> bool:
