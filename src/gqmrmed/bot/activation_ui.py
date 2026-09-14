@@ -4,7 +4,6 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import provision_user
@@ -18,57 +17,17 @@ class ActivationStates(StatesGroup):
     waiting_for_code = State()
 
 
-def _plans_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🔑 إدخال كود التفعيل", callback_data="pro:activate")],
-            [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")],
-        ]
-    )
-
-
 def _cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="إلغاء والعودة للرئيسية", callback_data="pro:activate_cancel")]
-        ]
-    )
-
-
-@router.callback_query(F.data == "pro:plans")
-async def activation_plans_entry(callback: CallbackQuery, session: AsyncSession) -> None:
-    plans = (
-        await session.execute(
-            select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price.asc(), Plan.code.asc())
-        )
-    ).scalars().all()
-    lines = ["💳 <b>الخطط والاشتراكات</b>", ""]
-    for plan in plans:
-        limit = "غير محدود" if plan.daily_limit is None else f"{plan.daily_limit} تصاميم يومياً"
-        duration = "مستمر" if plan.duration_days is None else f"{plan.duration_days} يوماً"
-        stars = "بدون رسوم" if plan.stars_price is None else f"{plan.stars_price} Telegram Stars"
-        lines.extend(
             [
-                f"<b>{plan.name}</b>",
-                f"الحد اليومي: {limit} · المدة: {duration}",
-                f"السعر: {stars}",
-                "",
+                InlineKeyboardButton(
+                    text="إلغاء والعودة للرئيسية",
+                    callback_data="pro:activate_cancel",
+                )
             ]
-        )
-    lines.extend(
-        [
-            "🔑 <b>لديك كود تفعيل؟</b>",
-            "أدخل الكود وسيحدد النظام الخطة المرتبطة به تلقائياً.",
-            "الكود صالح للاستخدام مرة واحدة فقط.",
         ]
     )
-    if callback.message is not None:
-        await callback.message.edit_text(
-            "\n".join(lines),
-            parse_mode="HTML",
-            reply_markup=_plans_keyboard(),
-        )
-    await callback.answer()
 
 
 @router.callback_query(F.data == "pro:activate")
@@ -87,7 +46,11 @@ async def activation_start(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(ActivationStates.waiting_for_code)
-async def activation_submit(message: Message, state: FSMContext, session: AsyncSession) -> None:
+async def activation_submit(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+) -> None:
     raw_code = (message.text or "").strip()
     if not raw_code:
         await message.answer("❌ أرسل كود التفعيل كنص.", reply_markup=_cancel_keyboard())
