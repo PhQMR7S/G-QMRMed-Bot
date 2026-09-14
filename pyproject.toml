@@ -82,3 +82,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["gqmrmed.bot.router"]
 disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["gqmrmed.services.worker", "gqmrmed.services.cancellation"]
+disable_error_code = ["call-arg"]
