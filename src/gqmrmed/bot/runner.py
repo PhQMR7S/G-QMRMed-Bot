@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 from gqmrmed.bot.dispatcher import GenerationDispatcher
 from gqmrmed.bot.middleware import DbSessionMiddleware
 from gqmrmed.bot.payments import router as payments_router
+from gqmrmed.bot.professional_ui import router as professional_ui_router
 from gqmrmed.bot.router import router
 from gqmrmed.config import get_settings
 
@@ -24,11 +25,14 @@ async def run_bot() -> None:
     bot = Bot(token=settings.telegram_bot_token)
     dispatcher = Dispatcher()
     session_middleware = DbSessionMiddleware()
+    professional_ui_router.message.middleware(session_middleware)
+    professional_ui_router.callback_query.middleware(session_middleware)
     router.message.middleware(session_middleware)
     router.callback_query.middleware(session_middleware)
     payments_router.message.middleware(session_middleware)
     payments_router.callback_query.middleware(session_middleware)
     payments_router.pre_checkout_query.middleware(session_middleware)
+    dispatcher.include_router(professional_ui_router)
     dispatcher.include_router(payments_router)
     dispatcher.include_router(router)
 
