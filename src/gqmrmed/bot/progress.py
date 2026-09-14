@@ -26,10 +26,30 @@ _STAGE_LABELS = {
     GenerationStage.QUALITY_CONTROL: ("success", "المراجعة النهائية"),
 }
 
+_EMOJI_FALLBACKS = {
+    "brand": "✦",
+    "medical": "🩺",
+    "create": "🎨",
+    "plans": "▣",
+    "research": "🔎",
+    "ai": "🤖",
+    "design": "✦",
+    "success": "✅",
+    "warning": "⚠️",
+    "support": "💬",
+    "free": "🎁",
+    "plus": "✚",
+    "pro": "★",
+}
+
 
 def _emoji(settings: dict[str, str], slot: str) -> str:
-    emoji_id = settings.get(f"{EMOJI_PREFIX}{slot}")
-    return f'<tg-emoji emoji-id="{emoji_id}"> </tg-emoji>' if emoji_id else ""
+    """Return valid Telegram custom-emoji markup with a real fallback character."""
+    fallback = _EMOJI_FALLBACKS.get(slot, "•")
+    emoji_id = (settings.get(f"{EMOJI_PREFIX}{slot}") or "").strip()
+    if not emoji_id.isdigit():
+        return fallback
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 
 def _progress_bar(value: int, *, width: int = 10) -> str:
@@ -45,11 +65,7 @@ def format_progress_message(
     emoji_settings: dict[str, str] | None = None,
 ) -> str:
     """Render one stable Arabic Telegram progress message using bound Premium Emoji."""
-    payload = GenerationProgress(
-        stage=stage,
-        progress=progress,
-        elapsed_seconds=elapsed_seconds,
-    )
+    payload = GenerationProgress(stage=stage, progress=progress, elapsed_seconds=elapsed_seconds)
     settings = emoji_settings or {}
     slot, label = _STAGE_LABELS[payload.stage]
     elapsed = f"{payload.elapsed_seconds // 60:02d}:{payload.elapsed_seconds % 60:02d}"
@@ -88,12 +104,7 @@ class TelegramProgressSink:
         self._emoji_settings = {row.key: row.value for row in rows}
         return self._emoji_settings
 
-    async def __call__(
-        self,
-        job: GenerationJob,
-        stage: GenerationStage,
-        progress: int,
-    ) -> None:
+    async def __call__(self, job: GenerationJob, stage: GenerationStage, progress: int) -> None:
         job_id = job.id
         started = self._started_at.setdefault(job_id, time.monotonic())
         elapsed = max(0, int(time.monotonic() - started))
@@ -105,9 +116,7 @@ class TelegramProgressSink:
         chat_id = (job.input_metadata or {}).get("telegram_chat_id")
         if not isinstance(chat_id, int) or chat_id <= 0:
             async with self._session_factory() as session:
-                result = await session.execute(
-                    select(User.telegram_id).where(User.id == job.user_id)
-                )
+                result = await session.execute(select(User.telegram_id).where(User.id == job.user_id))
                 chat_id = result.scalar_one_or_none()
         if not isinstance(chat_id, int) or chat_id <= 0:
             raise ValueError("telegram_chat_id_unavailable")
@@ -119,11 +128,7 @@ class TelegramProgressSink:
             emoji_settings=await self._load_emoji_settings(),
         )
         if message_id is None:
-            sent = await self._bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode="HTML",
-            )
+            sent = await self._bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
             message_id = sent.message_id
             self._message_ids[job_id] = message_id
             async with self._session_factory() as session:
