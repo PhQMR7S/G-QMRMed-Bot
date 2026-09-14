@@ -200,6 +200,13 @@ class _BlankIllustrationProvider:
         del prompt
         cx = width / 2
         cy = height * 0.42
+        path = (
+            f"M{width * 0.25:.1f} {cy:.1f} H{width * 0.38:.1f} "
+            f"L{width * 0.44:.1f} {height * 0.32:.1f} "
+            f"L{width * 0.50:.1f} {height * 0.53:.1f} "
+            f"L{width * 0.57:.1f} {height * 0.36:.1f} "
+            f"L{width * 0.63:.1f} {cy:.1f} H{width * 0.75:.1f}"
+        )
         svg = f"""
         <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"
              viewBox="0 0 {width} {height}">
@@ -215,12 +222,7 @@ class _BlankIllustrationProvider:
           <circle cx="{cx:.1f}" cy="{cy:.1f}"
                   r="{min(width, height) * 0.18:.1f}" fill="none"
                   stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
-          <path d="M{width * 0.25:.1f} {cy:.1f} H{width * 0.38:.1f} "
-                f"L{width * 0.44:.1f} {height * 0.32:.1f} "
-                f"L{width * 0.50:.1f} {height * 0.53:.1f} "
-                f"L{width * 0.57:.1f} {height * 0.36:.1f} "
-                f"L{width * 0.63:.1f} {cy:.1f} H{width * 0.75:.1f}"
-                fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
+          <path d="{path}" fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
         </svg>
         """
         image_bytes = await asyncio.to_thread(
