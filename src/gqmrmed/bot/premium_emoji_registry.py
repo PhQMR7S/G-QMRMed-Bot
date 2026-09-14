@@ -53,6 +53,12 @@ def _ids(message: Message) -> list[str]:
     return result
 
 
+def _has_custom_emoji(entities: Any) -> bool:
+    return any(
+        entity.type == "custom_emoji" and entity.custom_emoji_id for entity in entities or []
+    )
+
+
 async def _setting(session: AsyncSession, key: str) -> SystemSetting | None:
     return (
         await session.execute(select(SystemSetting).where(SystemSetting.key == key))
@@ -131,7 +137,7 @@ def _render(ids: list[str]) -> str:
     return "".join(f'<tg-emoji emoji-id="{emoji_id}"> </tg-emoji> ' for emoji_id in ids)
 
 
-@router.message(F.from_user.id == OWNER_TELEGRAM_ID, F.entities)
+@router.message(F.from_user.id == OWNER_TELEGRAM_ID, F.entities.func(_has_custom_emoji))
 async def capture_owner_premium_emojis(
     message: Message, session: AsyncSession, bot: Bot
 ) -> None:
