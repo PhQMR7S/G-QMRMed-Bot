@@ -93,7 +93,10 @@ class Settings(BaseSettings):
         default="@cf/black-forest-labs/flux-2-klein-4b", alias="CLOUDFLARE_IMAGE_MODEL"
     )
     dashscope_api_key: str | None = Field(default=None, alias="DASHSCOPE_API_KEY")
-    dashscope_base_url: str | None = Field(default=None, alias="DASHSCOPE_BASE_URL")
+    dashscope_base_url: str = Field(
+        default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        alias="DASHSCOPE_BASE_URL",
+    )
     dashscope_image_model: str = Field(
         default="qwen-image-3.0-pro", alias="DASHSCOPE_IMAGE_MODEL"
     )
@@ -109,7 +112,9 @@ class Settings(BaseSettings):
         default=180.0, gt=0, le=900, alias="IMAGE_GENERATION_TIMEOUT_SECONDS"
     )
 
-    research_provider: str | None = Field(default="gemini_grounded,pubmed", alias="RESEARCH_PROVIDER")
+    research_provider: str | None = Field(
+        default="gemini_grounded,pubmed", alias="RESEARCH_PROVIDER"
+    )
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
     research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
 
