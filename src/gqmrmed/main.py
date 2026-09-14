@@ -50,16 +50,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        stop_event = getattr(app.state, "worker_stop", None)
+        stop_event_for_shutdown: asyncio.Event | None = getattr(
+            app.state, "worker_stop", None
+        )
         worker_task = getattr(app.state, "worker_task", None)
-        bot = getattr(app.state, "worker_bot", None)
-        if stop_event is not None:
-            stop_event.set()
+        bot_for_shutdown: Bot | None = getattr(app.state, "worker_bot", None)
+        if stop_event_for_shutdown is not None:
+            stop_event_for_shutdown.set()
         if worker_task is not None:
             with contextlib.suppress(asyncio.CancelledError):
                 await worker_task
-        if bot is not None:
-            await bot.session.close()
+        if bot_for_shutdown is not None:
+            await bot_for_shutdown.session.close()
 
 
 app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
