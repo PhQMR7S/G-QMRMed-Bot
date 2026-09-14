@@ -200,7 +200,11 @@ class GeminiImageProvider:
             if not isinstance(candidates, list) or not candidates:
                 raise ImageGenerationError("gemini_image_candidates_missing")
             content = candidates[0].get("content")
-            parts = content.get("parts", []) if isinstance(content, dict) else []
+            parts = (
+                content.get("parts", [])
+                if isinstance(content, dict)
+                else []
+            )
             for part in parts:
                 if not isinstance(part, dict):
                     continue
