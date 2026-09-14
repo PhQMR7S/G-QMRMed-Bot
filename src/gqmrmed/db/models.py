@@ -50,6 +50,11 @@ class UsageReservationStatus(StrEnum):
     RELEASED = "RELEASED"
 
 
+class UsageReservationSource(StrEnum):
+    DAILY = "DAILY"
+    CREDIT = "CREDIT"
+
+
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
@@ -60,6 +65,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     language: Mapped[str] = mapped_column(String(16), default="en", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    design_credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -78,6 +84,20 @@ class Plan(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     stars_price: Mapped[int | None] = mapped_column(Integer)
     duration_days: Mapped[int | None] = mapped_column(Integer)
     daily_limit: Mapped[int | None] = mapped_column(Integer)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class CreditPack(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "credit_packs"
+    __table_args__ = (
+        CheckConstraint("stars_price > 0", name="ck_credit_packs_stars_positive"),
+        CheckConstraint("credits > 0", name="ck_credit_packs_credits_positive"),
+    )
+
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    stars_price: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
@@ -116,7 +136,8 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    plan_id: Mapped[UUID] = mapped_column(ForeignKey("plans.id"), nullable=False)
+    plan_id: Mapped[UUID | None] = mapped_column(ForeignKey("plans.id"))
+    credit_pack_id: Mapped[UUID | None] = mapped_column(ForeignKey("credit_packs.id"))
     subscription_id: Mapped[UUID | None] = mapped_column(ForeignKey("subscriptions.id"))
     activation_code_id: Mapped[UUID | None] = mapped_column(ForeignKey("activation_codes.id"))
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -130,8 +151,6 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class BillingLedger(UUIDPrimaryKeyMixin, Base):
-    """Append-only billing audit record; business logic never updates prior events."""
-
     __tablename__ = "billing_ledger"
 
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
@@ -187,12 +206,14 @@ class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("job_id", name="uq_usage_reservations_job_id"),
         CheckConstraint("status IN ('RESERVED', 'COMMITTED', 'RELEASED')", name="ck_usage_reservation_status"),
+        CheckConstraint("source IN ('DAILY', 'CREDIT')", name="ck_usage_reservation_source"),
     )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, index=True)
     usage_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), default=UsageReservationStatus.RESERVED, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), default=UsageReservationSource.DAILY, nullable=False)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
