@@ -8,9 +8,10 @@ from gqmrmed.db.models import SystemSetting
 
 
 async def get_runtime_setting(session: AsyncSession, key: str) -> str | None:
-    """Return a setting value without creating rows as a side effect."""
+    """Return a string setting value without creating rows as a side effect."""
     result = await session.execute(select(SystemSetting.value).where(SystemSetting.key == key))
-    return result.scalar_one_or_none()
+    value = result.scalar_one_or_none()
+    return value if isinstance(value, str) else None
 
 
 async def set_runtime_setting(session: AsyncSession, *, key: str, value: str) -> SystemSetting:
