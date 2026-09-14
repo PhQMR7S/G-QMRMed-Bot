@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from aiogram.types import InlineKeyboardButton
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +29,10 @@ SLOTS = (
     "plus",
     "pro",
 )
+
+_ORIGINAL_INLINE_BUTTON = InlineKeyboardButton
+_BUTTON_EMOJI_IDS: list[str] = []
+_BUTTON_CURSOR = 0
 
 
 def _classify(alt: str | None) -> str:
@@ -66,20 +71,22 @@ async def emoji_settings(session: AsyncSession) -> dict[str, str]:
             parsed = []
         if isinstance(parsed, list):
             bank = [item for item in parsed if isinstance(item, dict)]
+
+    ids: list[str] = []
     for item in bank:
         emoji_id = str(item.get("id") or "")
         alt = str(item.get("alt") or "")
+        if emoji_id:
+            ids.append(emoji_id)
         if emoji_id and alt:
             settings[f"{PREFIX}alt:{emoji_id}"] = alt
             settings[f"{PREFIX}slot:{emoji_id}"] = str(
                 item.get("slot") or _classify(alt)
             )
-    settings[f"{PREFIX}count"] = str(len(bank))
-    settings[f"{PREFIX}ids"] = json.dumps(
-        [str(item.get("id")) for item in bank if item.get("id")],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+
+    settings[f"{PREFIX}count"] = str(len(ids))
+    settings[f"{PREFIX}ids"] = json.dumps(ids, ensure_ascii=False, separators=(",", ":"))
+    _refresh_button_pool(ids, settings)
     return settings
 
 
@@ -90,6 +97,32 @@ def _bank_ids(settings: Mapping[str, str]) -> list[str]:
     except json.JSONDecodeError:
         return []
     return [str(value) for value in ids if value]
+
+
+def _refresh_button_pool(ids: list[str], settings: Mapping[str, str]) -> None:
+    """Refresh the fixed button palette while preserving bank order and uniqueness."""
+    global _BUTTON_EMOJI_IDS, _BUTTON_CURSOR
+    valid = [emoji_id for emoji_id in ids if settings.get(f"{PREFIX}alt:{emoji_id}")]
+    if valid != _BUTTON_EMOJI_IDS:
+        _BUTTON_EMOJI_IDS = valid
+        _BUTTON_CURSOR = 0
+
+
+def _next_button_emoji_id() -> str | None:
+    """Return the next captured button icon without repeating within a keyboard build cycle."""
+    global _BUTTON_CURSOR
+    if not _BUTTON_EMOJI_IDS:
+        return None
+    emoji_id = _BUTTON_EMOJI_IDS[_BUTTON_CURSOR % len(_BUTTON_EMOJI_IDS)]
+    _BUTTON_CURSOR = (_BUTTON_CURSOR + 1) % len(_BUTTON_EMOJI_IDS)
+    return emoji_id
+
+
+def _button_factory(*args: Any, **kwargs: Any) -> InlineKeyboardButton:
+    """Construct every inline button with a real Telegram custom-emoji icon."""
+    kwargs = dict(kwargs)
+    kwargs.setdefault("icon_custom_emoji_id", _next_button_emoji_id())
+    return _ORIGINAL_INLINE_BUTTON(*args, **kwargs)
 
 
 def render(settings: dict[str, str], slot: str) -> str:
@@ -122,13 +155,16 @@ def render(settings: dict[str, str], slot: str) -> str:
 
 
 def patch_modules() -> None:
-    """Patch UI modules to use the shared resolver without duplicating DB logic."""
-    from gqmrmed.bot import admin_ui, professional_ui
+    """Install the shared message renderer and Premium Emoji button factory."""
+    from gqmrmed.bot import admin_ui, payments, professional_ui, progress, router
 
+    for module in (admin_ui, payments, professional_ui, router):
+        module.InlineKeyboardButton = _button_factory
     admin_ui._emoji_settings = emoji_settings
     admin_ui._emoji = render
     professional_ui._emoji_settings = emoji_settings
     professional_ui._emoji = render
+    progress._emoji = render
 
 
 __all__ = ["emoji_settings", "render", "patch_modules"]
