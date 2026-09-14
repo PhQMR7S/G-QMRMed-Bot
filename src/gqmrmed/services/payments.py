@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from gqmrmed.db.models import BillingLedger, CreditPack, Payment, PaymentStatus, Plan, PlanCode, Subscription, SubscriptionStatus, User
+from gqmrmed.db.models import BillingLedger, CreditPack, Payment, PaymentStatus, Plan, PlanCode, Subscription, User
 from gqmrmed.services.credits import grant_design_credits
 from gqmrmed.services.subscriptions import grant_paid_subscription
 
@@ -118,7 +118,14 @@ async def finalize_stars_payment(session: AsyncSession, *, invoice_payload: str,
         pack = await session.get(CreditPack, payment.credit_pack_id, with_for_update=True)
         if pack is None or not pack.is_active or pack.stars_price != total_amount:
             raise ValueError("credit_pack_unavailable_or_price_changed")
-        await grant_design_credits(session, user_id=user.id, credit_pack=pack, payment=payment)
+        await grant_design_credits(
+            session,
+            user_id=user.id,
+            credits=pack.credits,
+            payment_id=payment.id,
+            pack=pack,
+            stars_amount=total_amount,
+        )
         payment.status = PaymentStatus.APPROVED.value
         payment.transaction_id = transaction_id
         await _ledger(
