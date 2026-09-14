@@ -82,7 +82,6 @@ async def issue_codes(  # noqa: B008
                 session,
                 plan=plan,
                 duration_days=request.duration_days,
-                created_by=None,
             )
             codes.append(plaintext)
     return {"codes": codes}
