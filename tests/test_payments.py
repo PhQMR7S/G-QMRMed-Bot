@@ -54,6 +54,7 @@ def make_payment(plan: SimpleNamespace) -> SimpleNamespace:
         id=uuid4(),
         user_id=uuid4(),
         plan_id=plan.id,
+        credit_pack_id=None,
         subscription_id=None,
         activation_code_id=None,
         provider="manual",
