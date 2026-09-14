@@ -128,12 +128,14 @@ async def _home(session: AsyncSession) -> tuple[str, InlineKeyboardMarkup]:
             state = "✓" if item else "—"
             row.append(_emoji_button(f"{state} {SLOT_LABELS[slot]}", f"pem:list:{slot}:0", icon))
         rows.append(row)
-    rows.extend([
-        [_emoji_button("📚 عرض المكتبة كاملة", "pem:catalog:0")],
-        [_emoji_button("⚡ ربط تلقائي ذكي", "pem:auto")],
-        [_emoji_button("🔄 تحديث الحالة", "pem:home")],
-        [_emoji_button("↩️ لوحة الإدارة", "adm:home")],
-    ])
+    rows.extend(
+        [
+            [_emoji_button("📚 عرض المكتبة كاملة", "pem:catalog:0")],
+            [_emoji_button("⚡ ربط تلقائي ذكي", "pem:auto")],
+            [_emoji_button("🔄 تحديث الحالة", "pem:home")],
+            [_emoji_button("↩️ لوحة الإدارة", "adm:home")],
+        ]
+    )
     return "\n".join(lines), _kb(rows)
 
 
@@ -155,7 +157,11 @@ async def manager_home(callback: CallbackQuery, session: AsyncSession) -> None:
     await _show(callback, text, markup)
 
 
-@router.callback_query(F.data.regexp(r"^pem:list:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"))
+@router.callback_query(
+    F.data.regexp(
+        r"^pem:list:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"
+    )
+)
 async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
@@ -188,7 +194,8 @@ async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
             alt = str(item.get("alt") or "?")
             absolute = start + local_index
             marker = "✓" if emoji_id == current else ""
-            row.append(_emoji_button(f"{marker} #{absolute + 1} {alt}", f"pem:pick:{slot}:{absolute}", emoji_id))
+            label = f"{marker} #{absolute + 1} {alt}"
+            row.append(_emoji_button(label, f"pem:pick:{slot}:{absolute}", emoji_id))
         rows.append(row)
 
     nav: list[InlineKeyboardButton] = []
@@ -202,7 +209,11 @@ async def emoji_picker(callback: CallbackQuery, session: AsyncSession) -> None:
     await _show(callback, "\n".join(lines), _kb(rows))
 
 
-@router.callback_query(F.data.regexp(r"^pem:pick:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"))
+@router.callback_query(
+    F.data.regexp(
+        r"^pem:pick:(brand|medical|create|plans|research|ai|design|success|warning|support|free|plus|pro):[0-9]+$"
+    )
+)
 async def emoji_pick(callback: CallbackQuery, session: AsyncSession) -> None:
     if not _owner(callback):
         await callback.answer("غير مصرح.", show_alert=True)
