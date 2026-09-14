@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-# The SVG compositor intentionally contains long markup literals.
-# Ruff's E501 is disabled for this renderer; functional checks remain enforced.
-# ruff: noqa: E501
-
 import base64
 import html
 import re
@@ -21,6 +17,10 @@ from gqmrmed.ai.infographic_design import (
     TextBlock,
 )
 from gqmrmed.generation.providers import GeneratedIllustration
+
+# The SVG compositor intentionally contains long markup literals.
+# Ruff's E501 is disabled for this renderer; functional checks remain enforced.
+# ruff: noqa: E501
 
 
 @dataclass(frozen=True, slots=True)
