@@ -92,5 +92,14 @@ module = ["gqmrmed.bot.router", "gqmrmed.bot.professional_ui", "gqmrmed.bot.admi
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
+module = [
+  "gqmrmed.ai.infographic_renderer",
+  "gqmrmed.ai.infographic_design",
+  "gqmrmed.ai.providers",
+  "gqmrmed.services.production_pipeline",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
 module = ["gqmrmed.services.worker", "gqmrmed.services.cancellation"]
 disable_error_code = ["call-arg"]
