@@ -38,7 +38,7 @@ async def run_bot() -> None:
 
     try:
         await bot.delete_webhook(drop_pending_updates=False)
-        await dispatcher.start_polling(bot)
+        await dispatcher.start_polling(bot, handle_signals=False)
     finally:
         stop_event.set()
         await dispatch_task
