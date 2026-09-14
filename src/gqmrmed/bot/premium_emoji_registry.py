@@ -1,9 +1,4 @@
-"""Owner-only Telegram Premium Emoji capture and registry.
-
-The bot cannot recover message history, so this router captures custom-emoji
-entities from new owner messages and enriches their IDs with Telegram sticker
-metadata. No ordinary Unicode emoji are emitted by the bot UI.
-"""
+"""Owner-only Telegram Premium Emoji capture and registry."""
 
 from __future__ import annotations
 
@@ -151,8 +146,8 @@ async def capture_owner_premium_emojis(
     if not fresh:
         return
     bank.extend(fresh)
-    async with session.begin():
-        await _save_bank(session, bank)
+    await _save_bank(session, bank)
+    await session.commit()
     await message.answer(
         f"تم التقاط {len(fresh)} من رموز Premium Emoji وحفظها في مكتبة GQMRMed.\n"
         f"الإجمالي المسجل: {len(bank)}.\n\n"
@@ -199,16 +194,16 @@ async def emoji_autobind(message: Message, session: AsyncSession) -> None:
         slot = str(item.get("slot") or "brand")
         if slot not in selected:
             selected[slot] = str(item["id"])
-    async with session.begin():
-        for slot in SLOTS:
-            if slot not in selected:
-                continue
-            key = f"{PREFIX}{slot}"
-            setting = await _setting(session, key)
-            if setting is None:
-                session.add(SystemSetting(key=key, value=selected[slot]))
-            else:
-                setting.value = selected[slot]
+    for slot in SLOTS:
+        if slot not in selected:
+            continue
+        key = f"{PREFIX}{slot}"
+        setting = await _setting(session, key)
+        if setting is None:
+            session.add(SystemSetting(key=key, value=selected[slot]))
+        else:
+            setting.value = selected[slot]
+    await session.commit()
     await message.answer(
         "اكتمل التصنيف الأولي الدلالي لمكتبة Premium Emoji.\n"
         f"تم ربط {len(selected)} مساحة من أصل {len(SLOTS)}.\n\n"
