@@ -11,6 +11,7 @@ from aiogram import Bot
 from redis.asyncio import Redis
 
 from gqmrmed.ai.evidence_fallback import synthesize_from_evidence
+from gqmrmed.ai.gemini_native import GeminiNativeConfig, GeminiNativeSynthesizer
 from gqmrmed.ai.openai_responses import OpenAIResponsesConfig, OpenAIResponsesSynthesizer
 from gqmrmed.ai.providers import (
     OllamaConfig,
@@ -103,13 +104,11 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
             providers.append(
                 (
                     ProviderDescriptor(name="gemini_free", model=settings.gemini_text_model, cost_tier="free"),
-                    OpenAICompatibleChatSynthesizer(
-                        OpenAICompatibleConfig(
+                    GeminiNativeSynthesizer(
+                        GeminiNativeConfig(
                             api_key=settings.gemini_api_key,
-                            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
                             model=settings.gemini_text_model,
                             timeout_seconds=settings.gemini_timeout_seconds,
-                            extra_headers=(("x-goog-api-client", "gqmrmed-bot/1.0"),),
                         )
                     ),
                 )
