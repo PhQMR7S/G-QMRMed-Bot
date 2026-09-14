@@ -7,6 +7,7 @@ locally after generation, which prevents image-model text hallucinations and lay
 from __future__ import annotations
 
 import base64
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,11 +27,17 @@ class CloudflareImageConfig:
 class CloudflareImageProvider:
     """Workers AI FLUX image adapter using the documented REST API."""
 
-    def __init__(self, config: CloudflareImageConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: CloudflareImageConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
-    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
+    async def generate(
+        self, *, prompt: str, width: int, height: int
+    ) -> GeneratedIllustration:
         _validate_request(prompt, width, height)
         if not self.config.api_token.strip() or not self.config.account_id.strip():
             raise ImageGenerationError("cloudflare_credentials_missing")
@@ -44,7 +51,11 @@ class CloudflareImageProvider:
             response = await client.post(
                 url,
                 headers={"Authorization": f"Bearer {self.config.api_token}"},
-                data={"prompt": prompt, "width": str(width), "height": str(height)},
+                files={
+                    "prompt": (None, prompt),
+                    "width": (None, str(width)),
+                    "height": (None, str(height)),
+                },
             )
             response.raise_for_status()
             payload: dict[str, Any] = response.json()
@@ -78,11 +89,17 @@ class QwenImageConfig:
 class QwenImageProvider:
     """Qwen Image 3.0 OpenAI-compatible image-generation adapter."""
 
-    def __init__(self, config: QwenImageConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: QwenImageConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
-    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
+    async def generate(
+        self, *, prompt: str, width: int, height: int
+    ) -> GeneratedIllustration:
         _validate_request(prompt, width, height)
         if not self.config.api_key.strip() or not self.config.base_url.strip():
             raise ImageGenerationError("qwen_credentials_missing")
@@ -110,11 +127,12 @@ class QwenImageProvider:
                 raise ImageGenerationError("qwen_image_url_missing")
             image_response = await client.get(url)
             image_response.raise_for_status()
+            mime_type = image_response.headers.get("content-type", "image/png")
             return GeneratedIllustration(
                 image_bytes=image_response.content,
                 width=width,
                 height=height,
-                mime_type=image_response.headers.get("content-type", "image/png").split(";", 1)[0],
+                mime_type=mime_type.split(";", 1)[0],
             )
         except httpx.HTTPError as exc:
             raise ImageGenerationError("qwen_image_request_failed") from exc
@@ -133,13 +151,19 @@ class GeminiImageConfig:
 
 
 class GeminiImageProvider:
-    """Gemini image adapter with optional Google Search grounding."""
+    """Gemini image adapter without trusting model-generated readable text."""
 
-    def __init__(self, config: GeminiImageConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: GeminiImageConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
-    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
+    async def generate(
+        self, *, prompt: str, width: int, height: int
+    ) -> GeneratedIllustration:
         _validate_request(prompt, width, height)
         if not self.config.api_key.strip():
             raise ImageGenerationError("gemini_credentials_missing")
@@ -147,21 +171,36 @@ class GeminiImageProvider:
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(timeout=self.config.timeout_seconds)
         try:
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{self.config.model}:generateContent"
+            )
             response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/{self.config.model}:generateContent",
-                headers={"x-goog-api-key": self.config.api_key, "Content-Type": "application/json"},
+                url,
+                headers={
+                    "x-goog-api-key": self.config.api_key,
+                    "Content-Type": "application/json",
+                },
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
                         "responseModalities": ["IMAGE"],
-                        "responseFormat": {"image": {"aspectRatio": aspect_ratio, "imageSize": "2K"}},
+                        "responseFormat": {
+                            "image": {
+                                "aspectRatio": aspect_ratio,
+                                "imageSize": "2K",
+                            }
+                        },
                     },
                 },
             )
             response.raise_for_status()
             payload: dict[str, Any] = response.json()
             candidates = payload.get("candidates")
-            parts = candidates[0].get("content", {}).get("parts", []) if isinstance(candidates, list) else []
+            if not isinstance(candidates, list) or not candidates:
+                raise ImageGenerationError("gemini_image_candidates_missing")
+            content = candidates[0].get("content")
+            parts = content.get("parts", []) if isinstance(content, dict) else []
             for part in parts:
                 if not isinstance(part, dict):
                     continue
@@ -200,8 +239,8 @@ def _aspect_ratio(width: int, height: int) -> str:
         (9, 16): "9:16",
         (16, 9): "16:9",
     }
-    gcd = __import__("math").gcd(width, height)
-    return pairs.get((width // gcd, height // gcd), "4:5")
+    divisor = math.gcd(width, height)
+    return pairs.get((width // divisor, height // divisor), "4:5")
 
 
 __all__ = [
