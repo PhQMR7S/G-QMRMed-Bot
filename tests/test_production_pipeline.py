@@ -78,7 +78,7 @@ async def fake_research(request: ResearchRequest) -> list[EvidenceSource]:
 
 
 @pytest.mark.asyncio
-async def test_pipeline_returns_final_9_16_png() -> None:
+async def test_pipeline_returns_final_4_5_png() -> None:
     pipeline = ProductionGenerationPipeline(
         research_provider=fake_research,
         synthesis_provider=FakeSynthesis(),
@@ -101,7 +101,7 @@ async def test_pipeline_returns_final_9_16_png() -> None:
     result = await pipeline.run(job, progress)
     assert result.mime_type == "image/png"
     assert result.width == 1080
-    assert result.height == 1920
+    assert result.height == 1350
     assert result.image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
     assert seen == [
         GenerationStage.RESEARCHING,
