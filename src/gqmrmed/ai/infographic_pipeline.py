@@ -198,6 +198,8 @@ class _BlankIllustrationProvider:
         self, *, prompt: str, width: int, height: int
     ) -> GeneratedIllustration:
         del prompt
+        cx = width / 2
+        cy = height * 0.42
         svg = f"""
         <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"
              viewBox="0 0 {width} {height}">
@@ -208,17 +210,16 @@ class _BlankIllustrationProvider:
             </linearGradient>
           </defs>
           <rect width="{width}" height="{height}" fill="url(#g)"/>
-          <circle cx="{width / 2:.1f}" cy="{height * 0.42:.1f}"
+          <circle cx="{cx:.1f}" cy="{cy:.1f}"
                   r="{min(width, height) * 0.28:.1f}" fill="#FFFFFF" opacity="0.45"/>
-          <circle cx="{width / 2:.1f}" cy="{height * 0.42:.1f}"
+          <circle cx="{cx:.1f}" cy="{cy:.1f}"
                   r="{min(width, height) * 0.18:.1f}" fill="none"
                   stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
-          <path d="M{width * 0.25:.1f} {height * 0.42:.1f} "
-                f"H{width * 0.38:.1f} L{width * 0.44:.1f} {height * 0.32:.1f} "
+          <path d="M{width * 0.25:.1f} {cy:.1f} H{width * 0.38:.1f} "
+                f"L{width * 0.44:.1f} {height * 0.32:.1f} "
                 f"L{width * 0.50:.1f} {height * 0.53:.1f} "
                 f"L{width * 0.57:.1f} {height * 0.36:.1f} "
-                f"L{width * 0.63:.1f} {height * 0.42:.1f} "
-                f"H{width * 0.75:.1f}"
+                f"L{width * 0.63:.1f} {cy:.1f} H{width * 0.75:.1f}"
                 fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
         </svg>
         """
