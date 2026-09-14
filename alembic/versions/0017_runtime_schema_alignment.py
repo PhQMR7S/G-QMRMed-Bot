@@ -16,22 +16,15 @@ depends_on: str | Sequence[str] | None = None
 
 
 def _columns(table_name: str) -> set[str]:
-    """Read columns only in online mode; offline mode must emit deterministic SQL."""
+    """Return column names from an online connection."""
     bind = op.get_bind()
-    return {
-        str(row[0])
-        for row in bind.exec_driver_sql(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema='public' AND table_name=:table_name",
-            {"table_name": table_name},
-        ).fetchall()
-    }
+    return {str(column["name"]) for column in sa.inspect(bind).get_columns(table_name, schema="public")}
 
 
 def upgrade() -> None:
     if context.is_offline_mode():
         # Fresh databases reach this revision from 0016 and therefore have the
-        # legacy names/shapes represented below.  No runtime inspection is
+        # legacy names/shapes represented below. No runtime inspection is
         # possible in --sql mode, so emit the complete deterministic upgrade.
         op.alter_column("activation_codes", "activated_by", new_column_name="activated_by_user_id")
         op.add_column(
