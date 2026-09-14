@@ -25,6 +25,7 @@ async def run_bot() -> None:
     dispatcher = Dispatcher()
     session_middleware = DbSessionMiddleware()
     router.message.middleware(session_middleware)
+    router.callback_query.middleware(session_middleware)
     payments_router.message.middleware(session_middleware)
     payments_router.callback_query.middleware(session_middleware)
     payments_router.pre_checkout_query.middleware(session_middleware)
