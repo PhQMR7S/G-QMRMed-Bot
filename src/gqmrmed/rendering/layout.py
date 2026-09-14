@@ -1,11 +1,11 @@
-"""Safe, deterministic layout planning for 9:16 medical infographics."""
+"""Safe, deterministic layout planning for 4:5 medical infographics."""
 
 from dataclasses import dataclass
 
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
 
 WIDTH = 1080
-HEIGHT = 1920
+HEIGHT = 1350
 
 
 @dataclass(frozen=True, slots=True)
