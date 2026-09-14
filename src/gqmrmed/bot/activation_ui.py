@@ -33,7 +33,7 @@ def _cancel_keyboard() -> InlineKeyboardMarkup:
 @router.callback_query(F.data == "pro:activate")
 async def activation_start(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(ActivationStates.waiting_for_code)
-    if callback.message is not None:
+    if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "🔑 <b>تفعيل الاشتراك بكود</b>\n\n"
             "أرسل كود التفعيل الآن كما استلمته.\n\n"
@@ -90,7 +90,8 @@ async def activation_submit(
 
     await state.clear()
     plan_name = plan.name if plan is not None else "الخطة المرتبطة بالكود"
-    expiry = subscription.expires_at.strftime("%Y-%m-%d %H:%M UTC")
+    expires_at = subscription.expires_at
+    expiry = expires_at.strftime("%Y-%m-%d %H:%M UTC") if expires_at is not None else "غير محدد"
     await message.answer(
         "🎉 <b>تم تفعيل الاشتراك بنجاح!</b>\n\n"
         f"الخطة: <b>{plan_name}</b>\n"
@@ -110,7 +111,7 @@ async def activation_submit(
 @router.callback_query(F.data == "pro:activate_cancel")
 async def activation_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    if callback.message is not None:
+    if isinstance(callback.message, Message):
         await callback.message.edit_text(
             "تم إلغاء إدخال كود التفعيل.",
             reply_markup=InlineKeyboardMarkup(
