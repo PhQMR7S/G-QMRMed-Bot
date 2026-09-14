@@ -21,9 +21,9 @@ def upgrade() -> None:
 
     op.create_table(
         "credit_packs",
-        sa.Column("id", sa.Uuid(), primary_key=True, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True, nullable=False, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("name", sa.String(length=128), nullable=False),
         sa.Column("code", sa.String(length=32), nullable=False),
         sa.Column("credits", sa.Integer(), nullable=False),
@@ -46,25 +46,13 @@ def upgrade() -> None:
         "ck_usage_reservation_source", "usage_reservations", "source IN ('DAILY', 'CREDIT')"
     )
 
-    credit_packs = sa.table(
-        "credit_packs",
-        sa.column("id", sa.Uuid()),
-        sa.column("created_at", sa.DateTime(timezone=True)),
-        sa.column("updated_at", sa.DateTime(timezone=True)),
-        sa.column("name", sa.String()),
-        sa.column("code", sa.String()),
-        sa.column("credits", sa.Integer()),
-        sa.column("stars_price", sa.Integer()),
-        sa.column("is_active", sa.Boolean()),
-    )
-    now = sa.func.now()
-    op.bulk_insert(
-        credit_packs,
-        [
-            {"id": sa.text("gen_random_uuid()"), "created_at": now, "updated_at": now, "name": "5 تصاميم", "code": "DESIGN_5", "credits": 5, "stars_price": 50, "is_active": True},
-            {"id": sa.text("gen_random_uuid()"), "created_at": now, "updated_at": now, "name": "12 تصميماً", "code": "DESIGN_12", "credits": 12, "stars_price": 100, "is_active": True},
-            {"id": sa.text("gen_random_uuid()"), "created_at": now, "updated_at": now, "name": "20 تصميماً", "code": "DESIGN_20", "credits": 20, "stars_price": 150, "is_active": True},
-        ],
+    op.execute(
+        sa.text(
+            "INSERT INTO credit_packs (name, code, credits, stars_price, is_active) VALUES "
+            "('5 تصاميم', 'DESIGN_5', 5, 50, true), "
+            "('12 تصميماً', 'DESIGN_12', 12, 100, true), "
+            "('20 تصميماً', 'DESIGN_20', 20, 150, true)"
+        )
     )
 
 
