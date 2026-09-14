@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from gqmrmed.admin import router as admin_router
 from gqmrmed.admin_panel import router as admin_panel_router
+from gqmrmed.admin_plans import router as admin_plans_router
 from gqmrmed.config import get_settings
 from gqmrmed.db.session import SessionFactory
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title=settings.app_name, version=settings.app_version)
 app.include_router(admin_router)
 app.include_router(admin_panel_router)
+app.include_router(admin_plans_router)
 
 
 @app.on_event("startup")
