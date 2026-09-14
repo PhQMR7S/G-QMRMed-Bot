@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
     image_height: int = Field(default=1920, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
+    admin_panel_url: str = Field(
+        default="https://gqmrmed-bot-api.onrender.com", alias="ADMIN_PANEL_URL"
+    )
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
