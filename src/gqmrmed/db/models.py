@@ -176,6 +176,17 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    dispatch_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_dispatch_error: Mapped[str | None] = mapped_column(Text)
+
+    @property
+    def current_stage(self) -> str | None:
+        return self.stage
+
+    @current_stage.setter
+    def current_stage(self, value: str | None) -> None:
+        self.stage = value
 
 
 class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
