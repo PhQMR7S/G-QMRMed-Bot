@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from aiogram import Bot
 from fastapi import FastAPI
@@ -17,57 +19,53 @@ from gqmrmed.db.session import SessionFactory
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
-app.include_router(admin_router)
-app.include_router(admin_panel_router)
-app.include_router(admin_plans_router)
 
-
-@app.on_event("startup")
-async def start_embedded_worker() -> None:
-    """Run the generation worker in the free API instance when fully configured."""
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage the optional embedded worker for the complete API lifespan."""
     app.state.worker_task = None
     app.state.worker_stop = None
     app.state.worker_bot = None
 
-    if settings.service_role != "api" or not settings.run_worker_in_api:
-        return
+    if settings.service_role == "api" and settings.run_worker_in_api:
+        if not settings.telegram_bot_token:
+            logger.warning("Embedded worker disabled: TELEGRAM_BOT_TOKEN is not configured")
+        else:
+            try:
+                from gqmrmed.services.runtime import build_worker
 
-    if not settings.telegram_bot_token:
-        logger.warning("Embedded worker disabled: TELEGRAM_BOT_TOKEN is not configured")
-        return
+                bot = Bot(token=settings.telegram_bot_token)
+                worker = build_worker(settings, bot)
+                stop_event = asyncio.Event()
+                app.state.worker_bot = bot
+                app.state.worker_stop = stop_event
+                app.state.worker_task = asyncio.create_task(worker.run(stop_event))
+                logger.info("Embedded generation worker started")
+            except Exception as exc:
+                logger.exception(
+                    "Embedded worker configuration failed; API will remain available",
+                    extra={"reason": str(exc)},
+                )
 
     try:
-        from gqmrmed.services.runtime import build_worker
-
-        bot = Bot(token=settings.telegram_bot_token)
-        worker = build_worker(settings, bot)
-    except Exception as exc:
-        logger.exception(
-            "Embedded worker configuration failed; API will remain available",
-            extra={"reason": str(exc)},
-        )
-        return
-
-    stop_event = asyncio.Event()
-    app.state.worker_bot = bot
-    app.state.worker_stop = stop_event
-    app.state.worker_task = asyncio.create_task(worker.run(stop_event))
-    logger.info("Embedded generation worker started")
+        yield
+    finally:
+        stop_event = getattr(app.state, "worker_stop", None)
+        worker_task = getattr(app.state, "worker_task", None)
+        bot = getattr(app.state, "worker_bot", None)
+        if stop_event is not None:
+            stop_event.set()
+        if worker_task is not None:
+            with contextlib.suppress(asyncio.CancelledError):
+                await worker_task
+        if bot is not None:
+            await bot.session.close()
 
 
-@app.on_event("shutdown")
-async def stop_embedded_worker() -> None:
-    stop_event = getattr(app.state, "worker_stop", None)
-    worker_task = getattr(app.state, "worker_task", None)
-    bot = getattr(app.state, "worker_bot", None)
-    if stop_event is not None:
-        stop_event.set()
-    if worker_task is not None:
-        with contextlib.suppress(asyncio.CancelledError):
-            await worker_task
-    if bot is not None:
-        await bot.session.close()
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
+app.include_router(admin_router)
+app.include_router(admin_panel_router)
+app.include_router(admin_plans_router)
 
 
 @app.get("/health", tags=["system"])
