@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gqmrmed.bot.service import provision_user
-from gqmrmed.db.models import Plan, Subscription
+from gqmrmed.db.models import Plan
 from gqmrmed.services.subscriptions import activate_code
 
 router = Router(name="gqmrmed-activation-ui")
@@ -29,7 +29,9 @@ def _plans_keyboard() -> InlineKeyboardMarkup:
 
 def _cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="إلغاء والعودة للرئيسية", callback_data="pro:home")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="إلغاء والعودة للرئيسية", callback_data="pro:activate_cancel")]
+        ]
     )
 
 
@@ -145,4 +147,13 @@ async def activation_submit(message: Message, state: FSMContext, session: AsyncS
 @router.callback_query(F.data == "pro:activate_cancel")
 async def activation_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await callback.answer("تم إلغاء إدخال الكود")
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "تم إلغاء إدخال كود التفعيل.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="القائمة الرئيسية", callback_data="pro:home")]
+                ]
+            ),
+        )
+    await callback.answer()
