@@ -1,8 +1,8 @@
 """Telegram handlers for onboarding and generation intake."""
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,13 +15,37 @@ from gqmrmed.services.usage import QuotaExceededError
 router = Router(name="gqmrmed")
 
 WELCOME_TEXT = (
-    "مرحباً بك في GQMRMed 🩺\n\n"
-    "أرسل موضوعاً طبياً، نصاً، صورة، ملفاً، صوتاً أو فيديو، "
-    "وسيعالجه النظام كطلب تصميم طبي.\n\n"
-    "الخطة المجانية: 3 تصاميم يومياً.\n"
-    "استخدم /plans لعرض الخطط، /terms لقراءة الشروط وشراء PLUS أو PRO عبر Telegram Stars، "
-    "أو /activate CODE لتفعيل كود إداري صالح."
+    "🩺 <b>GQMRMed</b>\n"
+    "<i>Medical Design Intelligence</i>\n\n"
+    "حوّل المعلومة الطبية إلى تصميم بصري منظم، واضح، وقابل للمشاركة.\n\n"
+    "أرسل <b>موضوعاً أو نصاً أو صورة أو ملفاً أو صوتاً أو فيديو</b>، "
+    "وسيتولى النظام مراحل البحث والتحقق والتركيب البصري.\n\n"
+    "🎁 <b>FREE</b> · 3 تصاميم يومياً\n"
+    "اختر من القائمة أدناه للبدء."
 )
+
+
+def _start_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✦ إنشاء تصميم", callback_data="menu:generate"),
+                InlineKeyboardButton(text="▣ الخطط", callback_data="menu:plans"),
+            ],
+            [
+                InlineKeyboardButton(text="ⓘ طريقة الاستخدام", callback_data="menu:help"),
+                InlineKeyboardButton(text="⌁ الشروط والدعم", callback_data="menu:terms"),
+            ],
+        ]
+    )
+
+
+def _back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="‹ القائمة الرئيسية", callback_data="menu:home")]
+        ]
+    )
 
 
 async def _user_from_message(session: AsyncSession, message: Message) -> User:
@@ -50,26 +74,102 @@ def _with_chat_metadata(request: GenerationRequest, message: Message) -> Generat
 
 @router.message(CommandStart())
 async def start_handler(message: Message, session: AsyncSession) -> None:
-    """Register the user and show the minimal onboarding message."""
+    """Register the user and show the polished onboarding menu."""
     async with session.begin():
         user = await _user_from_message(session, message)
     if not user.is_active:
         await message.answer("هذا الحساب غير نشط حالياً.")
         return
-    await message.answer(WELCOME_TEXT)
+    await message.answer(WELCOME_TEXT, parse_mode="HTML", reply_markup=_start_keyboard())
+
+
+@router.callback_query(F.data == "menu:home")
+async def menu_home_callback(callback: CallbackQuery) -> None:
+    if callback.message is not None:
+        await callback.message.edit_text(
+            WELCOME_TEXT, parse_mode="HTML", reply_markup=_start_keyboard()
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:generate")
+async def menu_generate_callback(callback: CallbackQuery) -> None:
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "✦ <b>إنشاء تصميم طبي</b>\n\n"
+            "أرسل الآن الموضوع أو النص أو الصورة أو الملف أو الصوت أو الفيديو "
+            "الذي تريد تحويله إلى تصميم.\n\n"
+            "يمكنك أيضاً إرسال النص مباشرة دون اختيار أي أمر إضافي.",
+            parse_mode="HTML",
+            reply_markup=_back_keyboard(),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:help")
+async def menu_help_callback(callback: CallbackQuery) -> None:
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "ⓘ <b>طريقة الاستخدام</b>\n\n"
+            "1. اختر «إنشاء تصميم».\n"
+            "2. أرسل المحتوى الطبي.\n"
+            "3. يجري النظام البحث والتحقق والتركيب البصري.\n"
+            "4. يصلك التصميم النهائي داخل Telegram.\n\n"
+            "<b>المدخلات:</b> نص · صورة · ملف · صوت · فيديو",
+            parse_mode="HTML",
+            reply_markup=_back_keyboard(),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:terms")
+async def menu_terms_callback(callback: CallbackQuery) -> None:
+    if callback.message is not None:
+        await callback.message.edit_text(
+            "⌁ <b>الاشتراكات والدعم</b>\n\n"
+            "الخطة المجانية تمنح <b>3 تصاميم يومياً</b>.\n"
+            "للاشتراكات المدفوعة استخدم «الخطط».\n"
+            "لشروط الشراء قبل الدفع استخدم /terms.\n"
+            "لدعم المدفوعات استخدم /paysupport.",
+            parse_mode="HTML",
+            reply_markup=_back_keyboard(),
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "menu:plans")
+async def menu_plans_callback(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.message is None:
+        await callback.answer("تعذر عرض الخطط.", show_alert=True)
+        return
+    result = await session.execute(
+        select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price.asc(), Plan.code.asc())
+    )
+    plans = result.scalars().all()
+    lines = ["▣ <b>خطط GQMRMed</b>\n"]
+    for plan in plans:
+        limit = "غير محدود" if plan.daily_limit is None else f"{plan.daily_limit}/اليوم"
+        duration = "مستمر" if plan.duration_days is None else f"{plan.duration_days} يوم"
+        stars = "—" if plan.stars_price is None else f"{plan.stars_price} ⭐"
+        lines.append(f"<b>{plan.name}</b> · ${plan.price} · {duration} · {limit} · {stars}")
+    lines.append("\nلشراء خطة مدفوعة استخدم /terms.")
+    await callback.message.edit_text("\n".join(lines), parse_mode="HTML", reply_markup=_back_keyboard())
+    await callback.answer()
 
 
 @router.message(Command("help"))
 async def help_handler(message: Message) -> None:
     """Show the supported input and command surface."""
     await message.answer(
+        "ⓘ <b>مساعدة GQMRMed</b>\n\n"
         "أرسل أي محتوى طبي تريد تحويله إلى تصميم.\n\n"
-        "/start — بدء الاستخدام\n"
+        "/start — القائمة الرئيسية\n"
         "/plans — الخطط\n"
         "/terms — شروط الشراء والموافقة قبل الدفع\n"
         "/activate CODE — تفعيل كود إداري صالح\n"
         "/paysupport — دعم المدفوعات\n"
-        "/help — المساعدة"
+        "/help — المساعدة",
+        parse_mode="HTML",
     )
 
 
@@ -80,14 +180,14 @@ async def plans_handler(message: Message, session: AsyncSession) -> None:
         select(Plan).where(Plan.is_active.is_(True)).order_by(Plan.price.asc(), Plan.code.asc())
     )
     plans = result.scalars().all()
-    lines = ["خطط GQMRMed:"]
+    lines = ["▣ <b>خطط GQMRMed</b>\n"]
     for plan in plans:
         limit = "غير محدود" if plan.daily_limit is None else f"{plan.daily_limit}/اليوم"
         duration = "مستمر" if plan.duration_days is None else f"{plan.duration_days} يوم"
         stars = "—" if plan.stars_price is None else f"{plan.stars_price} ⭐"
-        lines.append(f"• {plan.name}: ${plan.price} — {duration} — {limit} — {stars}")
-    lines.append("\nلشراء خطة مدفوعة داخل Telegram استخدم /terms.")
-    await message.answer("\n".join(lines))
+        lines.append(f"<b>{plan.name}</b> · ${plan.price} · {duration} · {limit} · {stars}")
+    lines.append("\nلشراء خطة مدفوعة استخدم /terms.")
+    await message.answer("\n".join(lines), parse_mode="HTML")
 
 
 @router.message(Command("buy"))
