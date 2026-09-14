@@ -7,13 +7,13 @@ from typing import Any
 
 import httpx
 
-from gqmrmed.contracts.research import ResearchBundle, SynthesizedContent
 from gqmrmed.ai.providers import (
     ProviderRoutingError,
     TextSynthesisProvider,
     _SYSTEM_INSTRUCTIONS,
     _build_prompt,
 )
+from gqmrmed.contracts.research import ResearchBundle, SynthesizedContent
 
 
 @dataclass(frozen=True, slots=True)
