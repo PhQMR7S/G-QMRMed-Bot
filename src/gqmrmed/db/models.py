@@ -152,7 +152,10 @@ class Payment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DailyUsage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "daily_usage"
-    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "usage_date", name="uq_daily_usage_user_date"),
+        CheckConstraint("reserved >= 0 AND committed >= 0", name="ck_daily_usage_nonnegative"),
+    )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     usage_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -162,6 +165,9 @@ class DailyUsage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_jobs"
+    __table_args__ = (
+        CheckConstraint("progress >= 0 AND progress <= 100", name="ck_generation_progress_range"),
+    )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     input_type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -191,6 +197,9 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GenerationResult(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "generation_results"
+    __table_args__ = (
+        CheckConstraint("width > 0 AND height > 0", name="ck_generation_dimensions_positive"),
+    )
 
     job_id: Mapped[UUID] = mapped_column(ForeignKey("generation_jobs.id", ondelete="CASCADE"), nullable=False, unique=True)
     storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -229,7 +238,7 @@ class SystemSetting(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class UsageReservation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "usage_reservations"
     __table_args__ = (
-        UniqueConstraint("job_id", name="uq_usage_reservations_job"),
+        UniqueConstraint("job_id", name="uq_usage_reservations_job_id"),
         CheckConstraint("source IN ('DAILY', 'CREDIT')", name="ck_usage_reservations_source"),
     )
 
