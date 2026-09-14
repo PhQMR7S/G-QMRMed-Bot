@@ -88,15 +88,33 @@ illustration itself.
 
 
 TEMPLATE_HINTS: dict[TemplateFamily, str] = {
-    TemplateFamily.CLINICAL: "Use a strong title, central clinical illustration, and balanced information cards.",
-    TemplateFamily.MECHANISM: "Use a left-to-right or top-to-bottom causal pathway with arrows and mechanism nodes.",
-    TemplateFamily.COMPARISON: "Use a symmetrical comparison matrix with shared attributes and a key discriminator.",
-    TemplateFamily.DRUG: "Use medication cards, mechanism/uses/cautions sections, and a visually dominant drug asset.",
-    TemplateFamily.DIAGNOSIS: "Use a decision-oriented diagnostic flow with tests, findings, and interpretation.",
-    TemplateFamily.TREATMENT: "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks.",
-    TemplateFamily.SYMPTOMS: "Use grouped symptom clusters with a clear visual hierarchy and warning strip when needed.",
-    TemplateFamily.ANATOMY: "Use a central anatomical illustration with callout regions and concise relationship cards.",
-    TemplateFamily.EDUCATIONAL: "Use a flexible teaching-card layout with definition, explanation, examples, and takeaways.",
+    TemplateFamily.CLINICAL: (
+        "Use a strong title, central clinical illustration, and balanced information cards."
+    ),
+    TemplateFamily.MECHANISM: (
+        "Use a causal pathway with arrows and mechanism nodes."
+    ),
+    TemplateFamily.COMPARISON: (
+        "Use a symmetrical comparison matrix with shared attributes and a key discriminator."
+    ),
+    TemplateFamily.DRUG: (
+        "Use medication cards, mechanism/uses/cautions sections, and a dominant drug asset."
+    ),
+    TemplateFamily.DIAGNOSIS: (
+        "Use a decision-oriented diagnostic flow with tests, findings, and interpretation."
+    ),
+    TemplateFamily.TREATMENT: (
+        "Use a stepwise treatment pathway with priority, monitoring, and escalation blocks."
+    ),
+    TemplateFamily.SYMPTOMS: (
+        "Use grouped symptom clusters with a clear hierarchy and warning strip when needed."
+    ),
+    TemplateFamily.ANATOMY: (
+        "Use a central anatomical illustration with concise callout cards."
+    ),
+    TemplateFamily.EDUCATIONAL: (
+        "Use a flexible teaching-card layout with definition and high-yield takeaways."
+    ),
 }
 
 
@@ -146,11 +164,14 @@ def build_design_spec(
         TextBlock(text=_compact(content.title, 120), role="title", importance=5)
     ]
     if content.subtitle:
-        blocks.append(TextBlock(text=_compact(content.subtitle, 180), role="subtitle", importance=4))
+        blocks.append(
+            TextBlock(text=_compact(content.subtitle, 180), role="subtitle", importance=4)
+        )
     for point in content.key_points:
         blocks.append(TextBlock(text=_compact(point, 240), role="point", importance=3))
     for claim in content.claims:
-        blocks.append(TextBlock(text=_compact(claim.text, 360), role="claim", importance=4 if claim.critical else 3))
+        importance = 4 if claim.critical else 3
+        blocks.append(TextBlock(text=_compact(claim.text, 360), role="claim", importance=importance))
     for caution in content.cautions:
         blocks.append(TextBlock(text=_compact(caution, 240), role="caution", importance=5))
 
@@ -158,12 +179,13 @@ def build_design_spec(
     payload = blocks[1:] if len(blocks) > 1 else blocks
     page_count = max(1, (len(payload) + max_blocks_per_page - 1) // max_blocks_per_page)
     for page_index in range(page_count):
-        chunk = payload[page_index * max_blocks_per_page : (page_index + 1) * max_blocks_per_page]
+        chunk = payload[
+            page_index * max_blocks_per_page : (page_index + 1) * max_blocks_per_page
+        ]
         title = content.title if page_index == 0 else f"{content.title} — {page_index + 1}"
         sections = list(dict.fromkeys(visual_plan.sections[:8])) or ["key points"]
-        page_blocks = chunk or [blocks[0]]
-        if page_index == 0:
-            page_blocks = [blocks[0], *page_blocks]
+        page_title = TextBlock(text=_compact(title, 160), role="title", importance=5)
+        page_blocks = [page_title, *chunk]
         pages.append(
             InfographicPage(
                 page_number=page_index + 1,
