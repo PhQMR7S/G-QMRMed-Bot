@@ -29,7 +29,6 @@ async def create_activation_code(
     *,
     plan: Plan,
     duration_days: int,
-    created_by: UUID | None,
     expires_at: datetime | None = None,
 ) -> tuple[ActivationCode, str]:
     """Create a unique hashed activation code and return plaintext once."""
@@ -44,7 +43,6 @@ async def create_activation_code(
                 code_hash=code_hash,
                 plan_id=plan.id,
                 duration_days=duration_days,
-                created_by=created_by,
                 expires_at=expires_at,
             )
             .on_conflict_do_nothing(index_elements=[ActivationCode.code_hash])
