@@ -1,10 +1,10 @@
 """Add optional inline image bytes for durable Telegram delivery retry."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 
-revision = "0013_generation_result_image_bytes"
+revision = "0013_result_image_bytes"
 down_revision = "0012_design_credit_packs"
 branch_labels = None
 depends_on = None
