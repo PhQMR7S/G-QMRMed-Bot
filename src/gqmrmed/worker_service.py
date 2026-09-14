@@ -26,9 +26,8 @@ _stop_event: asyncio.Event | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Migrate the database, then own the generation worker for the service lifespan."""
+    """Start the worker task without blocking Render's health port."""
     global _worker_task
-    await upgrade_head()
     _worker_task = asyncio.create_task(_run())
 
     def report_failure(task: asyncio.Task[None]) -> None:
@@ -64,6 +63,10 @@ async def _run() -> None:
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required to run the generation worker")
 
+    logger.info("database_migration_starting")
+    await upgrade_head()
+    logger.info("database_migration_complete")
+
     from gqmrmed.services.runtime import build_worker
 
     _bot = Bot(token=settings.telegram_bot_token)
@@ -79,8 +82,4 @@ async def _run() -> None:
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "gqmrmed.worker_service:app",
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", "10000")),
-    )
+    uvicorn.run("gqmrmed.worker_service:app", host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))
