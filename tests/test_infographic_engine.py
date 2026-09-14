@@ -61,20 +61,15 @@ def test_design_qa_rejects_visible_source_urls() -> None:
 
 
 def test_renderer_returns_png_with_glass_signature_layout() -> None:
-    spec = build_design_spec(topic="DKA", content=_content(), visual_plan=_visual_plan())
-    illustration = GeneratedIllustration(
-        image_bytes=b"not-a-real-image",
-        width=1024,
-        height=1280,
-        mime_type="image/png",
-    )
-    # Use a tiny valid SVG converted to PNG as the artwork asset.
     import cairosvg
 
+    spec = build_design_spec(topic="DKA", content=_content(), visual_plan=_visual_plan())
+    svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
+        b'<rect width="100%" height="100%" fill="#fff"/></svg>'
+    )
     illustration = GeneratedIllustration(
-        image_bytes=cairosvg.svg2png(
-            bytestring=b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="#fff"/></svg>'
-        ),
+        image_bytes=cairosvg.svg2png(bytestring=svg),
         width=100,
         height=100,
         mime_type="image/png",
