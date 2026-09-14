@@ -30,9 +30,8 @@ _bot_task: asyncio.Task[None] | None = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Migrate the database, then own Telegram polling for the service lifespan."""
+    """Start the bot task without blocking Render's health port."""
     global _bot_task
-    await upgrade_head()
     _bot_task = asyncio.create_task(_run_bot_with_lock())
 
     def report_failure(task: asyncio.Task[None]) -> None:
@@ -82,13 +81,10 @@ async def _release_lock(redis: Redis, token: str) -> None:
 async def _heartbeat(redis: Redis, token: str, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
-            await asyncio.wait_for(
-                stop_event.wait(), timeout=POLLING_LOCK_HEARTBEAT_SECONDS
-            )
+            await asyncio.wait_for(stop_event.wait(), timeout=POLLING_LOCK_HEARTBEAT_SECONDS)
             return
         except TimeoutError:
             pass
-
         refreshed = await cast(
             Awaitable[Any],
             redis.eval(
@@ -110,12 +106,7 @@ async def _heartbeat(redis: Redis, token: str, stop_event: asyncio.Event) -> Non
 
 async def _acquire_polling_lock(redis: Redis, token: str) -> None:
     while True:
-        acquired = await redis.set(
-            POLLING_LOCK_KEY,
-            token,
-            nx=True,
-            ex=POLLING_LOCK_TTL_SECONDS,
-        )
+        acquired = await redis.set(POLLING_LOCK_KEY, token, nx=True, ex=POLLING_LOCK_TTL_SECONDS)
         if acquired:
             return
         logger.warning("telegram_polling_lock_busy; waiting for active instance")
@@ -129,22 +120,21 @@ async def _run_bot_with_lock() -> None:
     if not settings.redis_url:
         raise RuntimeError("REDIS_URL is required to coordinate Telegram polling")
 
+    logger.info("database_migration_starting")
+    await upgrade_head()
+    logger.info("database_migration_complete")
+
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
     token = uuid.uuid4().hex
     lock_stop = asyncio.Event()
     heartbeat_task: asyncio.Task[None] | None = None
     bot_task: asyncio.Task[None] | None = None
-
     try:
         await _acquire_polling_lock(redis, token)
         logger.info("telegram_polling_lock_acquired")
         heartbeat_task = asyncio.create_task(_heartbeat(redis, token, lock_stop))
         bot_task = asyncio.create_task(run_bot())
-
-        done, _ = await asyncio.wait(
-            {bot_task, heartbeat_task},
-            return_when=asyncio.FIRST_EXCEPTION,
-        )
+        done, _ = await asyncio.wait({bot_task, heartbeat_task}, return_when=asyncio.FIRST_EXCEPTION)
         for task in done:
             exception = task.exception()
             if exception is not None:
@@ -168,8 +158,4 @@ async def _run_bot_with_lock() -> None:
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "gqmrmed.bot_service:app",
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", "10000")),
-    )
+    uvicorn.run("gqmrmed.bot_service:app", host="0.0.0.0", port=int(os.environ.get("PORT", "10000")))
