@@ -1,6 +1,7 @@
 """Owner-only in-bot administration panel for GQMRMed."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from aiogram import F, Router
@@ -52,7 +53,7 @@ def _back() -> InlineKeyboardMarkup:
 
 
 async def _counts(session: AsyncSession) -> dict[str, int]:
-    async def count(model: type[object], *conditions: object) -> int:
+    async def count(model: type[object], *conditions: Any) -> int:
         stmt = select(func.count()).select_from(model)
         for condition in conditions:
             stmt = stmt.where(condition)
@@ -302,10 +303,10 @@ async def admin_create_code(callback: CallbackQuery, session: AsyncSession) -> N
     if plan is None:
         await callback.answer("الخطة غير موجودة.", show_alert=True)
         return
-    code = await create_activation_code(session, plan_id=plan.id, duration_days=int(days_raw))
+    _, plaintext = await create_activation_code(session, plan=plan, duration_days=int(days_raw), created_by=None)
     await session.commit()
     if isinstance(callback.message, Message):
-        await callback.message.answer(f"تم إنشاء كود اشتراك\n\nالخطة: {plan_code}\nالمدة: {days_raw} يوم\n\nالكود:\n<code>{code}</code>\n\nأرسل الكود للمستخدم المستحق فقط.", parse_mode="HTML")
+        await callback.message.answer(f"تم إنشاء كود اشتراك\n\nالخطة: {plan_code}\nالمدة: {days_raw} يوم\n\nالكود:\n<code>{plaintext}</code>\n\nأرسل الكود للمستخدم المستحق فقط.", parse_mode="HTML")
     await callback.answer("تم إنشاء الكود.")
 
 
