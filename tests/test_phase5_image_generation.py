@@ -10,14 +10,14 @@ from gqmrmed.ai.image_generation import (
 from gqmrmed.contracts.research import ArchitectureType, VisualPlan
 
 
-def test_image_request_defaults_to_9_16() -> None:
+def test_image_request_defaults_to_4_5() -> None:
     request = ImageGenerationRequest(prompt="Medical anatomy illustration")
     assert request.width == 1080
-    assert request.height == 1920
+    assert request.height == 1350
 
 
-def test_image_request_rejects_non_9_16_dimensions() -> None:
-    with pytest.raises(ValueError, match="image_dimensions_must_be_9_16"):
+def test_image_request_rejects_non_4_5_dimensions() -> None:
+    with pytest.raises(ValueError, match="image_dimensions_must_be_4_5"):
         ImageGenerationRequest(prompt="illustration", width=1024, height=1024)
 
 
@@ -35,17 +35,17 @@ def test_visual_plan_becomes_illustration_request() -> None:
     request = build_illustration_request(plan, seed=42)
     assert request.prompt == plan.illustration_prompt
     assert request.seed == 42
-    assert (request.width, request.height) == (1080, 1920)
+    assert (request.width, request.height) == (1080, 1350)
 
 
-def test_non_9_16_visual_plan_is_rejected() -> None:
+def test_non_4_5_visual_plan_is_rejected() -> None:
     plan = VisualPlan(
         architecture=ArchitectureType.ANATOMY_EXPLORER,
         aspect_ratio="1:1",
         sections=["structure"],
         illustration_prompt="Medical vector anatomy illustration only.",
     )
-    with pytest.raises(ValueError, match="visual_plan_must_be_9_16"):
+    with pytest.raises(ValueError, match="visual_plan_must_be_4_5"):
         build_illustration_request(plan)
 
 
