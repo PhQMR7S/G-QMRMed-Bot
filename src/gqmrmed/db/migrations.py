@@ -16,10 +16,6 @@ _MIGRATION_LOCK_SQL = "SELECT pg_advisory_lock(hashtext('gqmrmed:alembic'))"
 _MIGRATION_UNLOCK_SQL = "SELECT pg_advisory_unlock(hashtext('gqmrmed:alembic'))"
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 async def upgrade_head() -> None:
     """Upgrade the database to Alembic head, serializing concurrent services."""
     settings = get_settings()
@@ -34,7 +30,7 @@ async def upgrade_head() -> None:
                 "alembic",
                 "upgrade",
                 "head",
-                cwd=_repo_root(),
+                cwd=Path.cwd(),
                 env=os.environ.copy(),
             )
             return_code = await process.wait()
