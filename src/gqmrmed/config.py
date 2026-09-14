@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,openrouter_free,groq_free,huggingface_free,openai_compatible,openai",
+        default="ollama,gemini_free,openrouter_free,groq_free,huggingface_free,openai_compatible,openai",
         alias="AI_PROVIDER_ORDER",
     )
     ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
