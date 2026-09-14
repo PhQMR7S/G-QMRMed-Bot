@@ -1,5 +1,4 @@
-"""Provider registry, cost-aware routing, and local/OpenAI-compatible adapters."""
-
+"""Provider registry, routing, and OpenAI-compatible/local synthesis adapters."""
 from __future__ import annotations
 
 import asyncio
@@ -11,13 +10,12 @@ from typing import Any, Protocol
 
 import httpx
 
+from gqmrmed.ai.infographic_design import detect_language_mode
 from gqmrmed.contracts.research import ResearchBundle, SynthesizedContent
 
 
 class TextSynthesisProvider(Protocol):
-    async def synthesize(
-        self, *, user_input: str, research: ResearchBundle
-    ) -> SynthesizedContent: ...
+    async def synthesize(self, *, user_input: str, research: ResearchBundle) -> SynthesizedContent: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +31,7 @@ class ProviderRoutingError(RuntimeError):
 
 
 class ProviderRouter:
-    """Try free/local providers safely with bounded retry and concurrency."""
+    """Try configured providers with bounded retry and concurrency."""
 
     def __init__(
         self,
@@ -62,19 +60,15 @@ class ProviderRouter:
             for meta, _ in self.providers
         }
 
-    async def synthesize(
-        self, *, user_input: str, research: ResearchBundle
-    ) -> SynthesizedContent:
+    async def synthesize(self, *, user_input: str, research: ResearchBundle) -> SynthesizedContent:
         errors: list[str] = []
         for metadata, provider in self.providers:
             semaphore = self._semaphores[metadata.name]
             for attempt in range(self.retry_attempts + 1):
                 try:
                     async with semaphore:
-                        return await provider.synthesize(
-                            user_input=user_input, research=research
-                        )
-                except Exception as exc:  # noqa: BLE001 - isolate provider outages at boundary.
+                        return await provider.synthesize(user_input=user_input, research=research)
+                except Exception as exc:  # noqa: BLE001
                     errors.append(f"{metadata.name}:{type(exc).__name__}")
                     if attempt >= self.retry_attempts or not _is_transient_provider_error(exc):
                         break
@@ -83,7 +77,6 @@ class ProviderRouter:
 
 
 def _is_transient_provider_error(exc: Exception) -> bool:
-    """Retry only network, timeout, throttling, and server-side provider failures."""
     if isinstance(exc, (httpx.TimeoutException, httpx.NetworkError)):
         return True
     text = str(exc).lower()
@@ -109,10 +102,7 @@ def _is_transient_provider_error(exc: Exception) -> bool:
 
 
 def _retry_delay(attempt: int) -> float:
-    """Use bounded exponential backoff with jitter to avoid synchronized retries."""
-    base_delay = min(8.0, 0.5 * (2**attempt))
-    jitter = random.uniform(0.0, 0.25)
-    return float(base_delay + jitter)
+    return float(min(8.0, 0.5 * (2**attempt)) + random.uniform(0.0, 0.25))
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,31 +115,21 @@ class OpenAICompatibleConfig:
 
 
 class OpenAICompatibleChatSynthesizer:
-    """Adapter for OpenAI-compatible gateways without vendor coupling."""
+    """Adapter for OpenAI-compatible gateways."""
 
-    def __init__(
-        self,
-        config: OpenAICompatibleConfig,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
+    def __init__(self, config: OpenAICompatibleConfig, client: httpx.AsyncClient | None = None) -> None:
         self.config = config
         self._client = client
 
-    async def synthesize(
-        self, *, user_input: str, research: ResearchBundle
-    ) -> SynthesizedContent:
+    async def synthesize(self, *, user_input: str, research: ResearchBundle) -> SynthesizedContent:
         if not self.config.api_key.strip():
             raise ProviderRoutingError("provider_api_key_missing")
         if not self.config.base_url.strip() or not self.config.model.strip():
             raise ProviderRoutingError("provider_configuration_missing")
-
         owns_client = self._client is None
         client = self._client or httpx.AsyncClient(timeout=self.config.timeout_seconds)
         try:
-            headers = {
-                "Authorization": f"Bearer {self.config.api_key}",
-                "Content-Type": "application/json",
-            }
+            headers = {"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"}
             headers.update(dict(self.config.extra_headers))
             response = await client.post(
                 f"{self.config.base_url.rstrip('/')}/chat/completions",
@@ -178,7 +158,7 @@ class OpenAICompatibleChatSynthesizer:
 
 
 class OpenRouterFreeSynthesizer(OpenAICompatibleChatSynthesizer):
-    """OpenRouter free-only route. The model ID is dynamically resolved by OpenRouter."""
+    """OpenRouter free-only route."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,9 +175,7 @@ class OllamaSynthesizer:
         self.config = config
         self._client = client
 
-    async def synthesize(
-        self, *, user_input: str, research: ResearchBundle
-    ) -> SynthesizedContent:
+    async def synthesize(self, *, user_input: str, research: ResearchBundle) -> SynthesizedContent:
         if not self.config.base_url.strip() or not self.config.model.strip():
             raise ProviderRoutingError("ollama_configuration_missing")
         owns_client = self._client is None
@@ -234,17 +212,24 @@ class OllamaSynthesizer:
 
 _SYSTEM_INSTRUCTIONS = """You are the medical synthesis stage of GQMRMed.
 Use only facts supported by supplied evidence or directly supplied user text.
-Never invent numbers, doses, contraindications, laboratory ranges, or treatment
-instructions. Every factual claim must reference supplied evidence IDs. If evidence
-is weak or incomplete, lower confidence and use a caution instead of guessing.
-Return only valid JSON matching the supplied schema. Do not include markdown."""
+Never invent numbers, doses, contraindications, laboratory ranges, or treatment instructions.
+Every factual claim must reference supplied evidence IDs. If evidence is weak or incomplete,
+use a caution instead of guessing. Return only valid JSON matching the supplied schema.
+LANGUAGE CONTRACT: detect the language of user_input. Arabic input -> write all visible
+educational prose in correct Arabic. English input -> write all visible prose in English.
+Genuinely mixed input -> preserve the mixed language intentionally. Never output broken,
+transliterated, or pseudo-Arabic characters. Keep medical terms in their normal clinical
+form when a standard English abbreviation is required, but do not turn an Arabic sentence
+into English. Do not include markdown, provider status, internal errors, or source URLs."""
 
 
 def _build_prompt(user_input: str, research: ResearchBundle) -> str:
+    language = detect_language_mode(user_input)
     return json.dumps(
         {
             "task": "Create a structured medical infographic content plan.",
             "user_input": user_input[:20_000],
+            "language_mode": language,
             "evidence": [source.model_dump() for source in research.sources],
             "evidence_warnings": research.warnings,
             "output_schema": SynthesizedContent.model_json_schema(),
@@ -254,6 +239,7 @@ def _build_prompt(user_input: str, research: ResearchBundle) -> str:
                 "Keep each claim concise and evidence-linked.",
                 "Prefer clinically important distinctions and mechanisms.",
                 "Do not give individualized diagnosis or patient-specific advice.",
+                "The final visible text must obey language_mode exactly.",
             ],
         },
         ensure_ascii=False,
