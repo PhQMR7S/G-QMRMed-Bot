@@ -1,13 +1,8 @@
-from gqmrmed.ai.infographic_design import build_design_spec
+from gqmrmed.ai.infographic_design import build_design_spec, detect_language_mode
 from gqmrmed.ai.infographic_qa import InfographicQAError, validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page
 from gqmrmed.ai.research_router import split_long_research_query
-from gqmrmed.contracts.research import (
-    ArchitectureType,
-    MedicalClaim,
-    SynthesizedContent,
-    VisualPlan,
-)
+from gqmrmed.contracts.research import ArchitectureType, MedicalClaim, SynthesizedContent, VisualPlan
 from gqmrmed.generation.providers import GeneratedIllustration
 
 
@@ -61,6 +56,48 @@ def test_design_filters_internal_provider_messages_and_caps_body() -> None:
     assert all("provider was unavailable" not in block.text.lower() for block in body)
 
 
+def test_language_mode_is_exactly_ar_en_or_mixed() -> None:
+    assert detect_language_mode("تثقيف عن قصور القلب") == "ar"
+    assert detect_language_mode("Heart failure") == "en"
+    assert detect_language_mode("قصور القلب Heart failure") == "mixed"
+
+
+def test_arabic_design_keeps_arabic_visible_text() -> None:
+    spec = build_design_spec(
+        topic="قصور القلب",
+        content=_content(),
+        visual_plan=_visual_plan(),
+        language="ar",
+    )
+    assert spec.language == "ar"
+    assert all(any("\u0600" <= char <= "\u06ff" for char in block.text) for block in spec.pages[0].blocks)
+
+
+def test_english_design_keeps_english_visible_text() -> None:
+    content = SynthesizedContent(
+        title="Heart Failure",
+        subtitle="Evidence-led overview",
+        key_points=["Reduced cardiac output can cause congestion."],
+        claims=[
+            MedicalClaim(
+                claim_id="claim_1",
+                text="Clinical assessment integrates symptoms, signs and objective testing.",
+                evidence_ids=["pmid:1"],
+                confidence=0.9,
+            )
+        ],
+        cautions=["Educational information; not a diagnosis."],
+    )
+    spec = build_design_spec(
+        topic="Heart failure",
+        content=content,
+        visual_plan=_visual_plan(),
+        language="en",
+    )
+    assert spec.language == "en"
+    assert not any("\u0600" <= char <= "\u06ff" for block in spec.pages[0].blocks for char in block.text)
+
+
 def test_research_splits_long_input_into_bounded_queries() -> None:
     query = " ".join(["DKA treatment and diagnosis."] * 80)
     queries = split_long_research_query(query)
@@ -79,14 +116,11 @@ def test_design_qa_rejects_visible_source_urls() -> None:
         raise AssertionError("expected QA failure")
 
 
-def test_renderer_returns_single_4_5_png_with_glass_signature_layout() -> None:
+def test_renderer_returns_single_4_5_png_with_editorial_layout() -> None:
     import cairosvg
 
     spec = build_design_spec(topic="DKA", content=_content(), visual_plan=_visual_plan())
-    svg = (
-        b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
-        b'<rect width="100%" height="100%" fill="#fff"/></svg>'
-    )
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="#fff"/></svg>'
     illustration = GeneratedIllustration(
         image_bytes=cairosvg.svg2png(bytestring=svg),
         width=100,
