@@ -21,7 +21,11 @@ class PubMedResearchConfig:
 class PubMedResearchProvider:
     """Search PubMed and retrieve titles/abstracts with explicit provenance."""
 
-    def __init__(self, config: PubMedResearchConfig, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        config: PubMedResearchConfig,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.config = config
         self._client = client
 
@@ -37,16 +41,26 @@ class PubMedResearchProvider:
         }
         _add_identity_params(params, self.config)
         try:
-            search = await client.get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi", params=params)
+            search = await client.get(
+                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+                params=params,
+            )
             search.raise_for_status()
             payload = search.json()
             ids = payload.get("esearchresult", {}).get("idlist", [])
             if not isinstance(ids, list) or not ids:
                 return []
 
-            fetch_params = {"db": "pubmed", "id": ",".join(str(item) for item in ids), "retmode": "xml"}
+            fetch_params = {
+                "db": "pubmed",
+                "id": ",".join(str(item) for item in ids),
+                "retmode": "xml",
+            }
             _add_identity_params(fetch_params, self.config)
-            fetched = await client.get("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi", params=fetch_params)
+            fetched = await client.get(
+                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                params=fetch_params,
+            )
             fetched.raise_for_status()
             return _parse_pubmed(fetched.text, limit=request.max_sources)
         except (httpx.HTTPError, ValueError) as exc:
@@ -56,7 +70,9 @@ class PubMedResearchProvider:
                 await client.aclose()
 
 
-def _add_identity_params(params: dict[str, Any], config: PubMedResearchConfig) -> None:
+def _add_identity_params(
+    params: dict[str, Any], config: PubMedResearchConfig
+) -> None:
     if config.email:
         params["email"] = config.email
     if config.api_key:
@@ -70,7 +86,9 @@ def _parse_pubmed(xml_text: str, *, limit: int) -> list[EvidenceSource]:
         pmid = _text(article.find(".//PMID"))
         title = _text(article.find(".//ArticleTitle"))
         abstract_nodes = article.findall(".//Abstract/AbstractText")
-        abstract = " ".join(_text(node) for node in abstract_nodes if _text(node)).strip()
+        abstract = " ".join(
+            _text(node) for node in abstract_nodes if _text(node)
+        ).strip()
         journal = _text(article.find(".//Journal/Title"))
         year = _publication_year(article)
         if not pmid or not title:
