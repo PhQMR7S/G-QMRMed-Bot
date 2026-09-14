@@ -81,11 +81,10 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
     requested = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
-    # Render deployments sometimes retain an old AI_PROVIDER_ORDER such as `ollama`.
-    # Keep the explicit order first, but automatically add configured cloud routes
-    # so one stale environment value cannot silently disable production providers.
-    free_fallbacks = ["gemini_free", "openrouter_free", "groq_free", "huggingface_free"]
-    order = list(dict.fromkeys([*requested, *free_fallbacks]))
+    # Prefer configured cloud providers over local Ollama in production. Render can
+    # retain an old AI_PROVIDER_ORDER, so configured cloud routes are always appended.
+    cloud_order = ["gemini_free", "openrouter_free", "groq_free", "huggingface_free"]
+    order = list(dict.fromkeys([*cloud_order, *requested]))
     for name in order:
         if name == "ollama":
             providers.append(
@@ -203,7 +202,13 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
             )
     if not providers:
         raise RuntimeError("no_synthesis_provider_configured")
-    logger.info("synthesis_providers_configured: %s", ",".join(meta.name for meta, _ in providers))
+    configured_names = ",".join(meta.name for meta, _ in providers)
+    logger.info("synthesis_providers_configured: %s", configured_names)
+    if not any(meta.cost_tier == "free" for meta, _ in providers):
+        logger.error(
+            "synthesis_cloud_provider_missing: configure GEMINI_API_KEY, OPENROUTER_API_KEY, "
+            "GROQ_API_KEY, or HUGGINGFACE_TOKEN"
+        )
 
     rich_media = (
         OpenAIMediaExtractor(
