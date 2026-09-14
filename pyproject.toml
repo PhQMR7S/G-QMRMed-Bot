@@ -81,7 +81,7 @@ module = ["pypdf"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["gqmrmed.bot.router"]
+module = ["gqmrmed.bot.router", "gqmrmed.bot.professional_ui"]
 disable_error_code = ["union-attr"]
 
 [[tool.mypy.overrides]]
