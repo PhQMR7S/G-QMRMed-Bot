@@ -28,7 +28,11 @@ from gqmrmed.generation.providers import (
     ImageGenerationError,
     ImageGenerationProvider,
 )
-from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
+from gqmrmed.services.medical_pipeline import (
+    MedicalPlan,
+    SynthesisProvider,
+    build_medical_plan,
+)
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
@@ -195,18 +199,26 @@ class _BlankIllustrationProvider:
     ) -> GeneratedIllustration:
         del prompt
         svg = f"""
-        <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"
+             viewBox="0 0 {width} {height}">
           <defs>
             <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stop-color="#EAF3F7"/>
               <stop offset="1" stop-color="#D9E9E6"/>
             </linearGradient>
           </defs>
-          <rect width="100%" height="100%" fill="url(#g)"/>
-          <circle cx="50%" cy="42%" r="28%" fill="#FFFFFF" opacity="0.45"/>
-          <circle cx="50%" cy="42%" r="18%" fill="none"
+          <rect width="{width}" height="{height}" fill="url(#g)"/>
+          <circle cx="{width / 2:.1f}" cy="{height * 0.42:.1f}"
+                  r="{min(width, height) * 0.28:.1f}" fill="#FFFFFF" opacity="0.45"/>
+          <circle cx="{width / 2:.1f}" cy="{height * 0.42:.1f}"
+                  r="{min(width, height) * 0.18:.1f}" fill="none"
                   stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
-          <path d="M25% 42% H38% L44% 32% L50% 53% L57% 36% L63% 42% H75%"
+          <path d="M{width * 0.25:.1f} {height * 0.42:.1f} "
+                f"H{width * 0.38:.1f} L{width * 0.44:.1f} {height * 0.32:.1f} "
+                f"L{width * 0.50:.1f} {height * 0.53:.1f} "
+                f"L{width * 0.57:.1f} {height * 0.36:.1f} "
+                f"L{width * 0.63:.1f} {height * 0.42:.1f} "
+                f"H{width * 0.75:.1f}"
                 fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.48"/>
         </svg>
         """
