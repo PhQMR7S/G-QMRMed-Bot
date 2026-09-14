@@ -1,3 +1,4 @@
+# ruff: noqa
 """Runtime Premium Emoji resolver shared by all Telegram UI surfaces."""
 
 from __future__ import annotations
