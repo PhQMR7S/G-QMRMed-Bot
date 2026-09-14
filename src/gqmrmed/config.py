@@ -33,8 +33,6 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="gqmrmed", alias="S3_BUCKET")
     s3_region: str | None = Field(default=None, alias="S3_REGION")
 
-    # AI routing: free/local providers are the launch default. Paid providers
-    # are disabled unless explicitly enabled by configuration.
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
         default="ollama,openrouter_free,groq_free,huggingface_free,openai_compatible,openai",
@@ -82,7 +80,41 @@ class Settings(BaseSettings):
     ollama_timeout_seconds: float = Field(
         default=180.0, gt=0, le=900, alias="OLLAMA_TIMEOUT_SECONDS"
     )
-    research_provider: str | None = Field(default="pubmed", alias="RESEARCH_PROVIDER")
+
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_text_model: str = Field(default="gemini-3.8-flash", alias="GEMINI_TEXT_MODEL")
+    gemini_image_model: str = Field(default="gemini-3.1-flash-image", alias="GEMINI_IMAGE_MODEL")
+    gemini_timeout_seconds: float = Field(
+        default=180.0, gt=0, le=900, alias="GEMINI_TIMEOUT_SECONDS"
+    )
+    cloudflare_api_token: str | None = Field(default=None, alias="CLOUDFLARE_API_TOKEN")
+    cloudflare_account_id: str | None = Field(default=None, alias="CLOUDFLARE_ACCOUNT_ID")
+    cloudflare_image_model: str = Field(
+        default="@cf/black-forest-labs/flux-2-klein-4b", alias="CLOUDFLARE_IMAGE_MODEL"
+    )
+    dashscope_api_key: str | None = Field(default=None, alias="DASHSCOPE_API_KEY")
+    dashscope_base_url: str = Field(
+        default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        alias="DASHSCOPE_BASE_URL",
+    )
+    dashscope_image_model: str = Field(
+        default="qwen-image-3.0-pro", alias="DASHSCOPE_IMAGE_MODEL"
+    )
+    nararouter_api_key: str | None = Field(default=None, alias="NARAROUTER_API_KEY")
+    nararouter_base_url: str = Field(
+        default="https://router.bynara.id/v1", alias="NARAROUTER_BASE_URL"
+    )
+    nararouter_model: str = Field(default="agnes-2.5-flash", alias="NARAROUTER_MODEL")
+    image_provider_order: str = Field(
+        default="cloudflare,qwen,gemini,huggingface,procedural", alias="IMAGE_PROVIDER_ORDER"
+    )
+    image_generation_timeout_seconds: float = Field(
+        default=180.0, gt=0, le=900, alias="IMAGE_GENERATION_TIMEOUT_SECONDS"
+    )
+
+    research_provider: str | None = Field(
+        default="gemini_grounded,pubmed", alias="RESEARCH_PROVIDER"
+    )
     research_api_key: str | None = Field(default=None, alias="RESEARCH_API_KEY")
     research_email: str | None = Field(default=None, alias="RESEARCH_EMAIL")
 
@@ -91,8 +123,6 @@ class Settings(BaseSettings):
         default=120.0, gt=0, le=600, alias="COMFYUI_TIMEOUT_SECONDS"
     )
     comfyui_workflow_json: str | None = Field(default=None, alias="COMFYUI_WORKFLOW_JSON")
-    # Render/free containers do not provide a writable /data mount. Keep the
-    # filesystem fallback on /tmp; durable deployments should configure S3.
     result_storage_dir: str = Field(
         default="/tmp/gqmrmed-results", alias="RESULT_STORAGE_DIR"
     )

@@ -17,7 +17,7 @@ async def research_medical_topic(
     warnings: list[str] = []
 
     if not sources:
-        warnings.append("no_pubmed_evidence_found")
+        warnings.append("no_evidence_found")
     if sources and not any(source.abstract for source in sources):
         warnings.append("evidence_has_no_abstracts")
 

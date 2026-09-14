@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class SourceType(StrEnum):
     PUBMED = "pubmed"
+    WEB = "web"
     USER_INPUT = "user_input"
 
 
