@@ -79,6 +79,8 @@ cards, soft clinical pastel palette, strong title hierarchy, generous whitespace
 compact information cards, topic-specific medical illustrations, clear arrows and
 pathways, subtle gradients, restrained shadows, balanced density, precise alignment,
 modern Arabic typography with correct RTL, and a polished clinical-publication feel.
+Use red only for danger/warnings, green for favorable or treatment states, blue/teal
+for information and mechanism, purple as a secondary accent, and amber for caution.
 Adapt the composition to the topic: comparison topics use comparison panels, drug
 topics use medication-focused cards, mechanisms use causal diagrams, anatomy uses
 central anatomy with callouts, and symptom/clinical topics use grouped cards.
