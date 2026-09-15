@@ -20,7 +20,7 @@ require_env ADMIN_SECRET
 
 (( ${#ADMIN_SECRET} >= 32 )) || fail "ADMIN_SECRET must contain at least 32 characters"
 
-provider_order="${AI_PROVIDER_ORDER:-ollama,openrouter_free,groq_free,openai_compatible,openai}"
+provider_order="${AI_PROVIDER_ORDER:-openai}"
 IFS=',' read -r -a providers <<< "$provider_order"
 configured=0
 for provider in "${providers[@]}"; do
@@ -35,11 +35,14 @@ for provider in "${providers[@]}"; do
     groq_free)
       [[ -n "${GROQ_API_KEY:-}" ]] && configured=1
       ;;
+    huggingface_free)
+      [[ -n "${HUGGINGFACE_TOKEN:-}" && -n "${HUGGINGFACE_TEXT_MODEL:-}" ]] && configured=1
+      ;;
     openai_compatible)
       [[ -n "${AI_COMPATIBLE_API_KEY:-}" && -n "${AI_COMPATIBLE_BASE_URL:-}" && -n "${AI_COMPATIBLE_MODEL:-}" ]] && configured=1
       ;;
     openai)
-      if [[ "${AI_ALLOW_PAID:-false}" == "true" ]]; then
+      if [[ "${AI_ALLOW_PAID:-true}" == "true" ]]; then
         [[ -n "${AI_API_KEY:-}" && -n "${AI_BASE_URL:-}" && -n "${AI_MODEL:-}" ]] && configured=1
       fi
       ;;
