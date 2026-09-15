@@ -88,14 +88,22 @@ def render_infographic_page(
     language = spec.language.lower()
     margin = 48
 
-    _callout(draw, (margin, 34, 224, 92), "تثقيف طبي" if language != "en" else "MEDICAL", _soften(accents[0]), accents[0], language)
-    _callout(draw, (800, 34, cfg.width - margin, 92), "مبني على الأدلة" if language != "en" else "EVIDENCE", _soften(accents[1 % len(accents)]), accents[1 % len(accents)], language)
+    callout_left = accents[0]
+    callout_right = accents[1 % len(accents)]
+    _callout(draw, (margin, 34, 224, 92), "تثقيف طبي" if language != "en" else "MEDICAL", _soften(callout_left), _readable_accent(callout_left), language)
+    _callout(draw, (800, 34, cfg.width - margin, 92), "مبني على الأدلة" if language != "en" else "EVIDENCE", _soften(callout_right), _readable_accent(callout_right), language)
 
     title = _clean(page.title)
     title_font = _fit_title(draw, title, language, 720, prefs.font_scale)
-    title_anchor = "lm" if prefs.header_style == "left" else "mm"
-    title_x = margin if title_anchor == "lm" else cfg.width / 2
-    _text(draw, title, (title_x, 132), title_font, page_ink, anchor=title_anchor)
+    if prefs.header_style == "banner":
+        banner = (margin, 104, cfg.width - margin, 174)
+        draw.rounded_rectangle(banner, radius=24, fill=callout_left)
+        _text(draw, title, (cfg.width / 2, 139), title_font, _contrast_text(callout_left, cfg)[0], anchor="mm")
+    else:
+        title_anchor = "lm" if prefs.header_style == "left" else "mm"
+        title_x = margin if title_anchor == "lm" else cfg.width / 2
+        _text(draw, title, (title_x, 132), title_font, page_ink, anchor=title_anchor)
+
     subtitle = _clean(page.subtitle) or _subtitle(language)
     _text(draw, subtitle, (cfg.width / 2, 190), _fit_font(draw, subtitle, _font(max(14, round(20 * prefs.font_scale)), False, language), 760, 40, language), page_muted, anchor="mm")
 
@@ -142,7 +150,7 @@ def _cards(draw: ImageDraw.ImageDraw, blocks: list[TextBlock], sections: list[st
         fill, accent = _colors(block.role, index, cfg, prefs)
         _card(draw, block, sections, index, language, x, y, card_w, card_h, fill, accent, cfg, prefs)
         if prefs.layout in {"flow", "timeline"} and index < count - 1:
-            next_row, next_col = divmod(index + 1, cols)
+            next_row, _ = divmod(index + 1, cols)
             if next_row == row:
                 cx = x + card_w + gap / 2
                 cy = y + card_h / 2
@@ -158,10 +166,10 @@ def _card(draw: ImageDraw.ImageDraw, block: TextBlock, sections: list[str], inde
     rtl = language != "en" or _is_rtl(block.text)
     icon_cx = x + 30 if not rtl else x + width - 30
     draw.ellipse((icon_cx - 16, y + 10, icon_cx + 16, y + 42), fill=cfg.paper)
-    _text(draw, str(index + 1), (icon_cx, y + 26), _font(14, True, "en"), accent, anchor="mm")
+    _text(draw, str(index + 1), (icon_cx, y + 26), _font(14, True, "en"), _contrast_text(accent, cfg)[0], anchor="mm")
     label = _section_label(sections, index, language)
     label_x = x + width - 56 if rtl else x + 56
-    _text(draw, label, (label_x, y + header_h / 2), _font(max(13, round(19 * prefs.font_scale)), True, "ar" if rtl else "en"), cfg.paper, anchor="rm" if rtl else "lm")
+    _text(draw, label, (label_x, y + header_h / 2), _font(max(13, round(19 * prefs.font_scale)), True, "ar" if rtl else "en"), _contrast_text(accent, cfg)[0], anchor="rm" if rtl else "lm")
     pad = 22
     body_y = y + header_h + 22
     max_width = width - 2 * pad
@@ -198,7 +206,8 @@ def _colors(role: str, index: int, cfg: RenderConfig, prefs: DesignPreferences) 
     elif role == "caution":
         accent = "#C28D43"
     else:
-        accent = _accent_palette(cfg, prefs)[index % len(_accent_palette(cfg, prefs))]
+        accents = _accent_palette(cfg, prefs)
+        accent = accents[index % len(accents)]
     return _soften(accent), accent
 
 
@@ -225,11 +234,23 @@ def _valid_hex(value: str | None) -> str | None:
 
 def _contrast_text(background: str, cfg: RenderConfig) -> tuple[str, str]:
     value = background.lstrip("#")
+    if len(value) != 6:
+        return cfg.ink, cfg.muted
     rgb = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
     luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255
     if luminance < 0.48:
         return "#FFFDFC", "#E9E1E8"
     return cfg.ink, cfg.muted
+
+
+def _readable_accent(accent: str) -> str:
+    """Choose dark ink for very light custom accents and white for dark ones."""
+    value = accent.lstrip("#")
+    if len(value) != 6:
+        return "#33253A"
+    rgb = tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+    luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255
+    return "#33253A" if luminance > 0.60 else "#FFFDFC"
 
 
 def _artwork(canvas: Image.Image, illustration: GeneratedIllustration, box: tuple[int, int, int, int], cfg: RenderConfig) -> None:
