@@ -35,6 +35,7 @@ class InfographicPage(BaseModel):
     model_config = ConfigDict(extra="forbid")
     page_number: int = Field(default=1, ge=1, le=1)
     title: str = Field(min_length=1, max_length=160)
+    subtitle: str = Field(default="", max_length=240)
     sections: list[str] = Field(min_length=1, max_length=8)
     blocks: list[TextBlock] = Field(min_length=1, max_length=12)
 
@@ -55,7 +56,7 @@ class InfographicDesignSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
     topic: str = Field(min_length=1, max_length=20_000)
     language: str = Field(default="ar", min_length=2, max_length=8)
-    aspect_ratio: str = "4:5"
+    aspect_ratio: str = "2:3"
     template: TemplateFamily
     pages: list[InfographicPage] = Field(min_length=1, max_length=1)
     illustration_prompt: str = Field(min_length=1, max_length=8_000)
@@ -63,19 +64,24 @@ class InfographicDesignSpec(BaseModel):
 
 
 MASTER_VISUAL_LANGUAGE = """
-QMRMed editorial medical infographic. Match the supplied professional reference
-family: publication-grade hierarchy, clean white paper, restrained pastel section
-panels, strong title typography, dominant clinically relevant illustration,
-precise alignment, generous whitespace, rounded panels, small editorial labels,
-and a subtle QMR7S signature. The final composition is 1080x1350 (4:5).
-Use deep navy #0B1F3A, turquoise #14B8A6, white #FFFFFF and restrained gold #D4AF37,
-with soft rose, mint, cyan and lavender secondary panels. Never use random colors.
-Arabic text must be rendered with correct RTL shaping; English must remain LTR;
-mixed input may remain mixed. Never transliterate Arabic into broken Latin glyphs.
-Never put provider errors, fallback status, tracebacks, source URLs, citations,
-file paths, internal metadata, or system messages into visible artwork.
+QMRMed reference-driven Arabic medical editorial infographic. Use the supplied
+master visual language as the design system: warm ivory paper, centered bold
+Arabic headline, small soft-pastel callout bubbles, a dominant clinically
+relevant illustration near the upper middle, then three balanced columns of
+rounded modular cards. Cards use restrained rose, cyan, mint, lavender and
+amber pastel fills with darker matching header bands, circular icon zones,
+subtle borders, soft shadows, generous whitespace, precise alignment and a
+small educational footer. The composition is publication-grade, calm, friendly,
+modern and medically credible rather than generic AI art. Preserve the visual
+rhythm and hierarchy across topics while allowing the medical content and
+illustration to change. The canonical canvas is 1024x1536 (2:3).
+
+Arabic text must be rendered by the deterministic compositor with correct RTL
+shaping; English remains LTR and mixed text may remain mixed. Never place
+provider errors, fallback status, tracebacks, source URLs, citations, file
+paths, internal metadata or system messages into visible artwork.
 The illustration is artwork only: no readable text, labels, numbers, logos,
-watermarks or UI inside the generated illustration.
+watermarks, UI or disclaimers.
 """.strip()
 
 
@@ -146,12 +152,12 @@ def _is_internal_artifact(text: str) -> bool:
 
 
 def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
-    """Select concise evidence-locked facts; subtitle is header text, not a card."""
+    """Select concise evidence-locked facts for the fixed multi-card composition."""
     blocks: list[TextBlock] = []
     for point in content.key_points:
         if not _is_internal_artifact(point):
-            blocks.append(TextBlock(text=_compact(point, 260), role="point", importance=3))
-        if len(blocks) >= 3:
+            blocks.append(TextBlock(text=_compact(point, 240), role="point", importance=3))
+        if len(blocks) >= 4:
             break
 
     claims = [claim for claim in content.claims if not _is_internal_artifact(claim.text)]
@@ -159,19 +165,19 @@ def _select_single_image_blocks(content: SynthesizedContent) -> list[TextBlock]:
     for claim in claims:
         blocks.append(
             TextBlock(
-                text=_compact(claim.text, 320),
+                text=_compact(claim.text, 300),
                 role="danger" if claim.critical else "claim",
                 importance=5 if claim.critical else 4,
             )
         )
-        if len(blocks) >= 5:
+        if len(blocks) >= 8:
             break
 
     for caution in content.cautions:
         if not _is_internal_artifact(caution):
-            blocks.append(TextBlock(text=_compact(caution, 260), role="caution", importance=5))
+            blocks.append(TextBlock(text=_compact(caution, 240), role="caution", importance=5))
             break
-    return blocks[:6]
+    return blocks[:9]
 
 
 def build_design_spec(
@@ -182,7 +188,7 @@ def build_design_spec(
     language: str | None = None,
     max_blocks_per_page: int = 9,
 ) -> InfographicDesignSpec:
-    """Build one image while preserving the input language contract."""
+    """Build one reference-driven image while preserving the input language contract."""
     if max_blocks_per_page < 4 or max_blocks_per_page > 9:
         raise ValueError("single_image_capacity_must_be_between_4_and_9")
     mode = language or detect_language_mode(topic)
@@ -201,6 +207,7 @@ def build_design_spec(
     page = InfographicPage(
         page_number=1,
         title=title,
+        subtitle=_compact(content.subtitle or "", 220),
         sections=sections,
         blocks=[TextBlock(text=title, role="title", importance=5), *selected],
     )
@@ -222,7 +229,7 @@ def build_design_spec(
     return InfographicDesignSpec(
         topic=topic,
         language=mode,
-        aspect_ratio="4:5",
+        aspect_ratio="2:3",
         template=template,
         pages=[page],
         illustration_prompt=prompt[:8_000],
