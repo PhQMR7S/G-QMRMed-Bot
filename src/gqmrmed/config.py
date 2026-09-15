@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     ai_provider: str | None = Field(default=None, alias="AI_PROVIDER")
     ai_provider_order: str = Field(
-        default="ollama,gemini_free,openrouter_free,groq_free,huggingface_free,openai_compatible,openai",
+        default="openai,gemini_free,openrouter_free,groq_free,huggingface_free,ollama,openai_compatible",
         alias="AI_PROVIDER_ORDER",
     )
     ai_allow_paid: bool = Field(default=False, alias="AI_ALLOW_PAID")
@@ -105,8 +105,20 @@ class Settings(BaseSettings):
         default="https://router.bynara.id/v1", alias="NARAROUTER_BASE_URL"
     )
     nararouter_model: str = Field(default="agnes-2.5-flash", alias="NARAROUTER_MODEL")
+
+    # The production image path is intentionally OpenAI-first. Other providers
+    # remain available only when an operator explicitly changes this order.
     image_provider_order: str = Field(
-        default="cloudflare,qwen,gemini,huggingface,procedural", alias="IMAGE_PROVIDER_ORDER"
+        default="openai,procedural", alias="IMAGE_PROVIDER_ORDER"
+    )
+    openai_image_model: str = Field(
+        default="gpt-image-2", alias="OPENAI_IMAGE_MODEL"
+    )
+    openai_image_quality: str = Field(
+        default="medium", alias="OPENAI_IMAGE_QUALITY"
+    )
+    openai_image_timeout_seconds: float = Field(
+        default=180.0, gt=0, le=900, alias="OPENAI_IMAGE_TIMEOUT_SECONDS"
     )
     image_generation_timeout_seconds: float = Field(
         default=180.0, gt=0, le=900, alias="IMAGE_GENERATION_TIMEOUT_SECONDS"
@@ -136,8 +148,8 @@ class Settings(BaseSettings):
     media_transcription_model: str = Field(
         default="gpt-4o-mini-transcribe", alias="MEDIA_TRANSCRIPTION_MODEL"
     )
-    image_width: int = Field(default=1080, ge=256, le=4096, alias="IMAGE_WIDTH")
-    image_height: int = Field(default=1350, ge=256, le=4096, alias="IMAGE_HEIGHT")
+    image_width: int = Field(default=1024, ge=256, le=4096, alias="IMAGE_WIDTH")
+    image_height: int = Field(default=1536, ge=256, le=4096, alias="IMAGE_HEIGHT")
     admin_secret: str | None = Field(default=None, alias="ADMIN_SECRET")
     admin_panel_url: str = Field(
         default="https://gqmrmed-bot-api.onrender.com", alias="ADMIN_PANEL_URL"
