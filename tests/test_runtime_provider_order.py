@@ -63,7 +63,6 @@ def test_requested_provider_order_is_not_overridden_by_implicit_cloud_order() ->
     class CaptureRouter:
         def __init__(self, providers, **kwargs):
             captured["names"] = [meta.name for meta, _ in providers]
-            captured["kwargs"] = kwargs
 
     runtime.ProviderRouter = CaptureRouter  # type: ignore[assignment]
     try:
