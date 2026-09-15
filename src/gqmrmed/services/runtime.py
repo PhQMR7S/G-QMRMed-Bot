@@ -38,6 +38,7 @@ from gqmrmed.generation.providers import (
     ProceduralMedicalIllustrationProvider,
 )
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
+from gqmrmed.services.image_router import ImageProviderRouter
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
 from gqmrmed.services.media_routing import RoutingMediaExtractor
@@ -253,39 +254,48 @@ def _build_image_provider(
     settings: Settings,
     workflow: dict[str, object] | None,
 ) -> ImageGenerationProvider:
-    """Resolve the artwork provider from the explicit operator order."""
+    """Resolve all configured artwork providers in the explicit operator order."""
+    providers: list[ImageGenerationProvider] = []
     for name in (item.strip().lower() for item in settings.image_provider_order.split(",")):
         if not name:
             continue
         if name == "openai" and settings.ai_api_key:
-            return OpenAIImageProvider(
-                OpenAIImageConfig(
-                    api_key=settings.ai_api_key,
-                    model=settings.openai_image_model,
-                    quality=settings.openai_image_quality,
-                    timeout_seconds=settings.openai_image_timeout_seconds,
+            providers.append(
+                OpenAIImageProvider(
+                    OpenAIImageConfig(
+                        api_key=settings.ai_api_key,
+                        model=settings.openai_image_model,
+                        quality=settings.openai_image_quality,
+                        timeout_seconds=settings.openai_image_timeout_seconds,
+                    )
                 )
             )
-        if name == "huggingface" and settings.huggingface_token:
-            return HuggingFaceImageProvider(
-                HuggingFaceImageConfig(
-                    token=settings.huggingface_token,
-                    model=settings.huggingface_image_model,
-                    provider=settings.huggingface_image_provider,
-                    timeout_seconds=settings.huggingface_timeout_seconds,
+        elif name == "huggingface" and settings.huggingface_token:
+            providers.append(
+                HuggingFaceImageProvider(
+                    HuggingFaceImageConfig(
+                        token=settings.huggingface_token,
+                        model=settings.huggingface_image_model,
+                        provider=settings.huggingface_image_provider,
+                        timeout_seconds=settings.huggingface_timeout_seconds,
+                    )
                 )
             )
-        if name == "comfyui" and workflow is not None:
-            return ComfyUIImageProvider(
-                ComfyUIConfig(
-                    base_url=settings.comfyui_base_url,
-                    timeout_seconds=settings.comfyui_timeout_seconds,
-                    workflow=workflow,
+        elif name == "comfyui" and workflow is not None:
+            providers.append(
+                ComfyUIImageProvider(
+                    ComfyUIConfig(
+                        base_url=settings.comfyui_base_url,
+                        timeout_seconds=settings.comfyui_timeout_seconds,
+                        workflow=workflow,
+                    )
                 )
             )
-        if name == "procedural":
-            return ProceduralMedicalIllustrationProvider()
-    return ProceduralMedicalIllustrationProvider()
+        elif name == "procedural":
+            providers.append(ProceduralMedicalIllustrationProvider())
+    if not providers:
+        providers.append(ProceduralMedicalIllustrationProvider())
+    return ImageProviderRouter(tuple(providers))
 
 
 __all__ = ["build_worker"]
