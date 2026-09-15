@@ -41,10 +41,10 @@ def make_plan(code: PlanCode = PlanCode.PLUS) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid4(),
         code=code.value,
-        price=Decimal("5.00") if code == PlanCode.PLUS else Decimal("20.00"),
-        stars_price=400 if code == PlanCode.PLUS else 1600,
+        price=Decimal("15.00") if code == PlanCode.PLUS else Decimal("50.00"),
+        stars_price=1200 if code == PlanCode.PLUS else 3850,
         duration_days=30 if code == PlanCode.PLUS else 90,
-        daily_limit=8 if code == PlanCode.PLUS else 15,
+        daily_limit=2 if code == PlanCode.PLUS else 3,
         is_active=True,
     )
 
@@ -61,7 +61,7 @@ def make_payment(plan: SimpleNamespace) -> SimpleNamespace:
         transaction_id=None,
         invoice_payload=None,
         stars_amount=None,
-        amount=Decimal("5.00"),
+        amount=Decimal("15.00"),
         currency="USD",
         status=PaymentStatus.PENDING.value,
         approved_by=None,
@@ -74,6 +74,7 @@ async def test_create_payment_rejects_free_plan_and_wrong_amount() -> None:
     free.price = Decimal("0.00")
     free.stars_price = None
     free.duration_days = None
+    free.daily_limit = 1
     with pytest.raises(ValueError, match="invalid_payment_amount"):
         await create_payment(
             FakeSession(),
@@ -92,7 +93,7 @@ async def test_create_payment_rejects_free_plan_and_wrong_amount() -> None:
             plan=paid,
             provider="manual",
             transaction_id=None,
-            amount=Decimal("4.99"),
+            amount=Decimal("14.99"),
         )
 
 
@@ -108,7 +109,7 @@ async def test_create_payment_returns_existing_transaction() -> None:
         plan=plan,
         provider="MANUAL",
         transaction_id=" tx-123 ",
-        amount=Decimal("5.00"),
+        amount=Decimal("15.00"),
     )
 
     assert result is existing
@@ -127,8 +128,8 @@ async def test_create_stars_payment_uses_canonical_star_price() -> None:
     )
     assert result.provider == "telegram_stars"
     assert result.currency == "XTR"
-    assert result.stars_amount == 400
-    assert result.amount == Decimal("400")
+    assert result.stars_amount == 1200
+    assert result.amount == Decimal("1200")
     assert len(session.added) == 2
 
 
