@@ -68,10 +68,10 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_BUCKET: ${S3_BUCKET:-gqmrmed}
       S3_REGION: ${S3_REGION:-}
-      AI_PROVIDER: ${AI_PROVIDER:-}
-      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-ollama,openrouter_free,groq_free,openai_compatible,openai}
-      AI_ALLOW_PAID: ${AI_ALLOW_PAID:-false}
-      AI_API_KEY: ${AI_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-openai}
+      AI_ALLOW_PAID: ${AI_ALLOW_PAID:-true}
+      AI_API_KEY: ${AI_API_KEY:?AI_API_KEY is required for the default OpenAI synthesis/image path}
       AI_BASE_URL: ${AI_BASE_URL:-https://api.openai.com/v1}
       AI_MODEL: ${AI_MODEL:-gpt-5.6-luna}
       AI_COMPATIBLE_API_KEY: ${AI_COMPATIBLE_API_KEY:-}
