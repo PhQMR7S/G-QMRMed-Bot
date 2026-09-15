@@ -1,9 +1,9 @@
 import pytest
 
 from gqmrmed.ai.image_generation import (
+    build_illustration_request,
     CANVAS_HEIGHT,
     CANVAS_WIDTH,
-    build_illustration_request,
     ComfyUIConfig,
     ComfyUIIllustrationProvider,
     ImageGenerationError,
