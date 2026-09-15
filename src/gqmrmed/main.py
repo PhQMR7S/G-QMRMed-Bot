@@ -23,8 +23,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Migrate the database and manage the optional embedded worker."""
-    await upgrade_head()
+    """Manage local development migrations and the optional embedded worker."""
+    if settings.app_env.strip().lower() != "production":
+        await upgrade_head()
     app.state.worker_task = None
     app.state.worker_stop = None
     app.state.worker_bot = None
