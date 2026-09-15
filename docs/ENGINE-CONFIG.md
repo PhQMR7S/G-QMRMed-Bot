@@ -14,13 +14,14 @@ The model is used for structured medical content synthesis only. Evidence retrie
 
 ### Illustration
 
-- Provider: ComfyUI HTTP API or the deterministic procedural fallback
-- Model: configured by the ComfyUI workflow
-- Endpoint: `COMFYUI_BASE_URL`
-- Workflow: `COMFYUI_WORKFLOW_JSON`
-- Canonical output: 1080×1350, 4:5
+- Default provider: OpenAI GPT-Image-2
+- Default order: `IMAGE_PROVIDER_ORDER=openai,procedural`
+- Model: `OPENAI_IMAGE_MODEL` (default `gpt-image-2`)
+- Quality: `OPENAI_IMAGE_QUALITY` (default `medium`)
+- Timeout: `OPENAI_IMAGE_TIMEOUT_SECONDS`
+- Canonical output: **1024×1536, 2:3**
 
-The image model is an illustration layer. It must not be trusted for exact readable medical text, numeric facts, doses, labels, or clinical claims.
+OpenAI receives an illustration-only prompt. The deterministic QMRMed compositor owns exact medical text, labels, numbers, cards, branding and disclaimer. ComfyUI and other image providers remain optional fallbacks and are not required by the default production path.
 
 ## Infrastructure
 
