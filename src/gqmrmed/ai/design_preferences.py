@@ -1,7 +1,7 @@
 """Natural-language controls for user-directed infographic presentation."""
 
-import re
 from dataclasses import dataclass
+import re
 
 
 _COLOR_MAP: dict[str, str] = {
