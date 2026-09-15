@@ -1,4 +1,4 @@
-import pathlib
+import pathlib  # noqa: I001
 
 
 COMPOSE = pathlib.Path("compose.production.yml").read_text(encoding="utf-8")
