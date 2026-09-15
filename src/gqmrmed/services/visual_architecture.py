@@ -10,7 +10,16 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.LABORATORY_INTERPRETATION,
-        ("lab", "laboratory", "blood test", "cbc", "electrolyte", "sodium", "potassium", "creatinine"),
+        (
+            "lab",
+            "laboratory",
+            "blood test",
+            "cbc",
+            "electrolyte",
+            "sodium",
+            "potassium",
+            "creatinine",
+        ),
         ("test", "normal", "abnormal", "interpretation"),
     ),
     (
@@ -25,7 +34,17 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.ANATOMY_EXPLORER,
-        ("anatomy", "artery", "vein", "nerve", "organ", "heart", "brain", "kidney", "liver"),
+        (
+            "anatomy",
+            "artery",
+            "vein",
+            "nerve",
+            "organ",
+            "heart",
+            "brain",
+            "kidney",
+            "liver",
+        ),
         ("structure", "location", "blood supply", "relations"),
     ),
     (
@@ -108,3 +127,6 @@ def select_visual_architecture(
         emphasis=emphasis,
         illustration_prompt=prompt,
     )
+
+
+__all__ = ["select_visual_architecture"]
