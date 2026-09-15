@@ -121,7 +121,7 @@ class ProductionGenerationPipeline:
 
 def _design_preferences_for_job(job: GenerationJob, user_input: str) -> DesignPreferences:
     """Use structured metadata when present and fall back to natural-language controls."""
-    metadata = job.input_metadata or {}
+    metadata = getattr(job, "input_metadata", None) or {}
     raw = metadata.get("design_preferences")
     if isinstance(raw, dict):
         try:
