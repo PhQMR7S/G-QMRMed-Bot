@@ -1,5 +1,4 @@
 """Natural-language controls for user-directed infographic presentation."""
-from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -91,19 +90,28 @@ def extract_design_preferences(text: str) -> DesignPreferences:
     layout = "balanced"
     if any(token in lowered for token in ("timeline", "خط زمني", "زمني")):
         layout = "timeline"
-    elif any(token in lowered for token in ("flow", "flowchart", "مخطط انسيابي", "تدفق", "مسار")):
+    elif any(
+        token in lowered
+        for token in ("flow", "flowchart", "مخطط انسيابي", "تدفق", "مسار")
+    ):
         layout = "flow"
     elif any(token in lowered for token in ("comparison", "مقارنة", "مقارن")):
         layout = "comparison"
     elif any(token in lowered for token in ("two column", "عمودين", "عمودان")):
         layout = "two_column"
-    elif any(token in lowered for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")):
+    elif any(
+        token in lowered
+        for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")
+    ):
         layout = "three_column"
     elif any(token in lowered for token in ("central", "مركزي", "في الوسط", "وسط الصفحة")):
         layout = "central"
 
     density = "balanced"
-    if any(token in lowered for token in ("minimal", "بسيط جداً", "بسيط جدا", "مساحات واسعة", "هوائي")):
+    if any(
+        token in lowered
+        for token in ("minimal", "بسيط جداً", "بسيط جدا", "مساحات واسعة", "هوائي")
+    ):
         density = "airy"
     elif any(token in lowered for token in ("compact", "مضغوط", "معلومات كثيرة", "كثيف")):
         density = "compact"
@@ -127,13 +135,35 @@ def extract_design_preferences(text: str) -> DesignPreferences:
             break
 
     position = "upper_middle"
-    if any(token in lowered for token in ("الصورة يسار", "الصورة على اليسار", "illustration left", "image left")):
+    if any(
+        token in lowered
+        for token in (
+            "الصورة يسار",
+            "الصورة على اليسار",
+            "illustration left",
+            "image left",
+        )
+    ):
         position = "left"
-    elif any(token in lowered for token in ("الصورة يمين", "الصورة على اليمين", "illustration right", "image right")):
+    elif any(
+        token in lowered
+        for token in (
+            "الصورة يمين",
+            "الصورة على اليمين",
+            "illustration right",
+            "image right",
+        )
+    ):
         position = "right"
-    elif any(token in lowered for token in ("الصورة أسفل", "الصورة اسفل", "image bottom", "illustration bottom")):
+    elif any(
+        token in lowered
+        for token in ("الصورة أسفل", "الصورة اسفل", "image bottom", "illustration bottom")
+    ):
         position = "lower_middle"
-    elif any(token in lowered for token in ("الصورة في الوسط", "الصورة وسط", "image center", "illustration center")):
+    elif any(
+        token in lowered
+        for token in ("الصورة في الوسط", "الصورة وسط", "image center", "illustration center")
+    ):
         position = "center"
 
     header_style = "centered"
