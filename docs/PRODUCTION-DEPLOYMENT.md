@@ -16,9 +16,11 @@ Before production start, provide:
 - Redis with `REDIS_URL`.
 - A real Telegram bot token in `TELEGRAM_BOT_TOKEN`.
 - `ADMIN_SECRET` with at least 32 characters.
-- A reachable ComfyUI API in `COMFYUI_BASE_URL` and a concrete API-format workflow in `COMFYUI_WORKFLOW_JSON`.
-- At least one configured AI provider according to `AI_PROVIDER_ORDER`.
+- A real AI synthesis/image credential in `AI_API_KEY` for the default OpenAI path, or an explicitly configured alternative provider set in `AI_PROVIDER_ORDER` / `IMAGE_PROVIDER_ORDER`.
 - Persistent result storage. For a single host, the production compose volume is sufficient; for multiple hosts, configure S3-compatible storage.
+- Reachable PubMed/network access for the medical research path.
+
+ComfyUI is **not** a production prerequisite for the default image path. It is an optional legacy/fallback provider and only becomes required if `comfyui` is explicitly selected in `IMAGE_PROVIDER_ORDER`.
 
 Never put real credentials, Telegram tokens, API keys, S3 secrets, or ComfyUI workflow credentials in Git.
 
@@ -33,7 +35,7 @@ set +a
 bash scripts/release-gate.sh
 ```
 
-The gate verifies production mode, required dependencies, minimum admin-secret length, valid non-empty ComfyUI workflow JSON, at least one usable AI provider, and all-or-none S3 configuration. It does not print credential values.
+The gate verifies production mode, required infrastructure credentials, minimum admin-secret length, a usable AI synthesis provider, a usable image provider, and all-or-none S3 configuration. It validates ComfyUI workflow JSON only when ComfyUI is explicitly selected. It does not print credential values.
 
 Then validate the exact Compose contract:
 
@@ -61,10 +63,10 @@ Do not mix images built from different commits in the same release.
 7. Verify `/health/live` on the API process.
 8. Verify `/health/ready` reports both PostgreSQL and Redis as `ok`.
 9. Verify the bot is connected to Telegram and only one polling consumer is active.
-10. Send one controlled Telegram generation request and verify the complete durable path: job creation → quota reservation → queue → worker lease → research → synthesis → evidence validation → architecture → illustration → SVG QA → PNG QA → persistent result → Telegram delivery.
+10. Send one controlled Telegram generation request and verify the complete durable path: job creation → quota reservation → DB dispatcher → Redis queue → worker lease → research → synthesis → evidence validation → visual architecture → illustration → deterministic exact-text compositor → PNG QA → persistent result → Telegram delivery.
 11. Verify a failed Telegram delivery can be retried without regenerating the image or consuming another usage unit.
 12. Verify duplicate worker delivery/retry is idempotent.
-13. Verify the free quota is exactly three successful reservations per UTC calendar day and paid-plan limits match the active entitlement.
+13. Verify the FREE quota is exactly **1 successful reservation per UTC calendar day**, PLUS is 2/day, and PRO is 3/day while the corresponding entitlement is active.
 14. Verify a real Telegram Stars purchase only settles after `successful_payment`, and that the stored Telegram charge ID is present for refund handling.
 
 ## Rollback
@@ -84,6 +86,8 @@ Run the live and readiness checks again before accepting traffic. If a migration
 ## Compose
 
 `compose.production.yml` provides the three application roles and a one-shot migration container. It deliberately does **not** bundle PostgreSQL, Redis, Ollama, or ComfyUI: those components are infrastructure dependencies and should be supplied by the production environment rather than recreated on every application deployment.
+
+The default production worker path uses OpenAI for medical synthesis and GPT-Image-2 for the illustration layer, followed by the deterministic local compositor. Alternative providers remain explicit configuration choices.
 
 Create a production `.env` from `.env.example`; never commit real credentials or workflow secrets.
 
@@ -120,6 +124,6 @@ When more than one application host can execute workers, local `/data/results` i
 
 ## Final external gate
 
-The repository can validate code, packaging, migrations, deterministic rendering, and production configuration without production credentials. A real end-to-end generation cannot be truthfully marked complete until the external Telegram, PostgreSQL, Redis, AI, ComfyUI, and persistent-storage endpoints are supplied and exercised using the acceptance sequence above.
+The repository can validate code, packaging, migrations, deterministic rendering, and production configuration without production credentials. A real end-to-end generation cannot be truthfully marked complete until the external Telegram, PostgreSQL, Redis, AI, PubMed, and persistent-storage endpoints are supplied and exercised using the acceptance sequence above.
 
-The release is considered **production-ready** only when the repository CI is green **and** the external acceptance sequence passes. A green CI run alone does not prove that external services are reachable or that a real Telegram generation was delivered.
+The release is considered **production-ready** only when repository CI is green **and** the external acceptance sequence passes. A green CI run alone does not prove that external services are reachable or that a real Telegram generation was delivered.
