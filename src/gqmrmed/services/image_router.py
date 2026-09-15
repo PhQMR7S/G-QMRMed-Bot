@@ -32,7 +32,7 @@ class ImageProviderRouter:
                     width=width,
                     height=height,
                 )
-            except (ImageGenerationError, RuntimeError) as exc:
+            except RuntimeError as exc:
                 errors.append(type(exc).__name__)
         raise ImageGenerationError(
             "all_image_providers_failed:" + ",".join(errors)
