@@ -7,7 +7,7 @@ GQMRMed is an independent Telegram medical infographic generation system.
 - Fully independent from QMRMed and QMRMed-Bot.
 - No Telegram Mini App.
 - Separate backend, database, queue, AI/image pipeline, storage, subscriptions, payments, and admin panel.
-- The Telegram bot accepts medical topics, text, images, and supported files and produces original **1080×1350 (4:5)** medical infographics.
+- The Telegram bot accepts medical topics, text, images, and supported files and produces original **1024×1536 (2:3)** medical infographics.
 
 ## Core architecture
 
@@ -21,20 +21,38 @@ Telegram User
   -> Medical Research
   -> Evidence Validation
   -> Content Synthesis
-  -> Visual Architect
-  -> Image Generation
-  -> SVG exact-text rendering
-  -> PNG rasterization
+  -> Deterministic Visual Architect
+  -> OpenAI GPT-Image-2 illustration layer
+  -> QMRMed reference-driven exact-text compositor
+  -> 1024×1536 PNG rasterization
   -> Medical/Visual QA boundary
   -> Durable Result Storage
   -> Telegram delivery + retry
 ```
 
+## Master design system
+
+The supplied medical infographic reference is treated as a **master visual language**, not as a prompt that the image model is asked to imitate freely.
+
+The renderer keeps the design grammar deterministic:
+
+- warm ivory paper background;
+- centered Arabic headline and compact subtitle;
+- soft pastel rose/cyan/mint/lavender/amber accents;
+- rounded modular cards with restrained borders and shadows;
+- dominant clinical illustration in the upper-middle visual panel;
+- three-column card grid when content permits;
+- circular card icon/number zones;
+- exact Arabic RTL shaping and mixed Arabic/English support;
+- consistent footer/disclaimer safe zone.
+
+OpenAI generates **only the medical illustration layer**. It does not generate the final medical text, labels, numbers, disclaimer, watermark or card layout. Those are composed locally from evidence-locked structured content. This is the important architectural change that keeps the same visual identity across PCOS, DKA, MI, sepsis, stroke, anemia and other topics instead of allowing every image model request to drift into a new layout.
+
 ## Foundation guarantees
 
-- FREE entitlement is exactly 3 designs per UTC calendar day.
-- PLUS entitlement is exactly 8 designs per UTC calendar day while an active 30-day subscription exists.
-- PRO entitlement is exactly 15 designs per UTC calendar day while an active 90-day subscription exists.
+- FREE entitlement is exactly **1 design per UTC calendar day**.
+- PLUS entitlement is exactly **2 designs per UTC calendar day** while an active 30-day subscription exists.
+- PRO entitlement is exactly **3 designs per UTC calendar day** while an active 90-day subscription exists.
 - Quota reservations are atomic at the PostgreSQL level and are idempotent by generation job, so Telegram retries cannot consume the same slot twice.
 - Telegram IDs use PostgreSQL BIGINT.
 - Activation codes are stored only as SHA-256 hashes and are single-use.
@@ -58,10 +76,10 @@ Telegram User
 - Evidence records carry source IDs, PMID, title, abstract, publication year, provenance URL, and a bounded evidence score.
 - Research results are deduplicated and missing-evidence conditions are surfaced as warnings.
 - Synthesized medical claims must reference known evidence IDs; unknown or missing citations are rejected before visual planning.
-- AI synthesis is provider-neutral, with local Ollama first and configured free external providers next. Paid providers remain disabled unless explicitly enabled.
+- AI synthesis is provider-neutral; the artwork path is explicitly OpenAI-first and does not depend on Gemini/ComfyUI/Hugging Face when `IMAGE_PROVIDER_ORDER=openai,procedural`.
 - Visual architecture is selected deterministically from the medical topic and synthesized content.
 - Illustration generation and exact text rendering are explicitly separated: the image model receives an illustration-only prompt while exact labels/text remain a renderer responsibility.
-- Final artwork is rasterized to a deterministic **1080×1350 PNG (4:5)** for Telegram delivery.
+- Final artwork is rasterized to a deterministic **1024×1536 PNG (2:3)** matching the supplied reference proportions.
 
 ## Media ingestion
 
@@ -74,19 +92,31 @@ Telegram User
 
 ## Subscription plans
 
-| Plan | Price | Duration | Daily limit | Telegram Stars |
+| Plan | Price target | Duration | Daily limit | Telegram Stars |
 | --- | ---: | ---: | ---: | ---: |
-| FREE | $0 | ongoing | 3 | — |
-| PLUS | $5 | 30 days | 8 | 400 ⭐ |
-| PRO | $20 | 90 days | 15 | 1,600 ⭐ |
+| FREE | $0 | ongoing | 1 | — |
+| PLUS | $15 | 30 days | 2 | 1,200 ⭐ |
+| PRO | $50 | 90 days | 3 | 3,850 ⭐ |
 
-Telegram's official documentation states that the amount a user pays to acquire Stars can vary by user/region due to VAT and other fees, and Telegram currently assigns a $0.013 reward value per Star to developers. The launch Star amounts therefore target approximately $5.20 and $20.80 of current reward value; they are not a promise that every user will pay exactly $5/$20 when acquiring Stars.
+The public pricing is intentionally tied to a conservative **$0.07 fully-loaded planning budget per generated design**. At maximum theoretical use, PLUS represents up to 60 designs / ~$4.20 of variable generation budget and PRO up to 270 designs / ~$18.90. This leaves room for infrastructure, payment overhead, refunds and normal usage variance instead of repeating the previous $5/$20 plans with very high theoretical variable-cost exposure.
 
-Inside Telegram, GQMRMed sells a digital service. Telegram requires digital goods/services in bots to be sold exclusively using Telegram Stars (`XTR`), so the bot does not expose Mastercard, Zain Cash, bank-transfer, or other alternative payment instructions as an in-Telegram purchase path.
+Telegram's developer reward reference is currently $0.013 per earned Star, while the user's acquisition price can vary by region/platform. Therefore Stars are rounded launch amounts and are not a promise that every user pays exactly the USD headline price when buying Stars.
+
+Inside Telegram, GQMRMed sells a digital service. Telegram requires digital goods/services in bots to be sold using Telegram Stars (`XTR`), so the bot does not expose Mastercard, Zain Cash, bank-transfer, or other alternative payment instructions as an in-Telegram purchase path.
 
 The bot requires explicit purchase-terms confirmation before creating a Stars invoice, validates the exact server-side order during `pre_checkout_query`, and grants access only after a verified `successful_payment`. Telegram also requires `/terms` and payment support for live digital-service sales; GQMRMed exposes `/terms` and `/paysupport`.
 
 All successful Stars transactions persist the Telegram charge ID for audit/refund handling.
+
+## Design credit packs
+
+| Pack | Credits | Stars |
+| --- | ---: | ---: |
+| DESIGN_5 | 5 | 60 ⭐ |
+| DESIGN_12 | 12 | 120 ⭐ |
+| DESIGN_20 | 20 | 180 ⭐ |
+
+Purchased credits are independent of subscription duration and are consumed after an available daily entitlement according to the existing server-side usage policy.
 
 ## Activation codes and admin operations
 
@@ -110,8 +140,8 @@ Activation codes are intended for operator-controlled grants and other approved 
 - Queue: Redis
 - Medical research: NCBI PubMed E-utilities
 - Medical synthesis: provider abstraction + Ollama/OpenAI-compatible/OpenAI adapters
-- AI/image pipeline: ComfyUI API adapter plus deterministic procedural fallback
-- Exact layout: SVG renderer + CairoSVG rasterization
+- AI/image pipeline: OpenAI GPT-Image-2 illustration layer + deterministic QMRMed compositor
+- Exact layout: deterministic PIL renderer with Arabic RTL shaping; legacy SVG renderer remains isolated for compatibility tests
 - Storage: filesystem result adapter for local/dev operation; S3-compatible object storage adapter for durable production results
 - Media: Telegram download + local document extraction + optional AI OCR/transcription + FFmpeg
 - Deployment: Docker + managed application hosting
@@ -123,17 +153,17 @@ Activation codes are intended for operator-controlled grants and other approved 
 2. Core system foundation — complete
 3. Telegram bot + user onboarding + usage enforcement — implemented
 4. Research, verification, synthesis, and visual architecture — implemented
-5. Image generation + exact-text renderer — implemented
+5. Reference-driven OpenAI illustration + exact-text renderer — implemented
 6. Queue, live progress, heartbeat recovery, media ingestion, and durable Telegram delivery — implemented
 7. Subscriptions, activation, Telegram Stars payments, immutable billing audit, and private admin panel — implemented
 8. End-to-end testing, deployment, hardening, monitoring, and release — CI validation in progress
 
 ## Current release boundary
 
-The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a visual architecture is selected, an illustration is generated, exact SVG text is composed, the final artwork is rasterized to a **1080×1350 PNG**, quality-checked, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
+The application-level generation path is implemented: Telegram jobs are durably queued, media is normalized when necessary, medical research is performed against PubMed, content is synthesized through the configured provider router, a deterministic visual architecture is selected, OpenAI generates the illustration layer, exact Arabic/English text is composed locally, the final artwork is rasterized to **1024×1536 PNG**, quality-checked, persisted, and delivered to Telegram with durable retry support. Worker heartbeats prevent false recovery of legitimate long-running jobs.
 
-Subscription entitlements, activation codes, Telegram Stars checkout, payment replay protection, idempotent usage reservations, immutable billing audit, and the private admin API/panel are implemented. Launch pricing and daily limits are enforced from the database plan records: FREE 3/day, PLUS 8/day for 30 days, and PRO 15/day for 90 days.
+Subscription entitlements, activation codes, Telegram Stars checkout, payment replay protection, idempotent usage reservations, immutable billing audit, and the private admin API/panel are implemented. The current database migration sets FREE 1/day, PLUS 2/day for 30 days at 1,200 Stars, and PRO 3/day for 90 days at 3,850 Stars.
 
-The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential or reachable Ollama instance, persistent result storage credentials or a persistent volume, and a ComfyUI deployment with a concrete API-format workflow/model. These external credentials and model weights are intentionally not committed to the repository.
+The remaining release dependencies are external infrastructure/configuration: a real Telegram token, production PostgreSQL/Redis endpoints, an AI provider credential for the selected synthesis/image paths, persistent result storage credentials or a persistent volume, and the normal external medical-research/API connectivity. ComfyUI is no longer a production prerequisite for the default image path.
 
 CI is the source of truth for static typing, linting, migrations, package resolution, automated tests, production Compose validation, and production container buildability after each push. Passing CI does not replace an end-to-end staging smoke test against real external services.
