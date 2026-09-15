@@ -10,16 +10,7 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.LABORATORY_INTERPRETATION,
-        (
-            "lab",
-            "laboratory",
-            "blood test",
-            "cbc",
-            "electrolyte",
-            "sodium",
-            "potassium",
-            "creatinine",
-        ),
+        ("lab", "laboratory", "blood test", "cbc", "electrolyte", "sodium", "potassium", "creatinine"),
         ("test", "normal", "abnormal", "interpretation"),
     ),
     (
@@ -29,16 +20,7 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
     ),
     (
         ArchitectureType.DRUG_PROFILE,
-        (
-            "drug",
-            "medication",
-            "dose",
-            "antibiotic",
-            "insulin",
-            "heparin",
-            "aspirin",
-            "metformin",
-        ),
+        ("drug", "medication", "dose", "antibiotic", "insulin", "heparin", "aspirin", "metformin"),
         ("class", "mechanism", "uses", "cautions"),
     ),
     (
@@ -64,24 +46,18 @@ _RULES: tuple[tuple[ArchitectureType, tuple[str, ...], tuple[str, ...]], ...] = 
 )
 
 _REFERENCE_LANGUAGE = """
-QMRMed reference-driven visual language: premium editorial medical infographic.
-Match the supplied reference images as closely as possible at the level of visual
-system, not their protected or topic-specific content: clean 4:5 composition,
-strong title area, rounded modular cards, soft clinical pastel accents, subtle
-blue/teal/lavender gradients, precise grid alignment, generous whitespace,
-clear information hierarchy, restrained shadows, topic-specific clinical
-illustration, concise labels, comparison panels when appropriate, and clean
-educational diagrams. The layout must adapt to the topic instead of forcing one
-rigid template. Use red only for clinically meaningful warnings, green for
-favorable/treatment states, blue/teal for information and mechanisms, purple for
-secondary grouping, and amber for caution. Never add decorative medical objects
-that are unrelated to the requested topic.
+QMRMed master visual language derived from the supplied reference: warm ivory
+paper, centered Arabic title, small soft-pastel callouts, dominant clinical
+illustration near the upper middle, then a three-column grid of rounded cards.
+Use rose, cyan, mint, lavender and amber accents with restrained borders and
+soft shadows. Preserve the same grid rhythm, hierarchy, spacing and editorial
+feel for every topic; only the medical content and illustration should change.
+The canonical final canvas is 1024x1536 (2:3).
 
 Artwork is illustration-only. Never render readable text, labels, numbers,
 doses, drug names, logos, watermarks, signatures, citations, or invented facts
-inside the artwork. Leave intentional clean regions for deterministic text
-composition. The final image must contain only evidence-locked content supplied
-by the renderer.
+inside the artwork. Leave clean negative space for deterministic text
+composition. Never place the main artwork over the footer branding safe zone.
 """.strip()
 
 
@@ -120,14 +96,14 @@ def select_visual_architecture(
         + "\n\nMedical topic: "
         + content.title
         + f"\nArchitecture: {architecture.value}."
-        + "\nCreate medically appropriate vector-style anatomy or symbolic diagrams, "
-        "anonymous figures only, with no readable text or labels. Preserve clear "
-        "negative space for exact text overlays and do not place the main artwork "
-        "over the footer branding safe zone."
+        + "\nCreate a medically appropriate polished clinical illustration, with "
+        "anonymous figures only where relevant. Keep all readable text, labels, "
+        "numbers and arrows out of the artwork and preserve clean regions for "
+        "the exact text overlays."
     )
     return VisualPlan(
         architecture=architecture,
-        aspect_ratio="4:5",
+        aspect_ratio="2:3",
         sections=sections,
         emphasis=emphasis,
         illustration_prompt=prompt,
