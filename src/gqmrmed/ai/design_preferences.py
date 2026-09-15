@@ -4,14 +4,37 @@ import re
 from dataclasses import dataclass
 
 _COLOR_MAP: dict[str, str] = {
-    "وردي": "#C85E82", "زهري": "#C85E82", "بنفسجي": "#8C6AA9", "موف": "#8C6AA9",
-    "أزرق": "#4C9FB0", "ازرق": "#4C9FB0", "سماوي": "#4C9FB0", "أخضر": "#73A98C",
-    "اخضر": "#73A98C", "نعناعي": "#73A98C", "ذهبي": "#C49A5A", "أصفر": "#C49A5A",
-    "اصفر": "#C49A5A", "برتقالي": "#C9784B", "أحمر": "#B84F5E", "احمر": "#B84F5E",
-    "أسود": "#242126", "اسود": "#242126", "أبيض": "#FFFFFF", "ابيض": "#FFFFFF",
-    "pink": "#C85E82", "purple": "#8C6AA9", "blue": "#4C9FB0", "green": "#73A98C",
-    "mint": "#73A98C", "gold": "#C49A5A", "yellow": "#C49A5A", "orange": "#C9784B",
-    "red": "#B84F5E", "black": "#242126", "white": "#FFFFFF",
+    "وردي": "#C85E82",
+    "زهري": "#C85E82",
+    "بنفسجي": "#8C6AA9",
+    "موف": "#8C6AA9",
+    "أزرق": "#4C9FB0",
+    "ازرق": "#4C9FB0",
+    "سماوي": "#4C9FB0",
+    "أخضر": "#73A98C",
+    "اخضر": "#73A98C",
+    "نعناعي": "#73A98C",
+    "ذهبي": "#C49A5A",
+    "أصفر": "#C49A5A",
+    "اصفر": "#C49A5A",
+    "برتقالي": "#C9784B",
+    "أحمر": "#B84F5E",
+    "احمر": "#B84F5E",
+    "أسود": "#242126",
+    "اسود": "#242126",
+    "أبيض": "#FFFFFF",
+    "ابيض": "#FFFFFF",
+    "pink": "#C85E82",
+    "purple": "#8C6AA9",
+    "blue": "#4C9FB0",
+    "green": "#73A98C",
+    "mint": "#73A98C",
+    "gold": "#C49A5A",
+    "yellow": "#C49A5A",
+    "orange": "#C9784B",
+    "red": "#B84F5E",
+    "black": "#242126",
+    "white": "#FFFFFF",
 }
 
 
@@ -36,7 +59,9 @@ class DesignPreferences:
         """Return only explicit user controls, suitable for the image model."""
         parts: list[str] = []
         if self.palette:
-            parts.append("Use this user-selected palette: " + ", ".join(self.palette) + ".")
+            parts.append(
+                "Use this user-selected palette: " + ", ".join(self.palette) + "."
+            )
         if self.background:
             parts.append(f"Use this background color: {self.background}.")
         parts.append(f"Layout: {self.layout}.")
@@ -45,7 +70,10 @@ class DesignPreferences:
         parts.append(f"Illustration position: {self.illustration_position}.")
         parts.append(f"Header style: {self.header_style}.")
         if self.raw_instruction:
-            parts.append("Honor the user's additional design direction exactly: " + self.raw_instruction[:1200])
+            parts.append(
+                "Honor the user's additional design direction exactly: "
+                + self.raw_instruction[:1200]
+            )
         return " ".join(parts)
 
 
@@ -61,21 +89,36 @@ def extract_design_preferences(text: str) -> DesignPreferences:
     layout = "balanced"
     if any(token in lowered for token in ("timeline", "خط زمني", "زمني")):
         layout = "timeline"
-    elif any(token in lowered for token in ("flow", "flowchart", "مخطط انسيابي", "تدفق", "مسار")):
+    elif any(
+        token in lowered
+        for token in ("flow", "flowchart", "مخطط انسيابي", "تدفق", "مسار")
+    ):
         layout = "flow"
     elif any(token in lowered for token in ("comparison", "مقارنة", "مقارن")):
         layout = "comparison"
     elif any(token in lowered for token in ("two column", "عمودين", "عمودان")):
         layout = "two_column"
-    elif any(token in lowered for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")):
+    elif any(
+        token in lowered
+        for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")
+    ):
         layout = "three_column"
-    elif any(token in lowered for token in ("central", "مركزي", "في الوسط", "وسط الصفحة")):
+    elif any(
+        token in lowered
+        for token in ("central", "مركزي", "في الوسط", "وسط الصفحة")
+    ):
         layout = "central"
 
     density = "balanced"
-    if any(token in lowered for token in ("minimal", "بسيط جداً", "بسيط جدا", "مساحات واسعة", "هوائي")):
+    if any(
+        token in lowered
+        for token in ("minimal", "بسيط جداً", "بسيط جدا", "مساحات واسعة", "هوائي")
+    ):
         density = "airy"
-    elif any(token in lowered for token in ("compact", "مضغوط", "معلومات كثيرة", "كثيف")):
+    elif any(
+        token in lowered
+        for token in ("compact", "مضغوط", "معلومات كثيرة", "كثيف")
+    ):
         density = "compact"
 
     illustration_style = "editorial clinical"
@@ -97,25 +140,71 @@ def extract_design_preferences(text: str) -> DesignPreferences:
             break
 
     position = "upper_middle"
-    if any(token in lowered for token in ("الصورة يسار", "الصورة على اليسار", "illustration left", "image left")):
+    if any(
+        token in lowered
+        for token in (
+            "الصورة يسار",
+            "الصورة على اليسار",
+            "illustration left",
+            "image left",
+        )
+    ):
         position = "left"
-    elif any(token in lowered for token in ("الصورة يمين", "الصورة على اليمين", "illustration right", "image right")):
+    elif any(
+        token in lowered
+        for token in (
+            "الصورة يمين",
+            "الصورة على اليمين",
+            "illustration right",
+            "image right",
+        )
+    ):
         position = "right"
-    elif any(token in lowered for token in ("الصورة أسفل", "الصورة اسفل", "image bottom", "illustration bottom")):
+    elif any(
+        token in lowered
+        for token in (
+            "الصورة أسفل",
+            "الصورة اسفل",
+            "image bottom",
+            "illustration bottom",
+        )
+    ):
         position = "lower_middle"
-    elif any(token in lowered for token in ("الصورة في الوسط", "الصورة وسط", "image center", "illustration center")):
+    elif any(
+        token in lowered
+        for token in (
+            "الصورة في الوسط",
+            "الصورة وسط",
+            "image center",
+            "illustration center",
+        )
+    ):
         position = "center"
 
     header_style = "centered"
-    if any(token in lowered for token in ("شريط علوي", "banner", "ribbon", "بانر")):
+    if any(
+        token in lowered for token in ("شريط علوي", "banner", "ribbon", "بانر")
+    ):
         header_style = "banner"
-    elif any(token in lowered for token in ("يسار العنوان", "عنوان يسار", "left aligned")):
+    elif any(
+        token in lowered for token in ("يسار العنوان", "عنوان يسار", "left aligned")
+    ):
         header_style = "left"
 
     radius = 24
     if any(token in lowered for token in ("حاد", "مربع", "sharp", "square")):
         radius = 8
-    elif any(token in lowered for token in ("دائري", "مستدير", "مستديرة", "بطاقات مستديرة", "مستدير جداً", "rounded")):
+    elif any(
+        token in lowered
+        for token in (
+            "دائري",
+            "مستدير",
+            "مستديرة",
+            "بطاقات مستديرة",
+            "مستدير جداً",
+            "rounded",
+        )
+    ):
         radius = 34
 
     font_scale = 1.0
@@ -124,7 +213,10 @@ def extract_design_preferences(text: str) -> DesignPreferences:
     elif any(token in lowered for token in ("خط صغير", "نص صغير", "small typography")):
         font_scale = 0.9
 
-    show_footer = not any(token in lowered for token in ("بدون تذييل", "اخفِ التذييل", "hide footer", "no footer"))
+    show_footer = not any(
+        token in lowered
+        for token in ("بدون تذييل", "اخفِ التذييل", "hide footer", "no footer")
+    )
     return DesignPreferences(
         palette=palette,
         background=background,
@@ -143,15 +235,44 @@ def extract_design_preferences(text: str) -> DesignPreferences:
 def _extract_design_input(text: str) -> str:
     """Return the portion that clearly describes presentation rather than medicine."""
     lowered = text.lower()
-    explicit_markers = ("أريد", "اريد", "اجعل", "خلي", "صمم", "صمّم", "make it", "i want", "design it")
+    explicit_markers = (
+        "أريد",
+        "اريد",
+        "اجعل",
+        "خلي",
+        "صمم",
+        "صمّم",
+        "make it",
+        "i want",
+        "design it",
+    )
     for marker in explicit_markers:
         index = lowered.find(marker.lower())
         if index >= 0:
             return text[index : index + 1800]
+
     design_cues = (
-        "ألوان", "الوان", "باللون", "لون الخلفية", "خلفية", "palette", "background",
-        "two column", "three column", "عمودين", "ثلاثة أعمدة", "flowchart", "مخطط انسيابي",
-        "timeline", "خط زمني", "font", "خط كبير", "illustration", "الصورة على", "style", "أسلوب",
+        "ألوان",
+        "الوان",
+        "باللون",
+        "لون الخلفية",
+        "خلفية",
+        "palette",
+        "background",
+        "two column",
+        "three column",
+        "عمودين",
+        "ثلاثة أعمدة",
+        "flowchart",
+        "مخطط انسيابي",
+        "timeline",
+        "خط زمني",
+        "font",
+        "خط كبير",
+        "illustration",
+        "الصورة على",
+        "style",
+        "أسلوب",
     )
     if any(cue in lowered for cue in design_cues):
         return text
@@ -173,7 +294,11 @@ def _extract_palette(text: str) -> tuple[str, ...] | None:
 
 
 def _extract_background(text: str) -> str | None:
-    match = re.search(r"(?:خلفية|background)\s*(?:بلون|color)?\s*(#[0-9a-fA-F]{6})", text, re.IGNORECASE)
+    match = re.search(
+        r"(?:خلفية|background)\s*(?:بلون|color)?\s*(#[0-9a-fA-F]{6})",
+        text,
+        re.IGNORECASE,
+    )
     if match:
         return match.group(1).upper()
     lowered = text.lower()
