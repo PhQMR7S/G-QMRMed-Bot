@@ -116,7 +116,7 @@ class VisualPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     architecture: ArchitectureType
-    aspect_ratio: str = "4:5"
+    aspect_ratio: str = "2:3"
     sections: list[str] = Field(min_length=1, max_length=12)
     emphasis: list[str] = Field(default_factory=list, max_length=12)
     illustration_prompt: str = Field(min_length=1, max_length=4_000)

@@ -12,6 +12,7 @@ from redis.asyncio import Redis
 
 from gqmrmed.ai.evidence_fallback import synthesize_from_evidence
 from gqmrmed.ai.gemini_native import GeminiNativeConfig, GeminiNativeSynthesizer
+from gqmrmed.ai.openai_image import OpenAIImageConfig, OpenAIImageProvider
 from gqmrmed.ai.openai_responses import OpenAIResponsesConfig, OpenAIResponsesSynthesizer
 from gqmrmed.ai.providers import (
     OllamaConfig,
@@ -37,6 +38,7 @@ from gqmrmed.generation.providers import (
     ProceduralMedicalIllustrationProvider,
 )
 from gqmrmed.research.pubmed import PubMedConfig, PubMedResearchProvider
+from gqmrmed.services.image_router import ImageProviderRouter
 from gqmrmed.services.media_extractors import LocalMediaExtractor, OpenAIMediaExtractor
 from gqmrmed.services.media_ingestion import MediaIngestionConfig, MediaIngestor
 from gqmrmed.services.media_routing import RoutingMediaExtractor
@@ -66,7 +68,7 @@ class ResilientSynthesisProvider:
 
 
 def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
-    """Assemble the research, free-first AI routing, image and delivery chain."""
+    """Assemble the research, synthesis, OpenAI-first image, and delivery chain."""
     workflow: dict[str, object] | None = None
     if settings.comfyui_workflow_json:
         try:
@@ -82,8 +84,6 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
     requested = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
-    # Prefer configured cloud providers over local Ollama in production. Render can
-    # retain an old AI_PROVIDER_ORDER, so configured cloud routes are always appended.
     cloud_order = ["gemini_free", "openrouter_free", "groq_free", "huggingface_free"]
     order = list(dict.fromkeys([*cloud_order, *requested]))
     for name in order:
@@ -191,11 +191,6 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         raise RuntimeError("no_synthesis_provider_configured")
     configured_names = ",".join(meta.name for meta, _ in providers)
     logger.info("synthesis_providers_configured: %s", configured_names)
-    if not any(meta.cost_tier == "free" for meta, _ in providers):
-        logger.error(
-            "synthesis_cloud_provider_missing: configure GEMINI_API_KEY, OPENROUTER_API_KEY, "
-            "GROQ_API_KEY, or HUGGINGFACE_TOKEN"
-        )
 
     rich_media = (
         OpenAIMediaExtractor(
@@ -216,26 +211,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     synthesis = ResilientSynthesisProvider(
         ProviderRouter(providers, allow_paid=settings.ai_allow_paid)
     )
-    image: ImageGenerationProvider
-    if settings.huggingface_token:
-        image = HuggingFaceImageProvider(
-            HuggingFaceImageConfig(
-                token=settings.huggingface_token,
-                model=settings.huggingface_image_model,
-                provider=settings.huggingface_image_provider,
-                timeout_seconds=settings.huggingface_timeout_seconds,
-            )
-        )
-    elif workflow is not None:
-        image = ComfyUIImageProvider(
-            ComfyUIConfig(
-                base_url=settings.comfyui_base_url,
-                timeout_seconds=settings.comfyui_timeout_seconds,
-                workflow=workflow,
-            )
-        )
-    else:
-        image = ProceduralMedicalIllustrationProvider()
+    image = _build_image_provider(settings, workflow)
 
     pipeline = ProductionGenerationPipeline(
         research_provider=research.search,
@@ -272,6 +248,54 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
         media_ingestor=media_ingestor,
         media_temp_dir=settings.media_temp_dir,
     )
+
+
+def _build_image_provider(
+    settings: Settings,
+    workflow: dict[str, object] | None,
+) -> ImageGenerationProvider:
+    """Resolve all configured artwork providers in the explicit operator order."""
+    providers: list[ImageGenerationProvider] = []
+    for name in (item.strip().lower() for item in settings.image_provider_order.split(",")):
+        if not name:
+            continue
+        if name == "openai" and settings.ai_api_key:
+            providers.append(
+                OpenAIImageProvider(
+                    OpenAIImageConfig(
+                        api_key=settings.ai_api_key,
+                        model=settings.openai_image_model,
+                        quality=settings.openai_image_quality,
+                        timeout_seconds=settings.openai_image_timeout_seconds,
+                    )
+                )
+            )
+        elif name == "huggingface" and settings.huggingface_token:
+            providers.append(
+                HuggingFaceImageProvider(
+                    HuggingFaceImageConfig(
+                        token=settings.huggingface_token,
+                        model=settings.huggingface_image_model,
+                        provider=settings.huggingface_image_provider,
+                        timeout_seconds=settings.huggingface_timeout_seconds,
+                    )
+                )
+            )
+        elif name == "comfyui" and workflow is not None:
+            providers.append(
+                ComfyUIImageProvider(
+                    ComfyUIConfig(
+                        base_url=settings.comfyui_base_url,
+                        timeout_seconds=settings.comfyui_timeout_seconds,
+                        workflow=workflow,
+                    )
+                )
+            )
+        elif name == "procedural":
+            providers.append(ProceduralMedicalIllustrationProvider())
+    if not providers:
+        providers.append(ProceduralMedicalIllustrationProvider())
+    return ImageProviderRouter(tuple(providers))
 
 
 __all__ = ["build_worker"]

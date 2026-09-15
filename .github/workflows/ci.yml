@@ -40,8 +40,7 @@ jobs:
         run: mypy src
 
       - name: Verify source package resolution
-        run: |
-          python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
+        run: python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
 
       - name: Pytest
         run: python -m pytest

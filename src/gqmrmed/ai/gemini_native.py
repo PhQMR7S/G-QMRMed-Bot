@@ -88,11 +88,13 @@ def _extract_native_content(payload: dict[str, Any]) -> str:
     parts = content.get("parts")
     if not isinstance(parts, list):
         raise ProviderRoutingError("provider_empty_parts")
-    text_parts = [
-        part.get("text")
-        for part in parts
-        if isinstance(part, dict) and isinstance(part.get("text"), str)
-    ]
+    text_parts: list[str] = []
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        value = part.get("text")
+        if isinstance(value, str):
+            text_parts.append(value)
     text = "".join(text_parts).strip()
     if not text:
         raise ProviderRoutingError("provider_empty_output")

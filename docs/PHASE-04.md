@@ -34,7 +34,8 @@ MedicalPlan
 - Strict JSON validation of synthesized content through Pydantic contracts.
 - Deterministic visual architecture selector covering emergency, laboratory, ECG, drug, anatomy, pathophysiology, comparison, procedure and general disease-card paths.
 - Visual plan explicitly separates illustration generation from exact text rendering.
-- Canonical 4:5 output contract (1080×1350) and GQMRMed watermark metadata.
+- Canonical **2:3 output contract (1024×1536)** and GQMRMed watermark metadata.
+- Natural-language design preferences are passed into the deterministic design specification without requiring preset menus.
 - Unit tests for provenance, parsing, architecture selection and end-to-end Phase 4 planning.
 
 ## Medical safety boundary

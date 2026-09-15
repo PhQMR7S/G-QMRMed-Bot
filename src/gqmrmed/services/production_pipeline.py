@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from gqmrmed.ai.design_preferences import DesignPreferences, extract_design_preferences
 from gqmrmed.ai.infographic_design import build_design_spec, detect_language_mode
 from gqmrmed.ai.infographic_qa import validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page
@@ -30,14 +31,14 @@ class SynthesisService(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ProductionPipelineConfig:
-    """Fixed single-image canvas matching the supplied reference proportions."""
+    """Canonical 1024x1536 canvas matching the supplied master reference."""
 
-    width: int = 1080
-    height: int = 1350
+    width: int = 1024
+    height: int = 1536
 
     def __post_init__(self) -> None:
-        if self.width * 5 != self.height * 4:
-            raise ValueError("production_canvas_must_be_4_5")
+        if self.width * 3 != self.height * 2:
+            raise ValueError("production_canvas_must_be_2_3")
 
 
 class ProductionGenerationPipeline:
@@ -65,6 +66,7 @@ class ProductionGenerationPipeline:
         if not user_input:
             raise ValueError("text_input_required_for_medical_pipeline")
 
+        design_preferences = _design_preferences_for_job(job, user_input)
         await progress(GenerationStage.RESEARCHING, 10)
         research = await research_medical_topic(
             ResearchRequest(query=user_input, max_sources=8),
@@ -90,6 +92,7 @@ class ProductionGenerationPipeline:
             content=content,
             visual_plan=visual_plan,
             language=language,
+            design_preferences=design_preferences,
         )
         validate_design_spec(design)
         page = design.pages[0]
@@ -114,6 +117,18 @@ class ProductionGenerationPipeline:
             height=self._config.height,
             mime_type="image/png",
         )
+
+
+def _design_preferences_for_job(job: GenerationJob, user_input: str) -> DesignPreferences:
+    """Use structured metadata when present and fall back to natural-language controls."""
+    metadata = getattr(job, "input_metadata", None) or {}
+    raw = metadata.get("design_preferences")
+    if isinstance(raw, dict):
+        try:
+            return DesignPreferences(**raw)
+        except (TypeError, ValueError):
+            pass
+    return extract_design_preferences(user_input)
 
 
 def _validate_content_language(content: SynthesizedContent, language: str) -> None:

@@ -25,8 +25,8 @@ def validate_design_spec(spec: InfographicDesignSpec) -> None:
     """Reject metadata leaks, multi-page output, and composition violations."""
     if len(spec.pages) != 1:
         raise InfographicQAError("single_image_requires_exactly_one_page")
-    if spec.aspect_ratio != "4:5":
-        raise InfographicQAError("single_image_requires_4_5_ratio")
+    if spec.aspect_ratio != "2:3":
+        raise InfographicQAError("single_image_requires_2_3_ratio")
     if spec.branding.telegram_handle != "QMR7S":
         raise InfographicQAError("unexpected_branding_handle")
     for page in spec.pages:

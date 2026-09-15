@@ -9,10 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from gqmrmed.db.models import BillingLedger, CreditPack, User
 
 
+# Telegram currently assigns a $0.013 reward value per earned Star. Actual
+# user acquisition cost can vary by region and platform.
 CREDIT_PACK_CATALOG: tuple[tuple[str, int, int], ...] = (
-    ("DESIGN_5", 5, 50),
-    ("DESIGN_12", 12, 100),
-    ("DESIGN_20", 20, 150),
+    ("DESIGN_5", 5, 60),
+    ("DESIGN_12", 12, 120),
+    ("DESIGN_20", 20, 180),
 )
 
 

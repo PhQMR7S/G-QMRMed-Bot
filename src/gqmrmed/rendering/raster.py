@@ -14,13 +14,13 @@ class RasterRenderError(RuntimeError):
 
 
 def render_png(svg: str, *, width: int = WIDTH, height: int = HEIGHT) -> bytes:
-    """Rasterize a complete SVG into a bounded 4:5 PNG."""
+    """Rasterize a complete SVG into a bounded 2:3 PNG."""
     if not svg.strip():
         raise RasterRenderError("svg_empty")
     if width <= 0 or height <= 0:
         raise RasterRenderError("invalid_raster_dimensions")
-    if width * 5 != height * 4:
-        raise RasterRenderError("raster_dimensions_must_be_4_5")
+    if width * 3 != height * 2:
+        raise RasterRenderError("raster_dimensions_must_be_2_3")
     try:
         data = cast(
             bytes,

@@ -37,11 +37,11 @@ def _plan() -> VisualPlan:
     )
 
 
-def test_layout_is_4_5_and_has_expected_canvas() -> None:
+def test_layout_is_2_3_and_has_expected_canvas() -> None:
     layout = build_layout(_content(), _plan())
-    assert layout.canvas.width == WIDTH == 1080
-    assert layout.canvas.height == HEIGHT == 1350
-    assert HEIGHT / WIDTH == 5 / 4
+    assert layout.canvas.width == WIDTH == 1024
+    assert layout.canvas.height == HEIGHT == 1536
+    assert HEIGHT / WIDTH == 3 / 2
 
 
 def test_layout_keeps_all_regions_non_overlapping_at_max_key_points() -> None:
@@ -50,10 +50,19 @@ def test_layout_keeps_all_regions_non_overlapping_at_max_key_points() -> None:
     )
     layout = build_layout(content, _plan())
     assert len(layout.content_boxes) == 12
-    assert layout.illustration.y + layout.illustration.height <= layout.content_boxes[0].y
-    for previous, current in zip(layout.content_boxes, layout.content_boxes[1:], strict=False):
-        assert previous.y + previous.height <= current.y
-    assert layout.content_boxes[-1].y + layout.content_boxes[-1].height <= layout.footer.y
+    assert layout.illustration.y + layout.illustration.height <= min(
+        box.y for box in layout.content_boxes
+    )
+    for index, previous in enumerate(layout.content_boxes):
+        for current in layout.content_boxes[index + 1 :]:
+            separated = (
+                previous.x + previous.width <= current.x
+                or current.x + current.width <= previous.x
+                or previous.y + previous.height <= current.y
+                or current.y + current.height <= previous.y
+            )
+            assert separated
+    assert max(box.y + box.height for box in layout.content_boxes) <= layout.footer.y
 
 
 def test_svg_escapes_exact_text_and_keeps_watermark() -> None:
@@ -61,7 +70,7 @@ def test_svg_escapes_exact_text_and_keeps_watermark() -> None:
     svg = render_svg(content=content, visual_plan=_plan())
     assert "DKA &amp; &lt;test&gt;" in svg
     assert "GQMRMed" in svg
-    assert 'width="1080" height="1350"' in svg
+    assert 'width="1024" height="1536"' in svg
 
 
 def test_svg_can_embed_illustration_asset_without_changing_text_layer() -> None:

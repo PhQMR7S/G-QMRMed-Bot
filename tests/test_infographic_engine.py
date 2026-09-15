@@ -27,7 +27,7 @@ def _content() -> SynthesizedContent:
 def _visual_plan() -> VisualPlan:
     return VisualPlan(
         architecture=ArchitectureType.PATHOPHYSIOLOGY_FLOW,
-        aspect_ratio="4:5",
+        aspect_ratio="2:3",
         sections=["trigger", "mechanism", "effect", "clinical result"],
         emphasis=["high-yield facts"],
         illustration_prompt="Clean medical pathway artwork without text or labels.",
@@ -39,12 +39,14 @@ def test_design_always_produces_one_coherent_image() -> None:
         topic="DKA",
         content=_content(),
         visual_plan=_visual_plan(),
-        max_blocks_per_page=4,
+        max_blocks_per_page=9,
     )
     assert len(spec.pages) == 1
-    assert spec.aspect_ratio == "4:5"
+    assert spec.aspect_ratio == "2:3"
     assert spec.pages[0].page_number == 1
     assert spec.pages[0].blocks[0].role == "title"
+    assert spec.pages[0].subtitle == "نظرة تعليمية مختصرة"
+    assert len(spec.pages[0].blocks) >= 5
 
 
 def test_design_filters_internal_provider_messages_and_caps_body() -> None:
@@ -52,7 +54,7 @@ def test_design_filters_internal_provider_messages_and_caps_body() -> None:
     content.claims[0].text = "Automatic synthesis provider was unavailable"
     spec = build_design_spec(topic="DKA", content=content, visual_plan=_visual_plan())
     body = spec.pages[0].blocks[1:]
-    assert len(body) <= 6
+    assert len(body) <= 9
     assert all("provider was unavailable" not in block.text.lower() for block in body)
 
 
@@ -116,8 +118,10 @@ def test_design_qa_rejects_visible_source_urls() -> None:
         raise AssertionError("expected QA failure")
 
 
-def test_renderer_returns_single_4_5_png_with_editorial_layout() -> None:
+def test_renderer_returns_single_2_3_png_with_editorial_layout() -> None:
     import cairosvg
+    from PIL import Image
+    from io import BytesIO
 
     spec = build_design_spec(topic="DKA", content=_content(), visual_plan=_visual_plan())
     svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="#fff"/></svg>'
@@ -129,4 +133,4 @@ def test_renderer_returns_single_4_5_png_with_editorial_layout() -> None:
     )
     output = render_infographic_page(spec, spec.pages[0], illustration)
     assert output.startswith(b"\x89PNG\r\n\x1a\n")
-    assert len(output) > 1_000
+    assert Image.open(BytesIO(output)).size == (1024, 1536)

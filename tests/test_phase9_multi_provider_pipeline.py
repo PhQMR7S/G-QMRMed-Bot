@@ -65,7 +65,7 @@ async def test_router_falls_back_then_pipeline_validates_evidence() -> None:
         synthesis_provider=router,
     )
     assert plan.content.claims[0].evidence_ids == ["pubmed:1"]
-    assert plan.visual_plan.aspect_ratio == "4:5"
+    assert plan.visual_plan.aspect_ratio == "2:3"
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import cairosvg
 
+from gqmrmed.ai.design_preferences import extract_design_preferences
 from gqmrmed.ai.gemini_research import GeminiGroundedResearchProvider, GeminiResearchConfig
 from gqmrmed.ai.image_providers import (
     CloudflareImageConfig,
@@ -16,9 +17,14 @@ from gqmrmed.ai.image_providers import (
     QwenImageConfig,
     QwenImageProvider,
 )
-from gqmrmed.ai.infographic_design import build_design_spec, InfographicDesignSpec
+from gqmrmed.ai.infographic_design import (
+    build_design_spec,
+    detect_language_mode,
+    InfographicDesignSpec,
+)
 from gqmrmed.ai.infographic_qa import validate_design_spec
 from gqmrmed.ai.infographic_renderer import render_infographic_page, RenderConfig
+from gqmrmed.ai.openai_image import OpenAIImageConfig, OpenAIImageProvider
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
 from gqmrmed.config import Settings
@@ -28,11 +34,7 @@ from gqmrmed.generation.providers import (
     ImageGenerationError,
     ImageGenerationProvider,
 )
-from gqmrmed.services.medical_pipeline import (
-    build_medical_plan,
-    MedicalPlan,
-    SynthesisProvider,
-)
+from gqmrmed.services.medical_pipeline import build_medical_plan, MedicalPlan, SynthesisProvider
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
@@ -68,7 +70,18 @@ class InfographicPipeline:
     def from_settings(cls, settings: Settings) -> InfographicPipeline:
         providers: list[ImageGenerationProvider] = []
         for name in _csv(settings.image_provider_order):
-            if (
+            if name == "openai" and settings.ai_api_key:
+                providers.append(
+                    OpenAIImageProvider(
+                        OpenAIImageConfig(
+                            api_key=settings.ai_api_key,
+                            model=settings.openai_image_model,
+                            quality=settings.openai_image_quality,
+                            timeout_seconds=settings.openai_image_timeout_seconds,
+                        )
+                    )
+                )
+            elif (
                 name == "cloudflare"
                 and settings.cloudflare_api_token
                 and settings.cloudflare_account_id
@@ -108,17 +121,23 @@ class InfographicPipeline:
                         )
                     )
                 )
-        providers.append(_BlankIllustrationProvider())
+            elif name == "procedural":
+                providers.append(_BlankIllustrationProvider())
+        if not providers:
+            providers.append(_BlankIllustrationProvider())
         return cls(image_providers=tuple(providers))
 
     async def generate(
         self, *, user_input: str, plan: MedicalPlan
     ) -> InfographicGenerationResult:
+        language = detect_language_mode(user_input)
+        design_preferences = extract_design_preferences(user_input)
         design = build_design_spec(
             topic=user_input,
             content=plan.content,
             visual_plan=plan.visual_plan,
-            language="ar",
+            language=language,
+            design_preferences=design_preferences,
         )
         validate_design_spec(design)
         page = design.pages[0]
@@ -139,7 +158,11 @@ class InfographicPipeline:
         errors: list[str] = []
         for provider in self.image_providers:
             try:
-                return await provider.generate(prompt=prompt, width=1024, height=1280)
+                return await provider.generate(
+                    prompt=prompt,
+                    width=1024,
+                    height=1536,
+                )
             except (ImageGenerationError, RuntimeError) as exc:
                 errors.append(type(exc).__name__)
         raise ImageGenerationError(
@@ -195,7 +218,11 @@ class _BlankIllustrationProvider:
     """Zero-network fallback with no readable text or branding."""
 
     async def generate(
-        self, *, prompt: str, width: int, height: int
+        self,
+        *,
+        prompt: str,
+        width: int,
+        height: int,
     ) -> GeneratedIllustration:
         del prompt
         cx = width / 2
