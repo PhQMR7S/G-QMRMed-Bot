@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 from dataclasses import dataclass
+from io import BytesIO
 from typing import Any
 
 import httpx
 from PIL import Image
-from io import BytesIO
 
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationError
 
