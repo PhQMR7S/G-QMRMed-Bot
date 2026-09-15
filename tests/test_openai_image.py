@@ -68,5 +68,8 @@ async def test_openai_image_provider_rejects_non_reference_canvas() -> None:
         OpenAIImageConfig(api_key="test-key"),
         client=FakeClient({}),  # type: ignore[arg-type]
     )
-    with pytest.raises(ImageGenerationError, match="openai_image_requires_1024x1536_reference_canvas"):
+    with pytest.raises(
+        ImageGenerationError,
+        match="openai_image_requires_1024x1536_reference_canvas",
+    ):
         await provider.generate(prompt="medical illustration", width=1080, height=1350)
