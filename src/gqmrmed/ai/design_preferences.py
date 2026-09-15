@@ -104,7 +104,10 @@ def extract_design_preferences(text: str) -> DesignPreferences:
         for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")
     ):
         layout = "three_column"
-    elif any(token in lowered for token in ("central", "مركزي", "في الوسط", "وسط الصفحة")):
+    elif any(
+        token in lowered
+        for token in ("central", "مركزي", "في الوسط", "وسط الصفحة")
+    ):
         layout = "central"
 
     density = "balanced"
@@ -113,7 +116,10 @@ def extract_design_preferences(text: str) -> DesignPreferences:
         for token in ("minimal", "بسيط جداً", "بسيط جدا", "مساحات واسعة", "هوائي")
     ):
         density = "airy"
-    elif any(token in lowered for token in ("compact", "مضغوط", "معلومات كثيرة", "كثيف")):
+    elif any(
+        token in lowered
+        for token in ("compact", "مضغوط", "معلومات كثيرة", "كثيف")
+    ):
         density = "compact"
 
     illustration_style = "editorial clinical"
@@ -157,19 +163,33 @@ def extract_design_preferences(text: str) -> DesignPreferences:
         position = "right"
     elif any(
         token in lowered
-        for token in ("الصورة أسفل", "الصورة اسفل", "image bottom", "illustration bottom")
+        for token in (
+            "الصورة أسفل",
+            "الصورة اسفل",
+            "image bottom",
+            "illustration bottom",
+        )
     ):
         position = "lower_middle"
     elif any(
         token in lowered
-        for token in ("الصورة في الوسط", "الصورة وسط", "image center", "illustration center")
+        for token in (
+            "الصورة في الوسط",
+            "الصورة وسط",
+            "image center",
+            "illustration center",
+        )
     ):
         position = "center"
 
     header_style = "centered"
-    if any(token in lowered for token in ("شريط علوي", "banner", "ribbon", "بانر")):
+    if any(
+        token in lowered for token in ("شريط علوي", "banner", "ribbon", "بانر")
+    ):
         header_style = "banner"
-    elif any(token in lowered for token in ("يسار العنوان", "عنوان يسار", "left aligned")):
+    elif any(
+        token in lowered for token in ("يسار العنوان", "عنوان يسار", "left aligned")
+    ):
         header_style = "left"
 
     radius = 24
