@@ -36,34 +36,8 @@ jobs:
       - name: Ruff
         run: ruff check .
 
-      - name: Capture Ruff diagnostics
-        if: ${{ failure() }}
-        run: |
-          ruff check . --output-format=json > /tmp/ruff.json || true
-
-      - name: Upload Ruff diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ruff-diagnostics
-          path: /tmp/ruff.json
-          if-no-files-found: ignore
-
       - name: MyPy
         run: mypy src
-
-      - name: Capture MyPy diagnostics
-        if: ${{ failure() }}
-        run: |
-          mypy src > /tmp/mypy.txt 2>&1 || true
-
-      - name: Upload MyPy diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: mypy-diagnostics
-          path: /tmp/mypy.txt
-          if-no-files-found: ignore
 
       - name: Verify source package resolution
         run: |
@@ -71,19 +45,6 @@ jobs:
 
       - name: Pytest
         run: python -m pytest
-
-      - name: Capture Pytest diagnostics
-        if: ${{ failure() }}
-        run: |
-          python -m pytest > /tmp/pytest.txt 2>&1 || true
-
-      - name: Upload Pytest diagnostics
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-diagnostics
-          path: /tmp/pytest.txt
-          if-no-files-found: ignore
 
       - name: Validate production release gate
         env:
