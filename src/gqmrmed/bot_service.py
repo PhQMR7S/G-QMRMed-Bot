@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 POLLING_LOCK_KEY = "gqmrmed:telegram:polling-lock:v2"
 POLLING_LOCK_TTL_SECONDS = 60
 POLLING_LOCK_HEARTBEAT_SECONDS = 15
+POLLING_RESTART_INITIAL_DELAY_SECONDS = 1
+POLLING_RESTART_MAX_DELAY_SECONDS = 60
 _bot_task: asyncio.Task[None] | None = None
 
 
@@ -121,6 +123,28 @@ async def _acquire_polling_lock(redis: Redis, token: str) -> None:
 
 
 async def _run_bot_with_lock() -> None:
+    """Keep Telegram polling alive across transient network/process failures."""
+    restart_delay = POLLING_RESTART_INITIAL_DELAY_SECONDS
+    while True:
+        try:
+            await _run_bot_once()
+            logger.warning("telegram_polling_stopped; restarting")
+            restart_delay = POLLING_RESTART_INITIAL_DELAY_SECONDS
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception(
+                "telegram_polling_session_failed; restarting_in=%ss",
+                restart_delay,
+            )
+        await asyncio.sleep(restart_delay)
+        restart_delay = min(
+            restart_delay * 2,
+            POLLING_RESTART_MAX_DELAY_SECONDS,
+        )
+
+
+async def _run_bot_once() -> None:
     settings = get_settings()
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required to run the Telegram bot")
