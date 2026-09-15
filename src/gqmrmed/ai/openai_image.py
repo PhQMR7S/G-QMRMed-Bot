@@ -25,8 +25,9 @@ subject. Use the requested medical topic as the sole subject.
 This is NOT a request to generate the final infographic. Do not generate any
 readable text, Arabic letters, English letters, labels, numbers, doses, arrows
 with text, logos, signatures, watermarks, citations, UI, or disclaimers.
-Do not invent medical facts. Do not add unrelated medical objects. The final
-text and cards are composed deterministically by QMRMed after generation.
+No readable text is allowed in the artwork. Do not invent medical facts. Do not
+add unrelated medical objects. The final text and cards are composed
+deterministically by QMRMed after generation.
 """.strip()
 
 
