@@ -16,23 +16,16 @@ from gqmrmed.ai.image_providers import (
     QwenImageConfig,
     QwenImageProvider,
 )
-from gqmrmed.ai.infographic_design import build_design_spec, InfographicDesignSpec
+from gqmrmed.ai.infographic_design import InfographicDesignSpec, build_design_spec
 from gqmrmed.ai.infographic_qa import validate_design_spec
-from gqmrmed.ai.infographic_renderer import render_infographic_page, RenderConfig
+from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_page
+from gqmrmed.ai.openai_image import OpenAIImageConfig, OpenAIImageProvider
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
 from gqmrmed.config import Settings
 from gqmrmed.contracts.research import ResearchRequest, SynthesizedContent, VisualPlan
-from gqmrmed.generation.providers import (
-    GeneratedIllustration,
-    ImageGenerationError,
-    ImageGenerationProvider,
-)
-from gqmrmed.services.medical_pipeline import (
-    build_medical_plan,
-    MedicalPlan,
-    SynthesisProvider,
-)
+from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationError, ImageGenerationProvider
+from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
@@ -65,10 +58,21 @@ class InfographicPipeline:
         self.renderer_config = renderer_config or RenderConfig()
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> InfographicPipeline:
+    def from_settings(cls, settings: Settings) -> "InfographicPipeline":
         providers: list[ImageGenerationProvider] = []
         for name in _csv(settings.image_provider_order):
-            if (
+            if name == "openai" and settings.ai_api_key:
+                providers.append(
+                    OpenAIImageProvider(
+                        OpenAIImageConfig(
+                            api_key=settings.ai_api_key,
+                            model=settings.openai_image_model,
+                            quality=settings.openai_image_quality,
+                            timeout_seconds=settings.openai_image_timeout_seconds,
+                        )
+                    )
+                )
+            elif (
                 name == "cloudflare"
                 and settings.cloudflare_api_token
                 and settings.cloudflare_account_id
@@ -83,11 +87,7 @@ class InfographicPipeline:
                         )
                     )
                 )
-            elif (
-                name == "qwen"
-                and settings.dashscope_api_key
-                and settings.dashscope_base_url
-            ):
+            elif name == "qwen" and settings.dashscope_api_key and settings.dashscope_base_url:
                 providers.append(
                     QwenImageProvider(
                         QwenImageConfig(
@@ -108,7 +108,10 @@ class InfographicPipeline:
                         )
                     )
                 )
-        providers.append(_BlankIllustrationProvider())
+            elif name == "procedural":
+                providers.append(_BlankIllustrationProvider())
+        if not providers:
+            providers.append(_BlankIllustrationProvider())
         return cls(image_providers=tuple(providers))
 
     async def generate(
@@ -123,12 +126,7 @@ class InfographicPipeline:
         validate_design_spec(design)
         page = design.pages[0]
         illustration = await self._generate_illustration(design.illustration_prompt)
-        image = render_infographic_page(
-            design,
-            page,
-            illustration,
-            config=self.renderer_config,
-        )
+        image = render_infographic_page(design, page, illustration, config=self.renderer_config)
         return InfographicGenerationResult(
             images=(image,),
             design=design,
@@ -139,12 +137,10 @@ class InfographicPipeline:
         errors: list[str] = []
         for provider in self.image_providers:
             try:
-                return await provider.generate(prompt=prompt, width=1024, height=1280)
+                return await provider.generate(prompt=prompt, width=1024, height=1536)
             except (ImageGenerationError, RuntimeError) as exc:
                 errors.append(type(exc).__name__)
-        raise ImageGenerationError(
-            "all_infographic_image_providers_failed:" + ",".join(errors)
-        )
+        raise ImageGenerationError("all_infographic_image_providers_failed:" + ",".join(errors))
 
 
 async def build_infographic_medical_plan(
@@ -194,9 +190,7 @@ def _csv(value: str) -> tuple[str, ...]:
 class _BlankIllustrationProvider:
     """Zero-network fallback with no readable text or branding."""
 
-    async def generate(
-        self, *, prompt: str, width: int, height: int
-    ) -> GeneratedIllustration:
+    async def generate(self, *, prompt: str, width: int, height: int) -> GeneratedIllustration:
         del prompt
         cx = width / 2
         cy = height * 0.42
