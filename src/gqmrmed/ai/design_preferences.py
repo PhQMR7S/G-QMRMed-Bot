@@ -26,7 +26,6 @@ _COLOR_MAP: dict[str, str] = {
     "اسود": "#242126",
     "أبيض": "#FFFFFF",
     "ابيض": "#FFFFFF",
-    "وردي": "#C85E82",
     "pink": "#C85E82",
     "purple": "#8C6AA9",
     "blue": "#4C9FB0",
@@ -62,7 +61,9 @@ class DesignPreferences:
         """Return only explicit user controls, suitable for the image model."""
         parts: list[str] = []
         if self.palette:
-            parts.append("Use this user-selected palette: " + ", ".join(self.palette) + ".")
+            parts.append(
+                "Use this user-selected palette: " + ", ".join(self.palette) + "."
+            )
         if self.background:
             parts.append(f"Use this background color: {self.background}.")
         parts.append(f"Layout: {self.layout}.")
@@ -71,7 +72,10 @@ class DesignPreferences:
         parts.append(f"Illustration position: {self.illustration_position}.")
         parts.append(f"Header style: {self.header_style}.")
         if self.raw_instruction:
-            parts.append(f"Honor the user's additional design direction exactly: {self.raw_instruction[:1200]}")
+            parts.append(
+                "Honor the user's additional design direction exactly: "
+                + self.raw_instruction[:1200]
+            )
         return " ".join(parts)
 
 
@@ -88,7 +92,7 @@ def extract_design_preferences(text: str) -> DesignPreferences:
         layout = "flow"
     elif any(token in lowered for token in ("comparison", "مقارنة", "مقارن")):
         layout = "comparison"
-    elif any(token in lowered for token in ("two column", "عمودين", "عمودان", "عمودين")):
+    elif any(token in lowered for token in ("two column", "عمودين", "عمودان")):
         layout = "two_column"
     elif any(token in lowered for token in ("three column", "ثلاثة أعمدة", "ثلاث اعمدة", "3 أعمدة")):
         layout = "three_column"
@@ -147,7 +151,10 @@ def extract_design_preferences(text: str) -> DesignPreferences:
     elif any(token in lowered for token in ("خط صغير", "نص صغير", "small typography")):
         font_scale = 0.9
 
-    show_footer = not any(token in lowered for token in ("بدون تذييل", "اخفِ التذييل", "hide footer", "no footer"))
+    show_footer = not any(
+        token in lowered
+        for token in ("بدون تذييل", "اخفِ التذييل", "hide footer", "no footer")
+    )
     return DesignPreferences(
         palette=palette,
         background=background,
@@ -178,7 +185,11 @@ def _extract_palette(text: str) -> tuple[str, ...] | None:
 
 
 def _extract_background(text: str) -> str | None:
-    match = re.search(r"(?:خلفية|background)\s*(?:بلون|color)?\s*(#[0-9a-fA-F]{6})", text, re.IGNORECASE)
+    match = re.search(
+        r"(?:خلفية|background)\s*(?:بلون|color)?\s*(#[0-9a-fA-F]{6})",
+        text,
+        re.IGNORECASE,
+    )
     if match:
         return match.group(1).upper()
     lowered = text.lower()
