@@ -7,7 +7,6 @@ from typing import Protocol
 
 from gqmrmed.contracts.research import VisualPlan
 
-
 CANVAS_WIDTH = 1024
 CANVAS_HEIGHT = 1536
 CANVAS_ASPECT_RATIO = "2:3"
