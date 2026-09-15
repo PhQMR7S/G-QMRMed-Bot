@@ -27,62 +27,42 @@ class InfographicLayout:
 
 
 def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> InfographicLayout:
-    """Allocate non-overlapping regions before any text or artwork is rendered."""
-    del visual_plan
+    """Allocate bounded, non-overlapping regions on the canonical 2:3 canvas."""
+    if visual_plan.aspect_ratio != "2:3":
+        raise ValueError("layout_requires_2_3_visual_plan")
     margin = 48
-    title_h = 170
-    subtitle_h = 72 if content.subtitle else 0
-    footer_h = 70
-    gap = 24
-    top = margin
-
-    title = LayoutBox(margin, top, WIDTH - 2 * margin, title_h)
-    top += title_h + gap
-
-    subtitle: LayoutBox | None = None
+    gap = 20
+    title = LayoutBox(margin, 34, WIDTH - 2 * margin, 132)
+    top = title.y + title.height + gap
+    subtitle = None
     if content.subtitle:
-        subtitle = LayoutBox(margin, top, WIDTH - 2 * margin, subtitle_h)
-        top += subtitle_h + gap
-
-    footer = LayoutBox(margin, HEIGHT - margin - footer_h, WIDTH - 2 * margin, footer_h)
-    box_count = len(content.key_points)
-    if box_count < 1:
-        raise ValueError("layout_requires_key_points")
-
-    total_content_gap = gap * (box_count - 1)
-    minimum_box_h = 48
-    minimum_illustration_h = 300
-    illustration_h = min(
-        600,
-        max(
-            minimum_illustration_h,
-            int((footer.y - top) * 0.38),
-        ),
-    )
-
-    required_content = minimum_box_h * box_count + total_content_gap
-    if top + illustration_h + gap + required_content > footer.y:
-        illustration_h = max(
-            minimum_illustration_h,
-            footer.y - top - gap - required_content,
-        )
-    if top + illustration_h + gap + required_content > footer.y:
-        minimum_box_h = max(
-            1,
-            (footer.y - top - illustration_h - gap - total_content_gap) // box_count,
-        )
-
+        subtitle = LayoutBox(margin, top, WIDTH - 2 * margin, 48)
+        top += subtitle.height + gap
+    footer = LayoutBox(margin, HEIGHT - margin - 58, WIDTH - 2 * margin, 58)
+    illustration_h = min(330, max(260, int((footer.y - top) * 0.42)))
     illustration = LayoutBox(margin, top, WIDTH - 2 * margin, illustration_h)
-    top += illustration_h + gap
-
-    available = max(0, footer.y - top - gap)
-    box_h = max(
-        minimum_box_h,
-        (available - total_content_gap) // box_count,
-    )
+    content_top = illustration.y + illustration.height + gap
+    count = len(content.key_points)
+    if count < 1:
+        raise ValueError("layout_requires_key_points")
+    cols = 2 if count > 1 else 1
+    rows = (count + cols - 1) // cols
+    available_h = footer.y - content_top
+    content_gap = 16
+    box_h = (available_h - content_gap * (rows - 1)) // rows
+    if box_h < 80:
+        raise ValueError("layout_content_area_too_small")
+    box_w = (WIDTH - 2 * margin - content_gap * (cols - 1)) // cols
     boxes = tuple(
-        LayoutBox(margin, top + i * (box_h + gap), WIDTH - 2 * margin, box_h)
-        for i in range(box_count)
+        LayoutBox(
+            margin + col * (box_w + content_gap),
+            content_top + row * (box_h + content_gap),
+            box_w,
+            box_h,
+        )
+        for row in range(rows)
+        for col in range(cols)
+        if row * cols + col < count
     )
     return InfographicLayout(
         canvas=LayoutBox(0, 0, WIDTH, HEIGHT),
