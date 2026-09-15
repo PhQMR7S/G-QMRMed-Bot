@@ -30,14 +30,14 @@ class SynthesisService(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ProductionPipelineConfig:
-    """Fixed single-image canvas matching the supplied reference proportions."""
+    """Canonical 1024x1536 canvas matching the supplied master reference."""
 
-    width: int = 1080
-    height: int = 1350
+    width: int = 1024
+    height: int = 1536
 
     def __post_init__(self) -> None:
-        if self.width * 5 != self.height * 4:
-            raise ValueError("production_canvas_must_be_4_5")
+        if self.width * 3 != self.height * 2:
+            raise ValueError("production_canvas_must_be_2_3")
 
 
 class ProductionGenerationPipeline:
