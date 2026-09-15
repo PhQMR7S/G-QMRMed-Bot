@@ -6,7 +6,7 @@ import asyncio
 import copy
 import time
 from dataclasses import dataclass
-from typing import Any, Protocol, cast
+from typing import Any, cast, Protocol
 from uuid import uuid4
 
 import cairosvg
