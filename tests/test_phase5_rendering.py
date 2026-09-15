@@ -4,7 +4,7 @@ from gqmrmed.contracts.research import (
     SynthesizedContent,
     VisualPlan,
 )
-from gqmrmed.rendering.layout import build_layout, HEIGHT, WIDTH
+from gqmrmed.rendering.layout import HEIGHT, WIDTH, build_layout
 from gqmrmed.rendering.svg import render_svg
 
 
@@ -50,10 +50,19 @@ def test_layout_keeps_all_regions_non_overlapping_at_max_key_points() -> None:
     )
     layout = build_layout(content, _plan())
     assert len(layout.content_boxes) == 12
-    assert layout.illustration.y + layout.illustration.height <= layout.content_boxes[0].y
-    for previous, current in zip(layout.content_boxes, layout.content_boxes[1:], strict=False):
-        assert previous.y + previous.height <= current.y
-    assert layout.content_boxes[-1].y + layout.content_boxes[-1].height <= layout.footer.y
+    assert layout.illustration.y + layout.illustration.height <= min(
+        box.y for box in layout.content_boxes
+    )
+    for index, previous in enumerate(layout.content_boxes):
+        for current in layout.content_boxes[index + 1 :]:
+            separated = (
+                previous.x + previous.width <= current.x
+                or current.x + current.width <= previous.x
+                or previous.y + previous.height <= current.y
+                or current.y + current.height <= previous.y
+            )
+            assert separated
+    assert max(box.y + box.height for box in layout.content_boxes) <= layout.footer.y
 
 
 def test_svg_escapes_exact_text_and_keeps_watermark() -> None:
