@@ -46,6 +46,12 @@ for provider in "${providers[@]}"; do
         [[ -n "${AI_API_KEY:-}" && -n "${AI_BASE_URL:-}" && -n "${AI_MODEL:-}" ]] && configured=1
       fi
       ;;
+    gemini_free)
+      [[ -n "${GEMINI_API_KEY:-}" && -n "${GEMINI_TEXT_MODEL:-}" ]] && configured=1
+      ;;
+    *)
+      fail "unknown AI synthesis provider in AI_PROVIDER_ORDER: $provider"
+      ;;
   esac
 done
 (( configured == 1 )) || fail "no usable AI synthesis provider is configured in AI_PROVIDER_ORDER"
@@ -82,11 +88,14 @@ PY
     procedural)
       image_fallback=1
       ;;
+    *)
+      fail "unknown image provider in IMAGE_PROVIDER_ORDER: $provider"
+      ;;
   esac
 done
 (( image_configured == 1 || image_fallback == 1 )) || fail "no usable image provider is configured in IMAGE_PROVIDER_ORDER"
 
-s3_values=(S3_ENDPOINT S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET S3_REGION)
+s3_values=(S3_ENDPOINT S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_BUCKET)
 s3_set=0
 s3_missing=0
 for name in "${s3_values[@]}"; do
@@ -96,7 +105,7 @@ for name in "${s3_values[@]}"; do
     ((s3_missing+=1))
   fi
 done
-(( s3_set == 0 || s3_set == ${#s3_values[@]} )) || fail "S3 configuration must be complete or entirely omitted"
+(( s3_set == 0 || s3_set == ${#s3_values[@]} )) || fail "S3 configuration must include endpoint, access key, secret key, and bucket when enabled"
 
 printf '%s\n' "Production release gate: configuration contract passed"
 printf '%s\n' "Credentials were validated without printing their values"
