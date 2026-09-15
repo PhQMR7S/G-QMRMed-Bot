@@ -84,8 +84,7 @@ def build_worker(settings: Settings, bot: Bot) -> GenerationWorker:
     )
     providers: list[tuple[ProviderDescriptor, TextSynthesisProvider]] = []
     requested = [item.strip().lower() for item in settings.ai_provider_order.split(",") if item.strip()]
-    cloud_order = ["gemini_free", "openrouter_free", "groq_free", "huggingface_free"]
-    order = list(dict.fromkeys([*cloud_order, *requested]))
+    order = list(dict.fromkeys(requested))
     for name in order:
         if name == "ollama":
             providers.append(

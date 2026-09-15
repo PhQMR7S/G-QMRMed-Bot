@@ -44,10 +44,22 @@ def validate_synthesis_evidence(
     claim_evidence_ids: list[list[str]],
     evidence: ResearchBundle,
 ) -> None:
-    """Reject synthesized claims that cite unknown or missing evidence."""
+    """Reject claims unless every citation resolves to supplied evidence."""
     known_ids = {source.source_id for source in evidence.sources}
+    pubmed_aliases = {
+        alias: source.source_id
+        for source in evidence.sources
+        if source.pmid
+        for alias in (
+            source.pmid,
+            f"PMID:{source.pmid}",
+            f"pmid:{source.pmid}",
+            f"pubmed:{source.pmid}",
+        )
+    }
     for evidence_ids in claim_evidence_ids:
         if not evidence_ids:
             raise ValueError("medical_claim_without_evidence")
-        if any(source_id not in known_ids for source_id in evidence_ids):
-            raise ValueError("medical_claim_references_unknown_evidence")
+        for source_id in evidence_ids:
+            if source_id not in known_ids and source_id not in pubmed_aliases:
+                raise ValueError("medical_claim_references_unknown_evidence")

@@ -221,17 +221,24 @@ educational prose in correct Arabic. English input -> write all visible prose in
 Genuinely mixed input -> preserve the mixed language intentionally. Never output broken,
 transliterated, or pseudo-Arabic characters. Keep medical terms in their normal clinical
 form when a standard English abbreviation is required, but do not turn an Arabic sentence
-into English. Do not include markdown, provider status, internal errors, or source URLs."""
+into English. Do not include markdown, provider status, internal errors, or source URLs.
+PROVENANCE CONTRACT: evidence_ids must be copied character-for-character from the
+allowed_evidence_ids list in the user payload. Never invent, abbreviate, renumber, translate,
+or derive an evidence ID. If a source has a PMID, do not substitute the PMID for its
+source_id; use the exact allowed source_id string."""
 
 
 def _build_prompt(user_input: str, research: ResearchBundle) -> str:
     language = detect_language_mode(user_input)
+    evidence = [source.model_dump() for source in research.sources]
+    allowed_ids = [source.source_id for source in research.sources]
     return json.dumps(
         {
             "task": "Create a structured medical infographic content plan.",
             "user_input": user_input[:20_000],
             "language_mode": language,
-            "evidence": [source.model_dump() for source in research.sources],
+            "evidence": evidence,
+            "allowed_evidence_ids": allowed_ids,
             "evidence_warnings": research.warnings,
             "output_schema": SynthesizedContent.model_json_schema(),
             "rules": [
@@ -240,6 +247,7 @@ def _build_prompt(user_input: str, research: ResearchBundle) -> str:
                 "Keep each claim concise and evidence-linked.",
                 "Prefer clinically important distinctions and mechanisms.",
                 "Do not give individualized diagnosis or patient-specific advice.",
+                "Every claim must use one or more exact values from allowed_evidence_ids.",
                 "The final visible text must obey language_mode exactly.",
             ],
         },
