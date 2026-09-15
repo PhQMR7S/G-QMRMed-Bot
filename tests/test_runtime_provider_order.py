@@ -69,7 +69,6 @@ def test_requested_provider_order_is_not_overridden_by_implicit_cloud_order() ->
     try:
         runtime.build_worker(settings, SimpleNamespace())
     except Exception:
-        # Downstream dependencies are intentionally outside this unit test.
         pass
     finally:
         runtime.ProviderRouter = original  # type: ignore[assignment]
