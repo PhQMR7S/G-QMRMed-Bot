@@ -1,11 +1,11 @@
-"""Safe, deterministic layout planning for 4:5 medical infographics."""
+"""Safe, deterministic layout planning for 2:3 medical infographics."""
 
 from dataclasses import dataclass
 
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
 
-WIDTH = 1080
-HEIGHT = 1350
+WIDTH = 1024
+HEIGHT = 1536
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,10 +29,10 @@ class InfographicLayout:
 def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> InfographicLayout:
     """Allocate non-overlapping regions before any text or artwork is rendered."""
     del visual_plan
-    margin = 64
-    title_h = 150
+    margin = 48
+    title_h = 170
     subtitle_h = 72 if content.subtitle else 0
-    footer_h = 64
+    footer_h = 70
     gap = 24
     top = margin
 
@@ -51,9 +51,9 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
 
     total_content_gap = gap * (box_count - 1)
     minimum_box_h = 48
-    minimum_illustration_h = 280
+    minimum_illustration_h = 300
     illustration_h = min(
-        560,
+        600,
         max(
             minimum_illustration_h,
             int((footer.y - top) * 0.38),
@@ -77,7 +77,7 @@ def build_layout(content: SynthesizedContent, visual_plan: VisualPlan) -> Infogr
 
     available = max(0, footer.y - top - gap)
     box_h = max(
-        1,
+        minimum_box_h,
         (available - total_content_gap) // box_count,
     )
     boxes = tuple(
