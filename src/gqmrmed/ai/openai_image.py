@@ -12,7 +12,6 @@ from PIL import Image
 
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationError
 
-
 REFERENCE_DNA = """
 Create only the medical illustration layer for a QMRMed editorial infographic.
 The visual reference family is a polished Arabic medical education poster: warm
