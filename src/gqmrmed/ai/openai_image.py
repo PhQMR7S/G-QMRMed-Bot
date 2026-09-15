@@ -88,7 +88,9 @@ class OpenAIImageProvider:
                 json=payload,
             )
             if response.is_error:
-                raise ImageGenerationError(f"openai_image_request_failed:{response.status_code}")
+                raise ImageGenerationError(
+                    f"openai_image_request_failed:{response.status_code}"
+                )
             data = response.json()
             encoded = _extract_base64(data)
             if encoded is None:
