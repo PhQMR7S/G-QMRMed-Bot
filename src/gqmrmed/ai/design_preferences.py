@@ -80,11 +80,14 @@ class DesignPreferences:
 
 
 def extract_design_preferences(text: str) -> DesignPreferences:
-    """Interpret explicit design language without presenting a fixed option menu."""
+    """Interpret only explicit design intent and ignore incidental medical wording."""
     normalized = " ".join(text.split())
-    lowered = normalized.lower()
-    palette = _extract_palette(normalized)
-    background = _extract_background(normalized)
+    design_text = _extract_design_input(normalized)
+    if not design_text:
+        return DesignPreferences()
+    lowered = design_text.lower()
+    palette = _extract_palette(design_text)
+    background = _extract_background(design_text)
     layout = "balanced"
     if any(token in lowered for token in ("timeline", "خط زمني", "زمني")):
         layout = "timeline"
@@ -124,13 +127,13 @@ def extract_design_preferences(text: str) -> DesignPreferences:
             break
 
     position = "upper_middle"
-    if any(token in lowered for token in ("يسار", "left")):
+    if any(token in lowered for token in ("الصورة يسار", "الصورة على اليسار", "illustration left", "image left")):
         position = "left"
-    elif any(token in lowered for token in ("يمين", "right")):
+    elif any(token in lowered for token in ("الصورة يمين", "الصورة على اليمين", "illustration right", "image right")):
         position = "right"
-    elif any(token in lowered for token in ("أسفل", "اسفل", "bottom")):
+    elif any(token in lowered for token in ("الصورة أسفل", "الصورة اسفل", "image bottom", "illustration bottom")):
         position = "lower_middle"
-    elif any(token in lowered for token in ("في الوسط", "وسط", "center", "central")):
+    elif any(token in lowered for token in ("الصورة في الوسط", "الصورة وسط", "image center", "illustration center")):
         position = "center"
 
     header_style = "centered"
@@ -166,8 +169,55 @@ def extract_design_preferences(text: str) -> DesignPreferences:
         card_radius=radius,
         font_scale=font_scale,
         show_footer=show_footer,
-        raw_instruction=_extract_explicit_design_clause(normalized),
+        raw_instruction=design_text,
     )
+
+
+def _extract_design_input(text: str) -> str:
+    """Return the portion that clearly describes presentation rather than medicine."""
+    lowered = text.lower()
+    explicit_markers = (
+        "أريد",
+        "اريد",
+        "اجعل",
+        "خلي",
+        "صمم",
+        "صمّم",
+        "make it",
+        "i want",
+        "design it",
+    )
+    for marker in explicit_markers:
+        index = lowered.find(marker.lower())
+        if index >= 0:
+            return text[index : index + 1800]
+
+    design_cues = (
+        "ألوان",
+        "الوان",
+        "باللون",
+        "لون الخلفية",
+        "خلفية",
+        "palette",
+        "background",
+        "two column",
+        "three column",
+        "عمودين",
+        "ثلاثة أعمدة",
+        "flowchart",
+        "مخطط انسيابي",
+        "timeline",
+        "خط زمني",
+        "font",
+        "خط كبير",
+        "illustration",
+        "الصورة على",
+        "style",
+        "أسلوب",
+    )
+    if any(cue in lowered for cue in design_cues):
+        return text
+    return ""
 
 
 def _extract_palette(text: str) -> tuple[str, ...] | None:
@@ -197,16 +247,6 @@ def _extract_background(text: str) -> str | None:
         if re.search(rf"(?:خلفية|background)\s+(?:{re.escape(name)})", lowered):
             return value
     return None
-
-
-def _extract_explicit_design_clause(text: str) -> str:
-    markers = ("أريد", "اريد", "اجعل", "خلي", "أريد أن", "make it", "i want")
-    lowered = text.lower()
-    for marker in markers:
-        index = lowered.find(marker.lower())
-        if index >= 0:
-            return text[index : index + 1800]
-    return ""
 
 
 __all__ = ["DesignPreferences", "extract_design_preferences"]
