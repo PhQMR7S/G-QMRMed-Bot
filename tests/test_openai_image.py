@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 
 from gqmrmed.ai.openai_image import OpenAIImageConfig, OpenAIImageProvider
+from gqmrmed.generation.providers import ImageGenerationError
 
 
 class FakeResponse:
@@ -22,7 +23,13 @@ class FakeClient:
         self.payload = payload
         self.calls: list[dict[str, object]] = []
 
-    async def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]) -> FakeResponse:
+    async def post(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, object],
+    ) -> FakeResponse:
         self.calls.append({"url": url, "headers": headers, "json": json})
         return FakeResponse(self.payload)
 
@@ -32,7 +39,7 @@ async def test_openai_image_provider_uses_reference_canvas_and_illustration_only
     image = Image.new("RGB", (1024, 1536), "white")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
-    payload = {"data": [{"b64_json": base64.b64encode(buffer.getvalue()).decode("ascii")}]} 
+    payload = {"data": [{"b64_json": base64.b64encode(buffer.getvalue()).decode("ascii")}]}
     client = FakeClient(payload)
     provider = OpenAIImageProvider(
         OpenAIImageConfig(api_key="test-key"),
@@ -57,6 +64,9 @@ async def test_openai_image_provider_uses_reference_canvas_and_illustration_only
 
 @pytest.mark.asyncio
 async def test_openai_image_provider_rejects_non_reference_canvas() -> None:
-    provider = OpenAIImageProvider(OpenAIImageConfig(api_key="test-key"), client=FakeClient({}))  # type: ignore[arg-type]
-    with pytest.raises(Exception, match="openai_image_requires_1024x1536_reference_canvas"):
+    provider = OpenAIImageProvider(
+        OpenAIImageConfig(api_key="test-key"),
+        client=FakeClient({}),  # type: ignore[arg-type]
+    )
+    with pytest.raises(ImageGenerationError, match="openai_image_requires_1024x1536_reference_canvas"):
         await provider.generate(prompt="medical illustration", width=1080, height=1350)
