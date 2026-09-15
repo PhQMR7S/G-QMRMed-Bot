@@ -52,6 +52,19 @@ jobs:
       - name: MyPy
         run: mypy src
 
+      - name: Capture MyPy diagnostics
+        if: ${{ failure() }}
+        run: |
+          mypy src > /tmp/mypy.txt 2>&1 || true
+
+      - name: Upload MyPy diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-diagnostics
+          path: /tmp/mypy.txt
+          if-no-files-found: ignore
+
       - name: Verify source package resolution
         run: |
           python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
