@@ -21,7 +21,7 @@ Before the first real Telegram generation test, configure:
 - `TELEGRAM_BOT_TOKEN`
 - PostgreSQL `DATABASE_URL`
 - Redis `REDIS_URL`
-- `AI_API_KEY` for the OpenAI text/image path, unless an explicitly configured alternative synthesis/image path is used
+- `AI_API_KEY` for the default OpenAI text/image path, unless an explicitly configured alternative synthesis/image path is used
 - persistent result storage (`S3_*` or the production results volume)
 - external PubMed/network access
 
