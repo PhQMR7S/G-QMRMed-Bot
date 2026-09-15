@@ -16,9 +16,9 @@ from gqmrmed.ai.image_providers import (
     QwenImageConfig,
     QwenImageProvider,
 )
-from gqmrmed.ai.infographic_design import InfographicDesignSpec, build_design_spec
+from gqmrmed.ai.infographic_design import build_design_spec, InfographicDesignSpec
 from gqmrmed.ai.infographic_qa import validate_design_spec
-from gqmrmed.ai.infographic_renderer import RenderConfig, render_infographic_page
+from gqmrmed.ai.infographic_renderer import render_infographic_page, RenderConfig
 from gqmrmed.ai.openai_image import OpenAIImageConfig, OpenAIImageProvider
 from gqmrmed.ai.pubmed_research import PubMedResearchConfig, PubMedResearchProvider
 from gqmrmed.ai.research_router import HybridResearchProvider
@@ -29,7 +29,7 @@ from gqmrmed.generation.providers import (
     ImageGenerationError,
     ImageGenerationProvider,
 )
-from gqmrmed.services.medical_pipeline import MedicalPlan, SynthesisProvider, build_medical_plan
+from gqmrmed.services.medical_pipeline import build_medical_plan, MedicalPlan, SynthesisProvider
 from gqmrmed.services.research import ResearchProvider
 from gqmrmed.services.visual_architecture import select_visual_architecture
 
@@ -62,7 +62,7 @@ class InfographicPipeline:
         self.renderer_config = renderer_config or RenderConfig()
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "InfographicPipeline":
+    def from_settings(cls, settings: Settings) -> InfographicPipeline:
         providers: list[ImageGenerationProvider] = []
         for name in _csv(settings.image_provider_order):
             if name == "openai" and settings.ai_api_key:
