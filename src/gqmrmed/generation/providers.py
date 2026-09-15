@@ -6,7 +6,7 @@ import asyncio
 import copy
 import time
 from dataclasses import dataclass
-from typing import Any, cast, Protocol
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 import cairosvg
@@ -40,12 +40,7 @@ class ImageGenerationProvider(Protocol):
 
 
 class ProceduralMedicalIllustrationProvider:
-    """Deterministic no-network fallback used when no image model is configured.
-
-    It produces a clean medical/scientific motif so the full generation pipeline
-    remains operational on zero-cost infrastructure. A real image provider can
-    replace it without changing the pipeline contract.
-    """
+    """Deterministic no-network illustration fallback with no visible text."""
 
     async def generate(
         self,
@@ -57,23 +52,30 @@ class ProceduralMedicalIllustrationProvider:
         del prompt
         if width <= 0 or height <= 0:
             raise ImageGenerationError("invalid_image_dimensions")
+        cx = width / 2
+        cy = height * 0.42
+        radius = min(width, height) * 0.24
+        path = (
+            f"M{width * 0.25:.1f} {cy:.1f} H{width * 0.38:.1f} "
+            f"L{width * 0.44:.1f} {height * 0.32:.1f} "
+            f"L{width * 0.50:.1f} {height * 0.53:.1f} "
+            f"L{width * 0.57:.1f} {height * 0.36:.1f} "
+            f"L{width * 0.63:.1f} {cy:.1f} H{width * 0.75:.1f}"
+        )
         svg = f"""
         <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
           <defs>
             <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#0f172a"/>
-              <stop offset="1" stop-color="#1e3a5f"/>
+              <stop offset="0" stop-color="#EAF3F7"/>
+              <stop offset="1" stop-color="#D9E9E6"/>
             </linearGradient>
           </defs>
           <rect width="{width}" height="{height}" rx="48" fill="url(#bg)"/>
-          <circle cx="540" cy="600" r="260" fill="#ffffff" opacity="0.07"/>
-          <circle cx="540" cy="600" r="185" fill="none" stroke="#ffffff" stroke-width="10" opacity="0.32"/>
-          <path d="M300 600 H410 L455 480 L520 730 L575 530 L625 600 H780" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-          <path d="M455 860 C390 790 320 730 320 650 C320 565 430 530 540 640 C650 530 760 565 760 650 C760 730 690 790 625 860 L540 945 Z" fill="none" stroke="#ffffff" stroke-width="14" opacity="0.55"/>
-          <circle cx="540" cy="600" r="34" fill="#ffffff" opacity="0.9"/>
-          <path d="M540 350 V240 M540 960 V1070 M290 600 H180 M790 600 H900" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.35"/>
-          <text x="540" y="1190" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="54" font-weight="700">QMRMed</text>
-          <text x="540" y="1245" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="28" opacity="0.72">Medical infographic illustration</text>
+          <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius:.1f}" fill="#ffffff" opacity="0.38"/>
+          <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{radius * 0.70:.1f}" fill="none" stroke="#5E93A8" stroke-width="10" opacity="0.45"/>
+          <path d="{path}" fill="none" stroke="#5E93A8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.48"/>
+          <circle cx="{cx:.1f}" cy="{cy:.1f}" r="34" fill="#5E93A8" opacity="0.30"/>
+          <path d="M{cx:.1f} {cy - radius * 1.18:.1f} V{cy - radius * 0.90:.1f} M{cx:.1f} {cy + radius * 0.90:.1f} V{cy + radius * 1.18:.1f} M{cx - radius * 1.18:.1f} {cy:.1f} H{cx - radius * 0.90:.1f} M{cx + radius * 0.90:.1f} {cy:.1f} H{cx + radius * 1.18:.1f}" stroke="#5E93A8" stroke-width="8" stroke-linecap="round" opacity="0.28"/>
         </svg>
         """
         image_bytes = await asyncio.to_thread(
@@ -157,6 +159,8 @@ class HuggingFaceImageProvider:
 
 @dataclass(frozen=True, slots=True)
 class ComfyUIConfig:
+    """Configuration for a ComfyUI API-format illustration worker."""
+
     base_url: str = "http://127.0.0.1:8188"
     timeout_seconds: float = 180.0
     poll_interval_seconds: float = 1.0
@@ -217,9 +221,7 @@ class ComfyUIImageProvider:
                 image_bytes=image.content,
                 width=width,
                 height=height,
-                mime_type=image.headers.get(
-                    "content-type", "image/png"
-                ).split(";", 1)[0],
+                mime_type=image.headers.get("content-type", "image/png").split(";", 1)[0],
             )
         except httpx.HTTPError as exc:
             raise ImageGenerationError("comfyui_request_failed") from exc
