@@ -10,6 +10,7 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
+from gqmrmed.ai.design_preferences import DesignPreferences
 from gqmrmed.ai.infographic_design import InfographicDesignSpec, InfographicPage, TextBlock
 from gqmrmed.generation.providers import GeneratedIllustration
 
@@ -81,6 +82,8 @@ def render_infographic_page(
 ) -> bytes:
     """Render one deterministic 1024x1536 infographic with exact RTL text."""
     cfg = config or RenderConfig()
+    prefs = spec.design_preferences
+    background = prefs.background or cfg.background
     if cfg.width * 3 != cfg.height * 2:
         raise ValueError("render_canvas_must_be_2_3")
     if not illustration.image_bytes:
@@ -88,31 +91,48 @@ def render_infographic_page(
     if page.page_number != 1 or len(spec.pages) != 1:
         raise ValueError("single_image_contract_violated")
 
-    image = Image.new("RGB", (cfg.width, cfg.height), cfg.background)
+    image = Image.new("RGB", (cfg.width, cfg.height), background)
     draw = ImageDraw.Draw(image)
-    _background(draw, cfg)
+    _background(draw, cfg, prefs)
     language = spec.language.lower()
     margin = 48
 
-    _callout(draw, (margin, 44, 224, 126), "تثقيف طبي" if language != "en" else "MEDICAL", cfg.soft_rose, cfg.rose, language)
-    _callout(draw, (800, 44, cfg.width - margin, 126), "مبني على الأدلة" if language != "en" else "EVIDENCE", cfg.soft_cyan, cfg.cyan, language)
+    accents = _accent_palette(cfg, prefs)
+    _callout(
+        draw,
+        (margin, 44, 224, 126),
+        "تثقيف طبي" if language != "en" else "MEDICAL",
+        _soften(accents[0]),
+        accents[0],
+        language,
+    )
+    _callout(
+        draw,
+        (800, 44, cfg.width - margin, 126),
+        "مبني على الأدلة" if language != "en" else "EVIDENCE",
+        _soften(accents[1]),
+        accents[1],
+        language,
+    )
 
     title = _clean(page.title)
-    title_font = _fit_title(draw, title, language, max_width=690)
+    title_font = _fit_title(draw, title, language, max_width=690, scale=prefs.font_scale)
     title_y = 72
-    _text(draw, title, (cfg.width / 2, title_y + title_font.size / 2), title_font, cfg.ink, anchor="mm")
+    title_anchor = "mm" if prefs.header_style != "left" else "lm"
+    title_x = cfg.width / 2 if title_anchor == "mm" else margin
+    _text(draw, title, (title_x, title_y + title_font.size / 2), title_font, cfg.ink, anchor=title_anchor)
 
     subtitle = _clean(page.subtitle) or _subtitle(language)
     _text(
         draw,
         subtitle,
         (cfg.width / 2, 188),
-        _fit_font(draw, subtitle, _font(21, False, language), 760, 42, language),
+        _fit_font(draw, subtitle, _font(max(14, round(21 * prefs.font_scale)), False, language), 760, 42, language),
         cfg.muted,
         anchor="mm",
     )
 
-    art_box = (margin, 226, cfg.width - margin, 500)
+    art_box = _illustration_box(cfg, margin, prefs)
     _artwork(image, illustration, art_box, cfg)
     _small_label(draw, (margin + 18, art_box[1] + 16), "المعلومة بصرياً" if language != "en" else "VISUAL", cfg)
 
@@ -120,9 +140,23 @@ def render_infographic_page(
     body = sorted(body, key=lambda block: -block.importance)[:9]
     if not body:
         raise ValueError("infographic_body_required")
-    _cards(draw, body, page.sections, language, cfg, margin, 552, 1438)
-    _footer(draw, language, cfg)
+    _cards(draw, body, page.sections, language, cfg, prefs, margin, 552, 1438)
+    if prefs.show_footer:
+        _footer(draw, language, cfg)
     return _png(image)
+
+
+def _illustration_box(
+    cfg: RenderConfig, margin: int, prefs: DesignPreferences
+) -> tuple[int, int, int, int]:
+    base = (margin, 226, cfg.width - margin, 500)
+    if prefs.illustration_position == "lower_middle":
+        return (margin, 330, cfg.width - margin, 604)
+    if prefs.illustration_position == "left":
+        return (margin, 226, cfg.width // 2 + 20, 500)
+    if prefs.illustration_position == "right":
+        return (cfg.width // 2 - 20, 226, cfg.width - margin, 500)
+    return base
 
 
 def _cards(
@@ -131,22 +165,30 @@ def _cards(
     sections: list[str],
     language: str,
     cfg: RenderConfig,
+    prefs: DesignPreferences,
     margin: int,
     top: int,
     bottom: int,
 ) -> None:
     count = len(blocks)
-    cols = 2 if count <= 4 else 3
+    if prefs.layout in {"flow", "timeline"}:
+        cols = 1
+    elif prefs.layout in {"two_column", "comparison"}:
+        cols = 2
+    elif prefs.layout == "three_column":
+        cols = 3
+    else:
+        cols = 2 if count <= 4 else 3
     rows = (count + cols - 1) // cols
-    gap = 16
+    gap = 12 if prefs.density == "compact" else 20 if prefs.density == "airy" else 16
     card_w = (cfg.width - 2 * margin - gap * (cols - 1)) // cols
     card_h = (bottom - top - gap * (rows - 1)) // rows
     for index, block in enumerate(blocks):
         row, col = divmod(index, cols)
         x = margin + col * (card_w + gap)
         y = top + row * (card_h + gap)
-        fill, accent = _colors(block.role, index)
-        _card(draw, block, sections, index, language, x, y, card_w, card_h, fill, accent, cfg)
+        fill, accent = _colors(block.role, index, cfg, prefs)
+        _card(draw, block, sections, index, language, x, y, card_w, card_h, fill, accent, cfg, prefs)
 
 
 def _card(
@@ -162,8 +204,9 @@ def _card(
     fill: str,
     accent: str,
     cfg: RenderConfig,
+    prefs: DesignPreferences,
 ) -> None:
-    radius = 24
+    radius = prefs.card_radius
     draw.rounded_rectangle((x, y, x + width, y + height), radius=radius, fill=fill, outline=cfg.line, width=2)
     header_h = 64
     draw.rounded_rectangle((x, y, x + width, y + header_h), radius=radius, fill=accent)
@@ -180,7 +223,7 @@ def _card(
         draw,
         label,
         (label_x, y + header_h / 2),
-        _font(19 if width < 320 else 21, True, "ar" if rtl else "en"),
+        _font(max(14, round((19 if width < 320 else 21) * prefs.font_scale)), True, "ar" if rtl else "en"),
         cfg.paper,
         anchor="rm" if rtl else "lm",
     )
@@ -192,7 +235,7 @@ def _card(
     body_font = _fit_font(
         draw,
         block.text,
-        _font(20 if width < 320 else 23, False, language),
+        _font(max(14, round((20 if width < 320 else 23) * prefs.font_scale)), False, language),
         max_width,
         max_height,
         language,
@@ -223,15 +266,48 @@ def _section_label(sections: list[str], index: int, language: str) -> str:
     return _SECTION_LABELS_AR.get(section, "معلومة مهمة")
 
 
-def _colors(role: str, index: int) -> tuple[str, str]:
+def _accent_palette(cfg: RenderConfig, prefs: DesignPreferences) -> tuple[str, ...]:
+    if prefs.palette:
+        return prefs.palette
+    return tuple(accent for _, accent in _PALETTE)
+
+
+def _colors(
+    role: str,
+    index: int,
+    cfg: RenderConfig,
+    prefs: DesignPreferences,
+) -> tuple[str, str]:
+    accents = _accent_palette(cfg, prefs)
     if role == "danger":
-        return "#F8E1E4", "#B84F5E"
+        accent = "#B84F5E"
+        return _soften(accent), accent
     if role == "caution":
-        return "#F5E8D4", "#C28D43"
-    return _PALETTE[index % len(_PALETTE)]
+        accent = "#C28D43"
+        return _soften(accent), accent
+    accent = accents[index % len(accents)]
+    return _soften(accent), accent
 
 
-def _artwork(canvas: Image.Image, illustration: GeneratedIllustration, box: tuple[int, int, int, int], cfg: RenderConfig) -> None:
+def _soften(value: str) -> str:
+    """Blend a selected accent with white for readable pastel card fills."""
+    value = value.lstrip("#")
+    if len(value) != 6:
+        return "#F3EEF0"
+    try:
+        rgb = tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
+    except ValueError:
+        return "#F3EEF0"
+    softened = tuple(round(channel * 0.18 + 255 * 0.82) for channel in rgb)
+    return "#%02X%02X%02X" % softened
+
+
+def _artwork(
+    canvas: Image.Image,
+    illustration: GeneratedIllustration,
+    box: tuple[int, int, int, int],
+    cfg: RenderConfig,
+) -> None:
     x1, y1, x2, y2 = box
     panel = Image.new("RGB", (x2 - x1, y2 - y1), cfg.paper)
     try:
@@ -246,12 +322,15 @@ def _artwork(canvas: Image.Image, illustration: GeneratedIllustration, box: tupl
     ImageDraw.Draw(canvas).rounded_rectangle(box, radius=28, outline=cfg.line, width=2)
 
 
-def _background(draw: ImageDraw.ImageDraw, cfg: RenderConfig) -> None:
-    draw.ellipse((810, -120, 1110, 170), fill="#F4DCE4")
-    draw.ellipse((-120, 1310, 180, 1610), fill="#E4F0F2")
+def _background(draw: ImageDraw.ImageDraw, cfg: RenderConfig, prefs: DesignPreferences) -> None:
+    accents = _accent_palette(cfg, prefs)
+    first = accents[0]
+    second = accents[1 % len(accents)]
+    draw.ellipse((810, -120, 1110, 170), fill=_soften(first))
+    draw.ellipse((-120, 1310, 180, 1610), fill=_soften(second))
     for x in range(70, 1000, 72):
         for y in range(30, 1500, 72):
-            draw.ellipse((x, y, x + 2, y + 2), fill="#EFE5E7")
+            draw.ellipse((x, y, x + 2, y + 2), fill=_soften(cfg.line))
 
 
 def _callout(
@@ -292,14 +371,20 @@ def _footer(draw: ImageDraw.ImageDraw, language: str, cfg: RenderConfig) -> None
     _text(draw, text, (520, y + 17), _font(14, False, language), cfg.muted, anchor="mm")
 
 
-def _fit_title(draw: ImageDraw.ImageDraw, text: str, language: str, max_width: int) -> ImageFont.FreeTypeFont:
-    size = 60
-    while size >= 42:
+def _fit_title(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    language: str,
+    max_width: int,
+    scale: float = 1.0,
+) -> ImageFont.FreeTypeFont:
+    size = round(60 * scale)
+    while size >= 34:
         font = _font(size, True, language)
         if _width(draw, text, font) <= max_width:
             return font
         size -= 2
-    return _font(42, True, language)
+    return _font(max(34, round(42 * scale)), True, language)
 
 
 def _fit_font(
