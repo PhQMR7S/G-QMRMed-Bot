@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from gqmrmed.ai.design_preferences import DesignPreferences
 from gqmrmed.contracts.research import SynthesizedContent, VisualPlan
 
 
@@ -61,20 +62,20 @@ class InfographicDesignSpec(BaseModel):
     pages: list[InfographicPage] = Field(min_length=1, max_length=1)
     illustration_prompt: str = Field(min_length=1, max_length=8_000)
     branding: BrandingSpec = Field(default_factory=BrandingSpec)
+    design_preferences: DesignPreferences = Field(default_factory=DesignPreferences)
 
 
 MASTER_VISUAL_LANGUAGE = """
-QMRMed reference-driven Arabic medical editorial infographic. Use the supplied
-master visual language as the design system: warm ivory paper, centered bold
-Arabic headline, small soft-pastel callout bubbles, a dominant clinically
-relevant illustration near the upper middle, then three balanced columns of
-rounded modular cards. Cards use restrained rose, cyan, mint, lavender and
-amber pastel fills with darker matching header bands, circular icon zones,
-subtle borders, soft shadows, generous whitespace, precise alignment and a
-small educational footer. The composition is publication-grade, calm, friendly,
-modern and medically credible rather than generic AI art. Preserve the visual
-rhythm and hierarchy across topics while allowing the medical content and
-illustration to change. The canonical canvas is 1024x1536 (2:3).
+QMRMed reference-driven medical editorial infographic. Use the supplied master
+visual language as the baseline design system: warm ivory paper, centered bold
+headline, small pastel callout elements, a dominant clinically relevant
+illustration near the upper middle, and balanced modular information cards.
+Cards use restrained rose, cyan, mint, lavender and amber accents with darker
+matching headers, circular icon zones, subtle borders, soft shadows, generous
+whitespace and precise alignment. The composition is publication-grade, calm,
+friendly, modern and medically credible rather than generic AI art. Preserve
+the visual rhythm and hierarchy across topics while allowing medical content
+and illustration to change. The canonical canvas is 1024x1536 (2:3).
 
 Arabic text must be rendered by the deterministic compositor with correct RTL
 shaping; English remains LTR and mixed text may remain mixed. Never place
@@ -86,14 +87,14 @@ watermarks, UI or disclaimers.
 
 
 TEMPLATE_HINTS: dict[TemplateFamily, str] = {
-    TemplateFamily.CLINICAL: "Title + definition/clinical overview + dominant illustration + high-yield clinical panels.",
-    TemplateFamily.MECHANISM: "Title + causal pathway + dominant mechanism illustration + ordered mechanism/result panels.",
+    TemplateFamily.CLINICAL: "Title + clinical overview + dominant illustration + high-yield clinical panels.",
+    TemplateFamily.MECHANISM: "Title + causal pathway + dominant mechanism illustration + ordered result panels.",
     TemplateFamily.COMPARISON: "Title + comparison matrix with strong column hierarchy and a concise takeaway.",
     TemplateFamily.DRUG: "Title + drug illustration + indication/mechanism/safety/monitoring panels.",
     TemplateFamily.DIAGNOSIS: "Title + diagnostic visual + signs/tests/interpretation/red flags panels.",
     TemplateFamily.TREATMENT: "Title + treatment pathway + first-line/monitoring/escalation panels.",
     TemplateFamily.SYMPTOMS: "Title + symptom illustration + grouped symptoms, evaluation and red flags.",
-    TemplateFamily.ANATOMY: "Title + anatomical illustration + labeled relationship panels outside the artwork.",
+    TemplateFamily.ANATOMY: "Title + anatomical illustration + relationship panels outside the artwork.",
     TemplateFamily.EDUCATIONAL: "Title + teaching illustration + definition, key concepts and takeaways.",
 }
 
@@ -187,14 +188,16 @@ def build_design_spec(
     visual_plan: VisualPlan,
     language: str | None = None,
     max_blocks_per_page: int = 9,
+    design_preferences: DesignPreferences | None = None,
 ) -> InfographicDesignSpec:
-    """Build one reference-driven image while preserving the input language contract."""
+    """Build one reference-driven image while preserving explicit user controls."""
     if max_blocks_per_page < 4 or max_blocks_per_page > 9:
         raise ValueError("single_image_capacity_must_be_between_4_and_9")
     mode = language or detect_language_mode(topic)
     if mode not in {"ar", "en", "mixed"}:
         raise ValueError("unsupported_infographic_language")
 
+    preferences = design_preferences or DesignPreferences()
     template = choose_template(topic, visual_plan)
     selected = _select_single_image_blocks(content)[:max_blocks_per_page]
     if not selected:
@@ -203,7 +206,11 @@ def build_design_spec(
     title = _compact(content.title, 160)
     if _is_internal_artifact(title):
         title = _compact(topic, 160)
-    sections = [section for section in dict.fromkeys(visual_plan.sections[:8]) if not _is_internal_artifact(section)] or ["key points"]
+    sections = [
+        section
+        for section in dict.fromkeys(visual_plan.sections[:8])
+        if not _is_internal_artifact(section)
+    ] or ["key points"]
     page = InfographicPage(
         page_number=1,
         title=title,
@@ -224,6 +231,8 @@ def build_design_spec(
         + visual_plan.architecture.value
         + "\nIllustration brief: "
         + visual_plan.illustration_prompt
+        + "\nUser-directed design controls: "
+        + preferences.prompt_fragment
         + "\nIMPORTANT: artwork only; no readable text, labels, numbers, logos, watermark, UI, or disclaimers."
     )
     return InfographicDesignSpec(
@@ -233,6 +242,7 @@ def build_design_spec(
         template=template,
         pages=[page],
         illustration_prompt=prompt[:8_000],
+        design_preferences=preferences,
     )
 
 
