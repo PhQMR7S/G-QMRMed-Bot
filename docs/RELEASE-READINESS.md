@@ -26,3 +26,5 @@ Before the first real Telegram generation test, configure:
 - external PubMed/network access
 
 The first staging test should cover `/start`, `/plans`, `/terms`, `/paysupport`, text generation, a natural-language design instruction, a media input, quota exhaustion, successful Telegram delivery, and a forced generation failure to verify quota release.
+
+Payment readiness: Telegram requires a clear `/terms` path and explicit user agreement before purchase; digital goods/services sold inside Telegram use Stars (`XTR`).
