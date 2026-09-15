@@ -40,8 +40,28 @@ jobs:
         run: mypy src
 
       - name: Verify source package resolution
-        run: |
-          python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
+        run: python -c "from pathlib import Path; import gqmrmed.contracts.generation as m; source = Path('src/gqmrmed').resolve(); loaded = Path(m.__file__).resolve(); assert loaded.is_relative_to(source), f'Unexpected package path: {loaded}'"
+
+      - name: Diagnostic - phase5 rendering
+        run: python -m pytest -q tests/test_phase5_rendering.py
+
+      - name: Diagnostic - infographic engine
+        run: python -m pytest -q tests/test_infographic_engine.py
+
+      - name: Diagnostic - production pipeline
+        run: python -m pytest -q tests/test_production_pipeline.py
+
+      - name: Diagnostic - phase4 medical pipeline
+        run: python -m pytest -q tests/test_phase4_medical_pipeline.py
+
+      - name: Diagnostic - phase5 image generation
+        run: python -m pytest -q tests/test_phase5_image_generation.py
+
+      - name: Diagnostic - design preferences
+        run: python -m pytest -q tests/test_design_preferences.py
+
+      - name: Diagnostic - phase9 multi-provider pipeline
+        run: python -m pytest -q tests/test_phase9_multi_provider_pipeline.py
 
       - name: Pytest
         run: python -m pytest
