@@ -1,8 +1,7 @@
 """Natural-language controls for user-directed infographic presentation."""
 
-from dataclasses import dataclass
 import re
-
+from dataclasses import dataclass
 
 _COLOR_MAP: dict[str, str] = {
     "وردي": "#C85E82",
