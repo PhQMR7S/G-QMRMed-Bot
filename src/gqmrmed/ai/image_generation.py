@@ -8,6 +8,11 @@ from typing import Protocol
 from gqmrmed.contracts.research import VisualPlan
 
 
+CANVAS_WIDTH = 1024
+CANVAS_HEIGHT = 1536
+CANVAS_ASPECT_RATIO = "2:3"
+
+
 class ImageGenerationError(RuntimeError):
     """Raised when an illustration provider cannot produce an asset."""
 
@@ -17,8 +22,8 @@ class ImageGenerationRequest:
     """Validated request sent to an illustration-only provider."""
 
     prompt: str
-    width: int = 1080
-    height: int = 1350
+    width: int = CANVAS_WIDTH
+    height: int = CANVAS_HEIGHT
     seed: int | None = None
 
     def __post_init__(self) -> None:
@@ -26,8 +31,8 @@ class ImageGenerationRequest:
             raise ValueError("image_prompt_required")
         if not 256 <= self.width <= 4096 or not 256 <= self.height <= 4096:
             raise ValueError("invalid_image_dimensions")
-        if self.width * 5 != self.height * 4:
-            raise ValueError("image_dimensions_must_be_4_5")
+        if self.width * 3 != self.height * 2:
+            raise ValueError("image_dimensions_must_be_2_3")
         if self.seed is not None and self.seed < 0:
             raise ValueError("image_seed_invalid")
 
@@ -35,9 +40,9 @@ class ImageGenerationRequest:
 def build_illustration_request(
     visual_plan: VisualPlan, *, seed: int | None = None
 ) -> ImageGenerationRequest:
-    """Convert the visual plan into the single-image 4:5 illustration request."""
-    if visual_plan.aspect_ratio != "4:5":
-        raise ValueError("visual_plan_must_be_4_5")
+    """Convert the visual plan into the canonical 2:3 illustration request."""
+    if visual_plan.aspect_ratio != CANVAS_ASPECT_RATIO:
+        raise ValueError("visual_plan_must_be_2_3")
     return ImageGenerationRequest(prompt=visual_plan.illustration_prompt, seed=seed)
 
 
@@ -96,6 +101,9 @@ class ComfyUIIllustrationProvider:
 
 
 __all__ = [
+    "CANVAS_ASPECT_RATIO",
+    "CANVAS_HEIGHT",
+    "CANVAS_WIDTH",
     "ComfyUIConfig",
     "ComfyUIIllustrationProvider",
     "ImageGenerationError",
