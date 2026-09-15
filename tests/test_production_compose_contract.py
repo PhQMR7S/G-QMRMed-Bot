@@ -1,8 +1,8 @@
-from pathlib import Path
+import pathlib
 
 
-COMPOSE = Path("compose.production.yml").read_text(encoding="utf-8")
-RELEASE_GATE = Path("scripts/release-gate.sh").read_text(encoding="utf-8")
+COMPOSE = pathlib.Path("compose.production.yml").read_text(encoding="utf-8")
+RELEASE_GATE = pathlib.Path("scripts/release-gate.sh").read_text(encoding="utf-8")
 
 
 def test_production_worker_receives_all_supported_provider_settings() -> None:
