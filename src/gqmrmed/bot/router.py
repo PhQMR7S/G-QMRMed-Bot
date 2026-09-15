@@ -151,7 +151,7 @@ async def _show_plans(target: Message, session: AsyncSession, *, edit: bool = Fa
 
 @router.callback_query(F.data == "menu:plans")
 async def menu_plans_callback(callback: CallbackQuery, session: AsyncSession) -> None:
-    if callback.message is None:
+    if callback.message is None or not isinstance(callback.message, Message):
         await callback.answer("تعذر عرض الخطط.", show_alert=True)
         return
     await _show_plans(callback.message, session, edit=True, reply_markup=_back_keyboard())
