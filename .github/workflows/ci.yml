@@ -36,6 +36,19 @@ jobs:
       - name: Ruff
         run: ruff check .
 
+      - name: Capture Ruff diagnostics
+        if: ${{ failure() }}
+        run: |
+          ruff check . --output-format=json > /tmp/ruff.json || true
+
+      - name: Upload Ruff diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-diagnostics
+          path: /tmp/ruff.json
+          if-no-files-found: ignore
+
       - name: MyPy
         run: mypy src
 
