@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
-from PIL import Image
 import httpx
+from PIL import Image
 
 from gqmrmed.generation.providers import GeneratedIllustration, ImageGenerationError
 
